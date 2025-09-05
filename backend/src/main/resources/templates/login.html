@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>ChatMee - Login</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 50px; }
+        .container { max-width: 600px; margin: 0 auto; text-align: center; }
+        .btn { padding: 10px 20px; margin: 10px; text-decoration: none; border-radius: 5px; display: inline-block; }
+        .btn-google { background-color: #4285f4; color: white; }
+        .btn-github { background-color: #333; color: white; }
+        .error { color: red; margin: 20px 0; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Login to ChatMee</h1>
+        <div class="error" id="error" style="display: none;">
+            Login failed. Please try again.
+        </div>
+        <a href="/oauth2/authorization/google" class="btn btn-google">Login with Google</a>
+        <a href="/oauth2/authorization/github" class="btn btn-github">Login with GitHub</a>
+        <br><br>
+        <a href="/">← Back to Home</a>
+    </div>
+
+    <script>
+        const urlParams = new URLSearchParams(window.location.search);
+        if (urlParams.get('error')) {
+            document.getElementById('error').style.display = 'block';
+        }
+    </script>
+</body>
+</html>
