@@ -66,7 +66,7 @@ public class CustomOAuth2UserService extends DefaultOAuth2UserService {
                 .orElseGet(() -> {
                     logger.info("Creating new user for provider: {} with providerId: {}", provider, providerId);
                     return User.builder()
-                            .id(UUID.randomUUID())
+                            .id(UUID.randomUUID().toString())
                             .provider(provider)
                             .providerId(providerId)
                             .email(email)

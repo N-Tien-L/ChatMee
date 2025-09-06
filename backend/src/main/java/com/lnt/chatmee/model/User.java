@@ -2,7 +2,6 @@ package com.lnt.chatmee.model;
 
 import java.time.Instant;
 import java.util.Set;
-import java.util.UUID;
 
 import org.springframework.data.annotation.CreatedDate;
 import org.springframework.data.annotation.Id;
@@ -27,7 +26,7 @@ import lombok.Setter;
 public class User {
     
     @Id
-    private UUID id;
+    private String id;
 
     @Indexed
     private String email;
