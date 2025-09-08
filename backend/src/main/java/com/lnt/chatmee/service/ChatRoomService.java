@@ -11,17 +11,21 @@ import org.springframework.dao.DataAccessException;
 import org.springframework.stereotype.Service;
 
 import com.lnt.chatmee.dto.request.CreateChatRoomRequest;
+import com.lnt.chatmee.dto.response.CreateChatRoomResponse;
 import com.lnt.chatmee.exception.ChatRoomNotFoundException;
 import com.lnt.chatmee.exception.DatabaseOperationException;
 import com.lnt.chatmee.exception.RoomCapacityExceededException;
 import com.lnt.chatmee.exception.UnauthorizedRoomActionException;
 import com.lnt.chatmee.exception.UserAlreadyInRoomException;
+import com.lnt.chatmee.exception.UserNotFoundException;
 import com.lnt.chatmee.model.ChatRoom;
 import com.lnt.chatmee.model.Participant;
 import com.lnt.chatmee.model.ChatRoom.RoomType;
 import com.lnt.chatmee.model.Participant.Role;
 import com.lnt.chatmee.repository.ChatRoomRepository;
 import com.lnt.chatmee.repository.ParticipantRepository;
+import com.lnt.chatmee.repository.UserRepository;
+import com.lnt.chatmee.util.ValidationUtil;
 
 import org.springframework.transaction.annotation.Transactional;
 import lombok.RequiredArgsConstructor;
@@ -34,25 +38,47 @@ public class ChatRoomService {
     
     private final ChatRoomRepository chatRoomRepository;
     private final ParticipantRepository participantRepository;
+    private final UserRepository userRepository;
 
-    public ChatRoom createRoom(CreateChatRoomRequest request) {
+    public CreateChatRoomResponse createRoom(CreateChatRoomRequest request) {
 
+        // Validate creator ID
+        ValidationUtil.validateId(request.getCreatedBy(), "Creator ID");
+        if(userRepository.findById(request.getCreatedBy()).isEmpty()) {
+            throw new UserNotFoundException("Creator not found");
+        }
+
+        ChatRoom room;
         switch (request.getRoomType()) {
             case DIRECT_MESSAGE:
-                return createDirectRoom(request);
+                room = createDirectRoom(request);
+                break;
             case PRIVATE:
             case PUBLIC:
-                return createConfigurableRoom(request);
-        
+                room = createConfigurableRoom(request);
+                break;
             default:
                 throw new IllegalArgumentException("Invalid room type: " + request.getRoomType());
         }
+
+        return CreateChatRoomResponse.builder()
+            .id(room.getId())
+            .roomType(room.getType())
+            .createdBy(room.getCreatedBy())
+            .createdAt(room.getCreatedAt())
+            .roomName(room.getName())
+            .description(room.getDescription())
+            .maxUsers(room.getMaxParticipants())
+            .settings(room.getSettings())
+            .build();
     }
 
     private ChatRoom createDirectRoom(CreateChatRoomRequest request) {
         try {
-            if(request.getParticipantId() == null || request.getParticipantId().trim().isEmpty()) {
-                throw new IllegalArgumentException("Participant ID is required for direct message");
+            // Validate participant ID
+            ValidationUtil.validateId(request.getParticipantId(), "Participant ID");
+            if(userRepository.findById(request.getParticipantId()).isEmpty()) {
+                throw new UserNotFoundException("Participant not found");
             }
             if(request.getCreatedBy().equals(request.getParticipantId())) {
                 throw new IllegalArgumentException("Cannot create direct message with yourself");
@@ -97,6 +123,10 @@ public class ChatRoomService {
 
     private ChatRoom createConfigurableRoom(CreateChatRoomRequest request) {
         try {
+            // Validate room name for private/public rooms
+            boolean isRoomNameRequired = (request.getRoomType() == RoomType.PRIVATE || request.getRoomType() == RoomType.PUBLIC);
+            ValidationUtil.validateRoomName(request.getRoomName(), isRoomNameRequired);
+            
             Set<String> participants = new HashSet<>();
             participants.add(request.getCreatedBy());
             String roomId = UUID.randomUUID().toString();
@@ -141,7 +171,15 @@ public class ChatRoomService {
     @Transactional
     public void addParticipant(String roomId, String userId, Role role) {
         try {
+            // Validate IDs
+            ValidationUtil.validateId(roomId, "Room ID");
+            ValidationUtil.validateId(userId, "User ID");
+            
             ChatRoom room = findById(roomId);
+
+            if(userRepository.findById(userId).isEmpty()) {
+                throw new UserNotFoundException("Participant not found");
+            }
 
             if(participantRepository.existsByChatRoomIdAndUserId(roomId, userId)) {
                 throw new UserAlreadyInRoomException("User is already in the room");
@@ -185,6 +223,10 @@ public class ChatRoomService {
     @Transactional
     public void deleteRoom(String roomId, String userId) {
         try {
+            // Validate IDs
+            ValidationUtil.validateId(roomId, "Room ID");
+            ValidationUtil.validateId(userId, "User ID");
+            
             ChatRoom room = findById(roomId);
 
             if (!room.getCreatedBy().equals(userId)) {
