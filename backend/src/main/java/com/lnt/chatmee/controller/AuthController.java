@@ -1,6 +1,7 @@
 package com.lnt.chatmee.controller;
 
 import java.security.Principal;
+import java.util.List;
 
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.core.user.OAuth2User;
@@ -103,5 +104,11 @@ public class AuthController {
     @ResponseBody
     public String profile(Principal principal) {
         return "Hello, " + principal.getName();
+    }
+
+    @GetMapping("/api/users")
+    @ResponseBody
+    public List<User> getAllUsers() {
+        return userRepository.findAll();
     }
 }
