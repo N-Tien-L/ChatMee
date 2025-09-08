@@ -13,9 +13,9 @@ import com.lnt.chatmee.model.Message;
 @Repository
 public interface MessageRepository extends MongoRepository<Message, String> {
     
-    Page<Message> findByChatRoomIdOrderByTimestampDesc(String chatRoomId, Pageable pageable);
+    Page<Message> findByChatRoomIdOrderByCreatedAtDesc(String chatRoomId, Pageable pageable);
 
-    List<Message> findByChatRoomIdAndTimestampAfterOrderByTimestampAsc(String chatRoomId, LocalDateTime after);
+    List<Message> findByChatRoomIdAndCreatedAtAfterOrderByCreatedAtAsc(String chatRoomId, LocalDateTime after);
 
     List<Message> findBySenderIdAndChatRoomId(String senderId, String chatRoomId);
 
