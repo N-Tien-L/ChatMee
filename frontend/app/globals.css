@@ -1,5 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Jersey+10&display=swap');
-@import url('https://fonts.googleapis.com/css2?family=Borel&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Borel&family=Jersey+10&display=swap');
 @import "tailwindcss";
 @import "tw-animate-css";
 
@@ -129,24 +128,17 @@
     syntax: '<angle>';
 }
 
-/* Jersey 10 Font for FlipWords */
-[data-slot="flip-words"], 
-.font-jersey {
-    font-family: 'Jersey 10', cursive !important;
+.jersey-10-regular {
+  font-family: "Jersey 10", sans-serif;
+  font-weight: 400;
+  font-style: cursive;
 }
 
-/* Borel Font */
-.font-borel,
 .borel-regular {
-  font-family: "Borel", cursive !important;
+  font-family: "Borel", cursive;
   font-weight: 400;
   font-style: normal;
 }
 
-/* Ensure Borel applies to blur-text */
-.blur-text.font-borel,
-.blur-text.borel-regular {
-  font-family: "Borel", cursive !important;
-}
 
 

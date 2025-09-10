@@ -63,13 +63,15 @@ export function LoginForm({
           <CardHeader className="text-center space-y-4">
             <CardTitle className="font-bold text-white">
               <div className="flex justify-center items-center p-4">
-                <div className="text-6xl font-normal text-center max-w-2xl font-jersey">
+                <div
+                  className="text-7xl font-bold text-center max-w-2xl"
+                  style={{ fontFamily: "'Jersey 10', cursive" }}
+                >
                   Let's{" "}
                   <FlipWords
                     words={words}
                     duration={1800}
-                    className="text-cyan-400 font-bold"
-                    style={{ fontFamily: "'Jersey 10', cursive" }}
+                    className="text-cyan-400"
                   />
                   !
                 </div>

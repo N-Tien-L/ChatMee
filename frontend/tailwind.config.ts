@@ -18,9 +18,6 @@ const config: Config = {
         },
         extend: {
             fontFamily: {
-                'jersey': ['Jersey 10', 'cursive'],
-                'pacifico': ['Pacifico', 'cursive'],
-                'borel': ['borel', 'cursive']
             },
             colors: {
                 border: "hsl(var(--border))",

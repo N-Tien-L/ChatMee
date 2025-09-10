@@ -12,7 +12,7 @@ const Login = () => {
         delay={500}
         animateBy="words"
         direction="top"
-        className="text-7xl text-green-300 font-black font-borel borel-regular text-center max-w-4xl"
+        className="text-7xl text-green-300 font-[borel] text-center max-w-4xl"
       />
       <LoginForm />
     </div>
