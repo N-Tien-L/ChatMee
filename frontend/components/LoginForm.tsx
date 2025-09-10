@@ -12,6 +12,7 @@ import { Button } from "./ui/button";
 import { Github, Google } from "./ui/icon/OAuthIcons";
 import { useEffect, useRef, useState } from "react";
 import { FlipWords } from "./ui/shadcn-io/flip-words";
+import { useAuth } from "@/hook/useAuth";
 
 export function LoginForm({
   className,
@@ -20,6 +21,9 @@ export function LoginForm({
   const cardRef = useRef<HTMLDivElement>(null);
   const [mousePosition, setMousePosition] = useState({ x: 0, y: 0 });
   const words = ["join", "chat", "share"];
+
+  // Use the auth hook
+  const { login, loading, isAuthenticated } = useAuth();
 
   useEffect(() => {
     const handleMouseMove = (e: MouseEvent) => {
@@ -39,6 +43,15 @@ export function LoginForm({
       document.removeEventListener("mousemove", handleMouseMove);
     };
   }, []);
+
+  // If already authenticated, you might want to redirect or show a different UI
+  if (isAuthenticated) {
+    return (
+      <div className={cn("w-full max-w-md mx-auto text-center", className)}>
+        <p className="text-white">You are already logged in!</p>
+      </div>
+    );
+  }
 
   return (
     <div className={cn("w-full max-w-md mx-auto", className)} {...props}>
@@ -85,16 +98,20 @@ export function LoginForm({
             <Button
               variant="outline"
               className="w-full h-14 bg-white/10 border-white/20 text-white hover:bg-white/20 hover:shadow-[0_0_20px_rgba(34,197,94,0.6)] hover:border-green-400/50 transition-all duration-300 group"
+              onClick={() => login("google")}
+              disabled={loading}
             >
               <Google className="w-6 h-6 mr-3 group-hover:scale-110 transition-transform duration-300" />
-              Continue with Google
+              {loading ? "Redirecting..." : "Continue with Google"}
             </Button>
             <Button
               variant="outline"
               className="w-full h-14 bg-white/10 border-white/20 text-white hover:bg-white/20 hover:shadow-[0_0_20px_rgba(88,166,255,0.5)] hover:border-blue-400/50 transition-all duration-300 group"
+              onClick={() => login("github")}
+              disabled={loading}
             >
               <Github className="w-6 h-6 mr-3 group-hover:scale-110 transition-transform duration-300" />
-              Continue with Github
+              {loading ? "Redirecting..." : "Continue with Github"}
             </Button>
           </CardContent>
         </Card>
