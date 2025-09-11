@@ -1,6 +1,7 @@
 import { authApi } from "@/lib/api/authApi"
 import { UserResponse } from "@/lib/type/ResponseType"
 import { useEffect, useState } from "react"
+import toast from "react-hot-toast"
 
 export const useAuth = () => {
     const [user, setUser] = useState<UserResponse | null>(null)
@@ -11,7 +12,7 @@ export const useAuth = () => {
         checkAuthStatus();
     }, [])
 
-    const checkAuthStatus = async () => {
+    const checkAuthStatus = async (showSuccessToast = false) => {
         try {
             setLoading(true)
             const response = await authApi.getCurrentUser()
@@ -19,6 +20,12 @@ export const useAuth = () => {
             if (response.success && response.data.authenticated) {
                 setIsAuthenticated(true)
                 setUser(response.data.user || null)
+                
+                if (showSuccessToast) {
+                    toast.success(`Welcome back, ${response.data.user?.name || 'User'}!`, {
+                        id: 'login-success',
+                    });
+                }
             } else {
                 setIsAuthenticated(false)
                 setUser(null)
