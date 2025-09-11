@@ -1,3 +1,4 @@
+import { Borel } from "next/font/google";
 import type { Config } from "tailwindcss";
 
 const config: Config = {
@@ -18,6 +19,8 @@ const config: Config = {
         },
         extend: {
             fontFamily: {
+                'borel': ['Borel', 'cursive'],
+                'jersey': ['"Jersey 10"', 'cursive'],
             },
             colors: {
                 border: "hsl(var(--border))",

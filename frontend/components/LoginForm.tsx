@@ -48,7 +48,9 @@ export function LoginForm({
   if (isAuthenticated) {
     return (
       <div className={cn("w-full max-w-md mx-auto text-center", className)}>
-        <p className="text-white">You are already logged in!</p>
+        <p className="text-white text-5xl jersey-10-regular">
+          You are already logged in!
+        </p>
       </div>
     );
   }
@@ -76,10 +78,7 @@ export function LoginForm({
           <CardHeader className="text-center space-y-4">
             <CardTitle className="font-bold text-white">
               <div className="flex justify-center items-center p-4">
-                <div
-                  className="text-7xl font-bold text-center max-w-2xl"
-                  style={{ fontFamily: "'Jersey 10', cursive" }}
-                >
+                <div className="text-7xl font-bold text-center max-w-2xl jersey-10-regular">
                   Let's{" "}
                   <FlipWords
                     words={words}
