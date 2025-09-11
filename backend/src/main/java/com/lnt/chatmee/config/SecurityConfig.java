@@ -35,7 +35,7 @@ public class SecurityConfig {
                         .defaultSuccessUrl("http://localhost:3000/dashboard", true)
                         .failureUrl("http://localhost:3000/login?error=true"))
                 .logout(logout -> logout
-                        .logoutSuccessUrl("/")
+                        .logoutSuccessUrl("http://localhost:3000")
                         .invalidateHttpSession(true)
                         .clearAuthentication(true));
 
