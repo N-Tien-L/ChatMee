@@ -13,6 +13,7 @@ import com.lnt.chatmee.dto.response.AuthResponse;
 import com.lnt.chatmee.dto.response.UserResponse;
 import com.lnt.chatmee.model.User;
 import com.lnt.chatmee.repository.UserRepository;
+import com.lnt.chatmee.util.OAuthUtil;
 
 import lombok.RequiredArgsConstructor;
 
@@ -23,7 +24,8 @@ import lombok.RequiredArgsConstructor;
 public class AuthApiController {
 
     private final UserRepository userRepository;
-
+    private final OAuthUtil oAuthUtil;
+    
     @GetMapping("/me")
     public ResponseEntity<ApiResponse<AuthResponse>> getCurrentUser(@AuthenticationPrincipal OAuth2User principal) {
         if (principal == null) {
@@ -35,8 +37,8 @@ public class AuthApiController {
             return ResponseEntity.ok(ApiResponse.success(authResponse));
         }
 
-        String provider = determineProvider(principal);
-        String providerId = getProviderId(principal, provider);
+        String provider = oAuthUtil.determineProvider(principal);
+        String providerId = oAuthUtil.getProviderId(principal, provider);
 
         User user = userRepository.findByProviderAndProviderId(provider, providerId)
                 .orElse(null);
@@ -79,8 +81,8 @@ public class AuthApiController {
             return ResponseEntity.ok(ApiResponse.error("User not authenticated"));
         }
 
-        String provider = determineProvider(principal);
-        String providerId = getProviderId(principal, provider);
+        String provider = oAuthUtil.determineProvider(principal);
+        String providerId = oAuthUtil.getProviderId(principal, provider);
 
         User user = userRepository.findByProviderAndProviderId(provider, providerId)
                 .orElse(null);
@@ -98,24 +100,5 @@ public class AuthApiController {
         } else {
             return ResponseEntity.ok(ApiResponse.error("User not found in database"));
         }
-    }
-
-    private String determineProvider(OAuth2User principal) {
-        if (principal.getAttribute("sub") != null) {
-            return "google";
-        } else if (principal.getAttribute("login") != null) {
-            return "github";
-        }
-        return "unknown";
-    }
-
-    private String getProviderId(OAuth2User principal, String provider) {
-        if ("google".equals(provider)) {
-            return principal.getAttribute("sub");
-        } else if ("github".equals(provider)) {
-            Object id = principal.getAttribute("id");
-            return id != null ? id.toString() : null;
-        }
-        return null;
     }
 }
