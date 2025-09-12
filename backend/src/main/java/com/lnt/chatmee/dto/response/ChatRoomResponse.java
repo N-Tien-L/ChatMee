@@ -11,7 +11,7 @@ import lombok.Data;
 
 @Data
 @Builder
-public class CreateChatRoomResponse {
+public class ChatRoomResponse {
     private String id;
     private String roomName;
     private RoomType roomType;
