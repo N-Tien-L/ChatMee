@@ -2,6 +2,7 @@ package com.lnt.chatmee.service;
 
 import java.time.LocalDateTime;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Set;
 import java.util.UUID;
 
@@ -11,7 +12,7 @@ import org.springframework.dao.DataAccessException;
 import org.springframework.stereotype.Service;
 
 import com.lnt.chatmee.dto.request.CreateChatRoomRequest;
-import com.lnt.chatmee.dto.response.CreateChatRoomResponse;
+import com.lnt.chatmee.dto.response.ChatRoomResponse;
 import com.lnt.chatmee.exception.ChatRoomNotFoundException;
 import com.lnt.chatmee.exception.DatabaseOperationException;
 import com.lnt.chatmee.exception.RoomCapacityExceededException;
@@ -20,6 +21,7 @@ import com.lnt.chatmee.exception.UserAlreadyInRoomException;
 import com.lnt.chatmee.exception.UserNotFoundException;
 import com.lnt.chatmee.model.ChatRoom;
 import com.lnt.chatmee.model.Participant;
+import com.lnt.chatmee.model.User;
 import com.lnt.chatmee.model.ChatRoom.RoomType;
 import com.lnt.chatmee.model.Participant.Role;
 import com.lnt.chatmee.repository.ChatRoomRepository;
@@ -40,12 +42,18 @@ public class ChatRoomService {
     private final ParticipantRepository participantRepository;
     private final UserRepository userRepository;
 
-    public CreateChatRoomResponse createRoom(CreateChatRoomRequest request) {
+    public ChatRoomResponse createRoom(CreateChatRoomRequest request, String provider, String providerId) {
 
         // Validate creator ID
         ValidationUtil.validateId(request.getCreatedBy(), "Creator ID");
         if(userRepository.findById(request.getCreatedBy()).isEmpty()) {
             throw new UserNotFoundException("Creator not found");
+        }
+
+        User AuthenticatedUser = userRepository.findByProviderAndProviderId(provider, providerId)
+            .orElseThrow(() -> new UserNotFoundException("Authenticated user not found"));
+        if(!AuthenticatedUser.getId().equals(request.getCreatedBy())) {
+            throw new UnauthorizedRoomActionException("You are not allowed to create a chat room for another user");
         }
 
         ChatRoom room;
@@ -61,7 +69,7 @@ public class ChatRoomService {
                 throw new IllegalArgumentException("Invalid room type: " + request.getRoomType());
         }
 
-        return CreateChatRoomResponse.builder()
+        return ChatRoomResponse.builder()
             .id(room.getId())
             .roomType(room.getType())
             .createdBy(room.getCreatedBy())
@@ -144,9 +152,10 @@ public class ChatRoomService {
                 .admins(java.util.Collections.singleton(request.getCreatedBy()))
                 .isActive(true)
                 .settings(ChatRoom.RoomSettings.builder()
-                    .allowFileSharing(true)
-                    .allowGuestUsers(false)
-                    .moderationRequired(false)
+                    .allowFileSharing(request.getSettings().isAllowFileSharing())
+                    .allowGuestUsers(request.getSettings().isAllowGuestUsers())
+                    .moderationRequired(request.getSettings().isModerationRequired())
+                    .welcomeMessage(request.getSettings().getWelcomeMessage())
                     .build())
                 .build();
 
@@ -243,5 +252,14 @@ public class ChatRoomService {
             logger.error("Unexpected error while deleting room", e);
             throw new DatabaseOperationException("Failed to delete room", e);
         }
+    }
+
+    @Transactional(readOnly = true)
+    public List<ChatRoom> getList(String provider, String providerId) {
+        User authenticatedUser = userRepository.findByProviderAndProviderId(provider, providerId)
+            .orElseThrow(() -> new UserNotFoundException("Authenticated user not found"));
+        
+        List<ChatRoom> chatRoomList = chatRoomRepository.findByParticipantsContainingAndIsActiveTrue(authenticatedUser.getId());
+        return chatRoomList;
     }
 }

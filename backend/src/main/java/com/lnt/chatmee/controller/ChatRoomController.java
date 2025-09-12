@@ -1,18 +1,26 @@
 package com.lnt.chatmee.controller;
 
+import java.util.List;
+import java.util.stream.Collectors;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.security.oauth2.core.user.OAuth2User;
 import org.springframework.validation.annotation.Validated;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.lnt.chatmee.dto.request.CreateChatRoomRequest;
-import com.lnt.chatmee.dto.response.CreateChatRoomResponse;
+import com.lnt.chatmee.dto.response.ChatRoomResponse;
+import com.lnt.chatmee.model.ChatRoom;
 import com.lnt.chatmee.service.ChatRoomService;
+import com.lnt.chatmee.util.OAuthUtil;
 
 import lombok.RequiredArgsConstructor;
 
@@ -24,16 +32,48 @@ public class ChatRoomController {
     private static final Logger logger = LoggerFactory.getLogger(ChatRoomService.class);
 
     private final ChatRoomService chatRoomService;
+    private final OAuthUtil oAuthUtil;
     
     @PostMapping("/create")
-    public ResponseEntity<CreateChatRoomResponse> createChatRoom(@Validated @RequestBody CreateChatRoomRequest request) {
+    public ResponseEntity<ChatRoomResponse> createChatRoom(@Validated @RequestBody CreateChatRoomRequest request, @AuthenticationPrincipal OAuth2User principle) {
         try {
-            CreateChatRoomResponse responseBody = chatRoomService.createRoom(request);
+            String provider = oAuthUtil.determineProvider(principle);
+            String providerId = oAuthUtil.getProviderId(principle, provider);
+            ChatRoomResponse responseBody = chatRoomService.createRoom(request, provider, providerId);
             return ResponseEntity.status(HttpStatus.CREATED).body(responseBody);
         } catch (Exception e) {
             logger.error("Error creating chat room: ", e);
             throw e;
         }
+    }
+
+    @GetMapping
+    public ResponseEntity<List<ChatRoomResponse>> getChatRoomList(@AuthenticationPrincipal OAuth2User principle) {
+        try {
+            String provider = oAuthUtil.determineProvider(principle);
+            String providerId = oAuthUtil.getProviderId(principle, provider);
+            List<ChatRoom> chatRoomList = chatRoomService.getList(provider, providerId);
+            List<ChatRoomResponse> responseBody = chatRoomList.stream()
+                .map(this::convertToChatRoomResponse)
+                .collect(Collectors.toList());
+            return ResponseEntity.status(HttpStatus.OK).body(responseBody);
+        } catch (Exception e) {
+            logger.error("Error getting chat room list: ", e);
+            throw e;
+        }
+    }
+
+    private ChatRoomResponse convertToChatRoomResponse(ChatRoom chatRoom) {
+        return ChatRoomResponse.builder()
+            .id(chatRoom.getId())
+            .roomName(chatRoom.getName())
+            .description(chatRoom.getDescription())
+            .roomType(chatRoom.getType())
+            .createdBy(chatRoom.getCreatedBy())
+            .createdAt(chatRoom.getCreatedAt())
+            .maxUsers(chatRoom.getMaxParticipants())
+            .settings(chatRoom.getSettings())
+            .build();
     }
 
 }
