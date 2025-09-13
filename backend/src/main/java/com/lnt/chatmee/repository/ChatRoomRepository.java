@@ -1,6 +1,7 @@
 package com.lnt.chatmee.repository;
 
 import java.util.List;
+import java.util.Optional;
 
 import org.springframework.data.mongodb.repository.MongoRepository;
 import org.springframework.stereotype.Repository;
@@ -10,6 +11,8 @@ import com.lnt.chatmee.model.ChatRoom.RoomType;
 
 @Repository
 public interface ChatRoomRepository extends MongoRepository<ChatRoom, String> {
+
+    Optional<ChatRoom> findByIdAndParticipantsContaining(String roomId, String userId);
     
     List<ChatRoom> findByTypeAndIsActiveTrue(RoomType type);
 

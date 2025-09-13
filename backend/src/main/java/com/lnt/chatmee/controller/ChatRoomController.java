@@ -10,13 +10,18 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.core.user.OAuth2User;
 import org.springframework.validation.annotation.Validated;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.lnt.chatmee.dto.request.CreateChatRoomRequest;
+import com.lnt.chatmee.dto.request.UpdateChatRoomRequest;
+import com.lnt.chatmee.dto.response.ApiResponse;
 import com.lnt.chatmee.dto.response.ChatRoomResponse;
 import com.lnt.chatmee.model.ChatRoom;
 import com.lnt.chatmee.service.ChatRoomService;
@@ -35,12 +40,12 @@ public class ChatRoomController {
     private final OAuthUtil oAuthUtil;
     
     @PostMapping("/create")
-    public ResponseEntity<ChatRoomResponse> createChatRoom(@Validated @RequestBody CreateChatRoomRequest request, @AuthenticationPrincipal OAuth2User principle) {
+    public ResponseEntity<ApiResponse<ChatRoomResponse>> createChatRoom(@Validated @RequestBody CreateChatRoomRequest request, @AuthenticationPrincipal OAuth2User principle) {
         try {
             String provider = oAuthUtil.determineProvider(principle);
             String providerId = oAuthUtil.getProviderId(principle, provider);
             ChatRoomResponse responseBody = chatRoomService.createRoom(request, provider, providerId);
-            return ResponseEntity.status(HttpStatus.CREATED).body(responseBody);
+            return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.success("Chat room created successfully", responseBody));
         } catch (Exception e) {
             logger.error("Error creating chat room: ", e);
             throw e;
@@ -48,7 +53,7 @@ public class ChatRoomController {
     }
 
     @GetMapping
-    public ResponseEntity<List<ChatRoomResponse>> getChatRoomList(@AuthenticationPrincipal OAuth2User principle) {
+    public ResponseEntity<ApiResponse<List<ChatRoomResponse>>> getChatRoomList(@AuthenticationPrincipal OAuth2User principle) {
         try {
             String provider = oAuthUtil.determineProvider(principle);
             String providerId = oAuthUtil.getProviderId(principle, provider);
@@ -56,9 +61,50 @@ public class ChatRoomController {
             List<ChatRoomResponse> responseBody = chatRoomList.stream()
                 .map(this::convertToChatRoomResponse)
                 .collect(Collectors.toList());
-            return ResponseEntity.status(HttpStatus.OK).body(responseBody);
+            return ResponseEntity.ok(ApiResponse.success(responseBody));
         } catch (Exception e) {
             logger.error("Error getting chat room list: ", e);
+            throw e;
+        }
+    }
+
+    @GetMapping("/{roomId}")
+    public ResponseEntity<ApiResponse<ChatRoomResponse>> getChatRoomById(@AuthenticationPrincipal OAuth2User principle, @PathVariable String roomId) {
+        try {
+            String provider = oAuthUtil.determineProvider(principle);
+            String providerId = oAuthUtil.getProviderId(principle, provider);
+            ChatRoom room = chatRoomService.getChatRoomById(provider, providerId, roomId);
+            ChatRoomResponse responseBody = convertToChatRoomResponse(room);
+            return ResponseEntity.ok(ApiResponse.success(responseBody));
+        } catch (Exception e) {
+            logger.error("Error getting chat room by id ", e);
+            throw e;
+        }
+    }
+
+    @PutMapping("/{roomId}")
+    public ResponseEntity<ApiResponse<ChatRoomResponse>> updateChatRoom(@AuthenticationPrincipal OAuth2User principle, @PathVariable String roomId, @Validated @RequestBody UpdateChatRoomRequest request) {
+        try {
+            String provider = oAuthUtil.determineProvider(principle);
+            String providerId = oAuthUtil.getProviderId(principle, provider);
+            ChatRoom room = chatRoomService.updateChatRoomById(provider, providerId, roomId, request);
+            ChatRoomResponse responseBody = convertToChatRoomResponse(room);
+            return ResponseEntity.ok(ApiResponse.success("Chat room updated successfully", responseBody));
+        } catch (Exception e) {
+            logger.error("Error updating chat room: ", e);
+            throw e;
+        }
+    }
+
+    @DeleteMapping("/{roomId}")
+    public ResponseEntity<ApiResponse<String>> deleteChatRoom(@AuthenticationPrincipal OAuth2User principle, @PathVariable String roomId) {
+        try {
+            String provider = oAuthUtil.determineProvider(principle);
+            String providerId = oAuthUtil.getProviderId(principle, provider);
+            chatRoomService.deleteChatRoomById(provider, providerId, roomId);
+            return ResponseEntity.ok(ApiResponse.success("Chat room deleted successfully"));
+        } catch (Exception e) {
+            logger.error("Error during deleting chat room: ", e);
             throw e;
         }
     }
