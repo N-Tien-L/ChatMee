@@ -20,11 +20,14 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.lnt.chatmee.dto.request.CreateChatRoomRequest;
+import com.lnt.chatmee.dto.request.JoinChatRoomRequest;
 import com.lnt.chatmee.dto.request.UpdateChatRoomRequest;
 import com.lnt.chatmee.dto.response.ApiResponse;
 import com.lnt.chatmee.dto.response.ChatRoomResponse;
 import com.lnt.chatmee.model.ChatRoom;
+import com.lnt.chatmee.model.Participant;
 import com.lnt.chatmee.service.ChatRoomService;
+import com.lnt.chatmee.service.ParticipantService;
 import com.lnt.chatmee.util.OAuthUtil;
 
 import lombok.RequiredArgsConstructor;
@@ -37,6 +40,7 @@ public class ChatRoomController {
     private static final Logger logger = LoggerFactory.getLogger(ChatRoomService.class);
 
     private final ChatRoomService chatRoomService;
+    private final ParticipantService participantService;
     private final OAuthUtil oAuthUtil;
     
     @PostMapping("/create")
@@ -105,6 +109,55 @@ public class ChatRoomController {
             return ResponseEntity.ok(ApiResponse.success("Chat room deleted successfully"));
         } catch (Exception e) {
             logger.error("Error during deleting chat room: ", e);
+            throw e;
+        }
+    }
+
+    @PostMapping("/{roomId}/join")
+    public ResponseEntity<ApiResponse<String>> joinChatRoom(
+            @AuthenticationPrincipal OAuth2User principal, 
+            @PathVariable String roomId) {
+        try {
+            String provider = oAuthUtil.determineProvider(principal);
+            String providerId = oAuthUtil.getProviderId(principal, provider);
+            
+            // Join the room as the authenticated user
+            participantService.joinRoom(roomId, provider, providerId);
+            
+            return ResponseEntity.ok(ApiResponse.success("Successfully joined the chat room"));
+        } catch (Exception e) {
+            logger.error("Error joining chat room: ", e);
+            throw e;
+        }
+    }
+    
+    @PostMapping("/{roomId}/add-participant")
+    public ResponseEntity<ApiResponse<String>> addParticipantToChatRoom(
+            @AuthenticationPrincipal OAuth2User principal, 
+            @PathVariable String roomId,
+            @Validated @RequestBody JoinChatRoomRequest request) {
+        try {
+            // TODO: Add authorization check - only room admins/owners can add participants
+            // String provider = oAuthUtil.determineProvider(principal);
+            // String providerId = oAuthUtil.getProviderId(principal, provider);
+            
+            // Determine the role (default to MEMBER if not specified)
+            Participant.Role role = Participant.Role.MEMBER;
+            if (request.getRole() != null && !request.getRole().trim().isEmpty()) {
+                try {
+                    role = Participant.Role.valueOf(request.getRole().toUpperCase());
+                } catch (IllegalArgumentException e) {
+                    return ResponseEntity.badRequest()
+                        .body(ApiResponse.error("Invalid role specified: " + request.getRole()));
+                }
+            }
+            
+            // Add the participant to the room
+            participantService.addParticipant(roomId, request.getUserId(), role);
+            
+            return ResponseEntity.ok(ApiResponse.success("Participant successfully added to the chat room"));
+        } catch (Exception e) {
+            logger.error("Error adding participant to chat room: ", e);
             throw e;
         }
     }

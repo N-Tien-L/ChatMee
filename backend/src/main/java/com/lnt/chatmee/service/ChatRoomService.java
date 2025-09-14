@@ -17,17 +17,13 @@ import com.lnt.chatmee.dto.response.ChatRoomResponse;
 import com.lnt.chatmee.exception.ChatRoomNotFoundException;
 import com.lnt.chatmee.exception.DatabaseOperationException;
 import com.lnt.chatmee.exception.IllegalArgumentException;
-import com.lnt.chatmee.exception.RoomCapacityExceededException;
 import com.lnt.chatmee.exception.UnauthorizedRoomActionException;
-import com.lnt.chatmee.exception.UserAlreadyInRoomException;
 import com.lnt.chatmee.exception.UserNotFoundException;
 import com.lnt.chatmee.model.ChatRoom;
 import com.lnt.chatmee.model.Participant;
 import com.lnt.chatmee.model.User;
 import com.lnt.chatmee.model.ChatRoom.RoomType;
-import com.lnt.chatmee.model.Participant.Role;
 import com.lnt.chatmee.repository.ChatRoomRepository;
-import com.lnt.chatmee.repository.ParticipantRepository;
 import com.lnt.chatmee.repository.UserRepository;
 import com.lnt.chatmee.util.ValidationUtil;
 
@@ -41,8 +37,8 @@ public class ChatRoomService {
     private static final Logger logger = LoggerFactory.getLogger(ChatRoomService.class);
     
     private final ChatRoomRepository chatRoomRepository;
-    private final ParticipantRepository participantRepository;
     private final UserRepository userRepository;
+    private final ParticipantService participantService;
 
     public ChatRoomResponse createRoom(CreateChatRoomRequest request, String provider, String providerId) {
 
@@ -108,6 +104,11 @@ public class ChatRoomService {
                 .build();
 
             ChatRoom savedRoom = chatRoomRepository.save(chatRoom);
+            
+            // Create participant instances for direct message
+            participantService.createParticipant(savedRoom.getId(), creatorId, Participant.Role.MEMBER);
+            participantService.createParticipant(savedRoom.getId(), request.getParticipantId(), Participant.Role.MEMBER);
+            
             logger.info("Created direct chat room: {} between {} and {}", savedRoom.getId(), savedRoom.getCreatedBy(), request.getParticipantId());
 
             return savedRoom;
@@ -153,6 +154,10 @@ public class ChatRoomService {
                 .build();
 
             ChatRoom savedRoom = chatRoomRepository.save(chatRoom);
+            
+            // Create participant instance for room creator
+            participantService.createParticipant(savedRoom.getId(), creatorId, Participant.Role.OWNER);
+            
             logger.info("Created {} room: {} - {} with creator: {}", request.getRoomType(), savedRoom.getId(), request.getRoomName(), creatorId);
 
             return savedRoom;
@@ -168,58 +173,6 @@ public class ChatRoomService {
     public ChatRoom findById(String roomId) {
         return chatRoomRepository.findById(roomId)
             .orElseThrow(() -> new ChatRoomNotFoundException("Can't find chat room with id: " + roomId));
-    }
-
-    @Transactional
-    public void addParticipant(String roomId, String userId, Role role) {
-        try {
-            // Validate IDs
-            ValidationUtil.validateId(roomId, "Room ID");
-            ValidationUtil.validateId(userId, "User ID");
-            
-            ChatRoom room = findById(roomId);
-
-            if(userRepository.findById(userId).isEmpty()) {
-                throw new UserNotFoundException("Participant not found");
-            }
-
-            if(participantRepository.existsByChatRoomIdAndUserId(roomId, userId)) {
-                throw new UserAlreadyInRoomException("User is already in the room");
-            }
-
-            if(room.getMaxParticipants() > 0) {
-                Long currentCount = participantRepository.countByChatRoomId(roomId);
-                if(currentCount >= room.getMaxParticipants()) {
-                    throw new RoomCapacityExceededException("Room has reached maximum capacity");
-                }
-            }
-
-            String participantId = UUID.randomUUID().toString();
-            Participant participant = Participant.builder()
-                .id(participantId)
-                .chatRoomId(roomId)
-                .userId(userId)
-                .role(role)
-                .joinedAt(LocalDateTime.now())
-                .lastSeenAt(LocalDateTime.now())
-                .isMuted(false)
-                .isBlocked(false)
-                .build();
-            
-            participantRepository.save(participant);
-            logger.info("Added participant {} to room {}", userId, roomId);
-            
-            // Update room's participants set and last activity
-            room.getParticipants().add(userId);
-            room.setLastActivity(LocalDateTime.now());
-            chatRoomRepository.save(room);
-            
-        } catch (UserAlreadyInRoomException | RoomCapacityExceededException e) {
-            throw e;
-        } catch (Exception e) {
-            logger.error("Unexpected error while adding participant", e);
-            throw new DatabaseOperationException("Failed to add participant", e);
-        }
     }
 
     @Transactional
