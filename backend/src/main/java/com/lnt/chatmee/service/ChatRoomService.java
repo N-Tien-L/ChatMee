@@ -106,7 +106,7 @@ public class ChatRoomService {
             ChatRoom savedRoom = chatRoomRepository.save(chatRoom);
             
             // Create participant instances for direct message
-            participantService.createParticipant(savedRoom.getId(), creatorId, Participant.Role.MEMBER);
+            participantService.createParticipant(savedRoom.getId(), creatorId, Participant.Role.OWNER);
             participantService.createParticipant(savedRoom.getId(), request.getParticipantId(), Participant.Role.MEMBER);
             
             logger.info("Created direct chat room: {} between {} and {}", savedRoom.getId(), savedRoom.getCreatedBy(), request.getParticipantId());
@@ -133,25 +133,47 @@ public class ChatRoomService {
             participants.add(creatorId);
             String roomId = UUID.randomUUID().toString();
 
-            ChatRoom chatRoom = ChatRoom.builder()
-                .id(roomId)
-                .name(request.getRoomName())
-                .description(request.getDescription())
-                .type(request.getRoomType())
-                .createdBy(creatorId)
-                .createdAt(LocalDateTime.now())
-                .lastActivity(LocalDateTime.now())
-                .participants(participants)
-                .maxParticipants(request.getMaxUsers() != null ? request.getMaxUsers() : -1)
-                .admins(java.util.Collections.singleton(creatorId))
-                .isActive(true)
-                .settings(ChatRoom.RoomSettings.builder()
-                    .allowFileSharing(request.getSettings().isAllowFileSharing())
-                    .allowGuestUsers(request.getSettings().isAllowGuestUsers())
-                    .moderationRequired(request.getSettings().isModerationRequired())
-                    .welcomeMessage(request.getSettings().getWelcomeMessage())
-                    .build())
-                .build();
+            logger.info("SETTINGS: {}", request.getSettings());
+
+            ChatRoom chatRoom;
+            if (request.getSettings() != null) {
+                logger.info("CREATING ROOM WITH SETTINGS");
+                chatRoom = ChatRoom.builder()
+                    .id(roomId)
+                    .name(request.getRoomName())
+                    .description(request.getDescription())
+                    .type(request.getRoomType())
+                    .createdBy(creatorId)
+                    .createdAt(LocalDateTime.now())
+                    .lastActivity(LocalDateTime.now())
+                    .participants(participants)
+                    .maxParticipants(request.getMaxUsers() != null ? request.getMaxUsers() : -1)
+                    .admins(java.util.Collections.singleton(creatorId))
+                    .isActive(true)
+                    .settings(request.getSettings())
+                    .build();
+            } else {
+                logger.info("CREATING ROOM WITHOUT SETTINGS");
+                chatRoom = ChatRoom.builder()
+                    .id(roomId)
+                    .name(request.getRoomName())
+                    .description(request.getDescription())
+                    .type(request.getRoomType())
+                    .createdBy(creatorId)
+                    .createdAt(LocalDateTime.now())
+                    .lastActivity(LocalDateTime.now())
+                    .participants(participants)
+                    .maxParticipants(request.getMaxUsers() != null ? request.getMaxUsers() : -1)
+                    .admins(java.util.Collections.singleton(creatorId))
+                    .isActive(true)
+                    .settings(ChatRoom.RoomSettings.builder()
+                        .allowFileSharing(false)
+                        .allowGuestUsers(false)
+                        .moderationRequired(false)
+                        .welcomeMessage("")
+                        .build())
+                    .build();
+            }
 
             ChatRoom savedRoom = chatRoomRepository.save(chatRoom);
             

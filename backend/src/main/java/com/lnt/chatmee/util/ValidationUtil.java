@@ -76,8 +76,8 @@ public class ValidationUtil {
                 throw new IllegalArgumentException("Room name cannot exceed 100 characters");
             }
             
-            // Allow letters, numbers, spaces, and some special characters
-            if (!trimmed.matches("^[a-zA-Z0-9\\s._-]+$")) {
+            // Allow Unicode letters (including Vietnamese), numbers, spaces, and . _ -
+            if (!trimmed.matches("^[\\p{L}0-9\\s._-]+$")) {
                 throw new IllegalArgumentException("Room name contains invalid characters");
             }
         }

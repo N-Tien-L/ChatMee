@@ -24,8 +24,15 @@ import com.lnt.chatmee.dto.request.JoinChatRoomRequest;
 import com.lnt.chatmee.dto.request.UpdateChatRoomRequest;
 import com.lnt.chatmee.dto.response.ApiResponse;
 import com.lnt.chatmee.dto.response.ChatRoomResponse;
+import com.lnt.chatmee.exception.ForbiddenActionException;
+import com.lnt.chatmee.exception.UnauthorizedRoomActionException;
+import com.lnt.chatmee.exception.UserNotFoundException;
 import com.lnt.chatmee.model.ChatRoom;
 import com.lnt.chatmee.model.Participant;
+import com.lnt.chatmee.model.User;
+import com.lnt.chatmee.repository.ChatRoomRepository;
+import com.lnt.chatmee.repository.ParticipantRepository;
+import com.lnt.chatmee.repository.UserRepository;
 import com.lnt.chatmee.service.ChatRoomService;
 import com.lnt.chatmee.service.ParticipantService;
 import com.lnt.chatmee.util.OAuthUtil;
@@ -41,6 +48,8 @@ public class ChatRoomController {
 
     private final ChatRoomService chatRoomService;
     private final ParticipantService participantService;
+    private final UserRepository userRepository;
+    private final ParticipantRepository participantRepository;
     private final OAuthUtil oAuthUtil;
     
     @PostMapping("/create")
@@ -137,18 +146,24 @@ public class ChatRoomController {
             @PathVariable String roomId,
             @Validated @RequestBody JoinChatRoomRequest request) {
         try {
-            // TODO: Add authorization check - only room admins/owners can add participants
-            // String provider = oAuthUtil.determineProvider(principal);
-            // String providerId = oAuthUtil.getProviderId(principal, provider);
+            String provider = oAuthUtil.determineProvider(principal);
+            String providerId = oAuthUtil.getProviderId(principal, provider);
+
+            User authenticatedUser = userRepository.findByProviderAndProviderId(provider, providerId)
+                .orElseThrow(() -> new UserNotFoundException("Authenticated user not found"));
             
-            // Determine the role (default to MEMBER if not specified)
+            Participant authenticatedParticipant = participantRepository.findByChatRoomIdAndUserId(roomId, authenticatedUser.getId())
+                .orElseThrow(() -> new UnauthorizedRoomActionException("User is not a participant of the chat room"));
+            if (authenticatedParticipant.getRole() != Participant.Role.ADMIN && authenticatedParticipant.getRole() != Participant.Role.OWNER ) {
+                throw new ForbiddenActionException("Only ADMIN or OWNER can add participants to the chat room");
+            }
+            
             Participant.Role role = Participant.Role.MEMBER;
             if (request.getRole() != null && !request.getRole().trim().isEmpty()) {
                 try {
                     role = Participant.Role.valueOf(request.getRole().toUpperCase());
                 } catch (IllegalArgumentException e) {
-                    return ResponseEntity.badRequest()
-                        .body(ApiResponse.error("Invalid role specified: " + request.getRole()));
+                    throw new IllegalArgumentException("Invalid role specified: " + request.getRole());
                 }
             }
             
