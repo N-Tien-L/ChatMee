@@ -4,6 +4,7 @@ import { useAuth } from "@/hook/useAuth";
 import { useEffect } from "react";
 import toast from "react-hot-toast";
 import React from "react";
+import ChatRoomsList from "@/components/ChatRoomsList";
 
 const Dashboard = () => {
   const { user, isAuthenticated, loading } = useAuth();
@@ -29,36 +30,54 @@ const Dashboard = () => {
   if (!isAuthenticated) {
     return (
       <div className="flex items-center justify-center min-h-screen">
-        <div className="text-2xl text-gray-600">
-          Please log in to access the dashboard.
+        <div className="text-center">
+          <div className="text-2xl text-gray-600 mb-4">Access Denied</div>
+          <div className="text-gray-500 mb-6">
+            You must be logged in to access the dashboard.
+          </div>
+          <a
+            href="/login"
+            className="bg-blue-500 hover:bg-blue-600 text-white px-6 py-2 rounded-lg"
+          >
+            Go to Login
+          </a>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 p-8">
-      <div className="max-w-4xl mx-auto">
-        <h1 className="text-4xl font-bold text-gray-900 mb-8">Dashboard</h1>
+    <div className="min-h-screen w-full bg-gray-50 flex">
+      {/* Sidebar */}
+      <ChatRoomsList />
 
-        <div className="bg-white rounded-lg shadow-md p-6 mb-6">
-          <h2 className="text-2xl font-semibold text-gray-800 mb-4">
-            Welcome, {user?.name}!
-          </h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="p-4 bg-blue-50 rounded-lg">
-              <h3 className="font-semibold text-blue-900">Profile Info</h3>
-              <p className="text-blue-700">Email: {user?.email}</p>
-              <p className="text-blue-700">Provider: {user?.provider}</p>
-            </div>
-            <div className="p-4 bg-green-50 rounded-lg">
-              <h3 className="font-semibold text-green-900">Quick Actions</h3>
-              <p className="text-green-700">
-                Start chatting, manage profile, and more!
-              </p>
-            </div>
+      {/* Main Content Area */}
+      <div className="flex-1 flex flex-col">
+        {/* Header */}
+        <header className="bg-white shadow-sm border-b h-16 flex items-center px-6">
+          <h1 className="text-xl font-semibold text-gray-900">ChatMee</h1>
+          <div className="ml-auto flex items-center space-x-4">
+            <span className="text-gray-700">Welcome, {user?.name}</span>
+            <img
+              src={user?.avatarUrl || "/default-avatar.png"}
+              alt="Profile"
+              className="w-8 h-8 rounded-full"
+            />
           </div>
-        </div>
+        </header>
+
+        {/* Main Chat Area */}
+        <main className="flex-1 flex items-center justify-center bg-gray-100">
+          <div className="text-center">
+            <div className="text-6xl mb-4">💬</div>
+            <h2 className="text-2xl font-semibold text-gray-700 mb-2">
+              Select a chat room
+            </h2>
+            <p className="text-gray-500">
+              Choose a chat room from the sidebar to start messaging
+            </p>
+          </div>
+        </main>
       </div>
     </div>
   );

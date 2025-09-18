@@ -30,7 +30,6 @@ import com.lnt.chatmee.exception.UserNotFoundException;
 import com.lnt.chatmee.model.ChatRoom;
 import com.lnt.chatmee.model.Participant;
 import com.lnt.chatmee.model.User;
-import com.lnt.chatmee.repository.ChatRoomRepository;
 import com.lnt.chatmee.repository.ParticipantRepository;
 import com.lnt.chatmee.repository.UserRepository;
 import com.lnt.chatmee.service.ChatRoomService;
