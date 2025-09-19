@@ -184,8 +184,10 @@ public class ChatRoomController {
             .roomType(chatRoom.getType())
             .createdBy(chatRoom.getCreatedBy())
             .createdAt(chatRoom.getCreatedAt())
+            .updatedAt(chatRoom.getLastActivity())
             .maxUsers(chatRoom.getMaxParticipants())
             .settings(chatRoom.getSettings())
+            .participants(chatRoom.getParticipants())
             .build();
     }
 

@@ -12,7 +12,7 @@ import { Button } from "./ui/button";
 import { Github, Google } from "./ui/icon/OAuthIcons";
 import { useEffect, useRef, useState } from "react";
 import { FlipWords } from "./ui/shadcn-io/flip-words";
-import { useAuth } from "@/hook/useAuth";
+import { useAuth } from "@/hooks/useAuth";
 
 export function LoginForm({
   className,

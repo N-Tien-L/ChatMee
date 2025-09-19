@@ -1,6 +1,6 @@
 "use client";
 
-import { useAuth } from "@/hook/useAuth";
+import { useAuth } from "@/hooks/useAuth";
 import { useEffect } from "react";
 import toast from "react-hot-toast";
 import React from "react";

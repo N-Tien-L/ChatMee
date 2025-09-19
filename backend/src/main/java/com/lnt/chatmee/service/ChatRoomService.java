@@ -63,10 +63,12 @@ public class ChatRoomService {
             .roomType(room.getType())
             .createdBy(room.getCreatedBy())
             .createdAt(room.getCreatedAt())
+            .updatedAt(room.getLastActivity())
             .roomName(room.getName())
             .description(room.getDescription())
             .maxUsers(room.getMaxParticipants())
             .settings(room.getSettings())
+            .participants(room.getParticipants())
             .build();
     }
 

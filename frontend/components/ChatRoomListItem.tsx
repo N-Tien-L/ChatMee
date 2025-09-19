@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { ChatRoomResponse } from "@/lib/type/ResponseType";
 import { RoomType } from "@/lib/type/ChatTypes";
 import {
@@ -26,6 +26,26 @@ const ChatRoomListItem: React.FC<ChatRoomListItemProps> = ({
 }) => {
   const [showActions, setShowActions] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handleClickOutSide = (event: MouseEvent) => {
+      if (
+        dropdownRef.current &&
+        !dropdownRef.current.contains(event.target as Node)
+      ) {
+        setShowActions(false);
+      }
+    };
+
+    if (showActions) {
+      document.addEventListener("mousedown", handleClickOutSide);
+    }
+
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutSide);
+    };
+  }, [showActions]);
 
   const getRoomIcon = () => {
     switch (room.roomType) {
@@ -66,7 +86,13 @@ const ChatRoomListItem: React.FC<ChatRoomListItemProps> = ({
 
   const handleDelete = async (e: React.MouseEvent) => {
     e.stopPropagation();
-    if (window.confirm(`Are you sure you want to delete "${room.roomName}"?`)) {
+    if (
+      window.confirm(
+        `Are you sure you want to delete "${
+          room.displayName || room.roomName
+        }"?`
+      )
+    ) {
       setIsLoading(true);
       try {
         await onDelete();
@@ -86,9 +112,9 @@ const ChatRoomListItem: React.FC<ChatRoomListItemProps> = ({
         {/* Room Avatar/Icon */}
         <div className="flex-shrink-0 mr-3">
           <div className="w-12 h-12 rounded-full bg-gradient-to-br from-blue-400 to-purple-500 flex items-center justify-center text-white font-semibold text-lg">
-            {room.roomName
-              ? room.roomName.charAt(0).toUpperCase()
-              : "direct message"}
+            {room.displayName || room.roomName
+              ? (room.displayName || room.roomName).charAt(0).toUpperCase()
+              : "DM"}
           </div>
         </div>
 
@@ -96,7 +122,7 @@ const ChatRoomListItem: React.FC<ChatRoomListItemProps> = ({
         <div className="flex-1 min-w-0">
           <div className="flex items-center justify-between mb-1">
             <h3 className="text-sm font-medium text-gray-900 truncate">
-              {room.roomName}
+              {room.displayName || room.roomName}
             </h3>
             <div className="flex items-center space-x-1">
               {getRoomIcon()}
@@ -130,7 +156,7 @@ const ChatRoomListItem: React.FC<ChatRoomListItemProps> = ({
 
         {/* Actions Menu */}
         <div className="flex-shrink-0 ml-2">
-          <div className="relative">
+          <div className="relative" ref={dropdownRef}>
             <button
               onClick={(e) => {
                 e.stopPropagation();

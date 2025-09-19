@@ -23,6 +23,8 @@ export interface ChatRoomResponse {
     createdAt: string;
     maxUsers: number;
     settings: RoomSettings;
+    participants?: string[]; // Add participants array
+    displayName?: string; // Add computed display name
 }
 
 export interface ParticipantResponse {

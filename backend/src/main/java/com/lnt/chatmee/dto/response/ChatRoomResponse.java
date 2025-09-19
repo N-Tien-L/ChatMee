@@ -2,6 +2,7 @@ package com.lnt.chatmee.dto.response;
 
 
 import java.time.LocalDateTime;
+import java.util.Set;
 
 import com.lnt.chatmee.model.ChatRoom.RoomSettings;
 import com.lnt.chatmee.model.ChatRoom.RoomType;
@@ -18,6 +19,8 @@ public class ChatRoomResponse {
     private String description;
     private String createdBy;
     private LocalDateTime createdAt;
+    private LocalDateTime updatedAt;
     private int maxUsers;
     private RoomSettings settings;
+    private Set<String> participants; // Add participants
 }

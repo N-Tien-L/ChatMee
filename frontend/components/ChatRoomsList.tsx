@@ -6,7 +6,7 @@ import {
   SidebarHeader,
 } from "@/components/ui/sidebar";
 import React, { useState } from "react";
-import { useChatRooms } from "@/hook/useChatRooms";
+import { useChatRooms } from "@/hooks/useChatRooms";
 import { RoomType } from "@/lib/type/ChatTypes";
 import { Search, Plus, MessageSquare, Users, Lock, Globe } from "lucide-react";
 import ChatRoomListItem from "./ChatRoomListItem";
@@ -126,19 +126,14 @@ const ChatRoomsList = () => {
           {/* Chat Rooms List */}
           {!loading && !error && filteredRooms.length > 0 && (
             <div className="divide-y divide-gray-100">
-              {filteredRooms.map(
-                (room) => (
-                  console.log(room),
-                  (
-                    <ChatRoomListItem
-                      key={room.id}
-                      room={room}
-                      onJoin={() => joinChatRoom(room.id)}
-                      onDelete={() => deleteChatRoom(room.id)}
-                    />
-                  )
-                )
-              )}
+              {filteredRooms.map((room) => (
+                <ChatRoomListItem
+                  key={room.id}
+                  room={room}
+                  onJoin={() => joinChatRoom(room.id)}
+                  onDelete={() => deleteChatRoom(room.id)}
+                />
+              ))}
             </div>
           )}
         </SidebarGroup>
