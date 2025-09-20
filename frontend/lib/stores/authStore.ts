@@ -30,9 +30,9 @@ export const useAuthStore = create<AuthState>()(
 
             logout: () => {
                 authApi.logout()
-                set({ 
-                    user: null, 
-                    isAuthenticated: false 
+                set({
+                    user: null,
+                    isAuthenticated: false
                 })
                 toast.success('Logged out successfully')
             },
@@ -43,27 +43,27 @@ export const useAuthStore = create<AuthState>()(
                     const response = await authApi.getCurrentUser()
 
                     if (response.success && response.data.authenticated) {
-                        set({ 
+                        set({
                             isAuthenticated: true,
                             user: response.data.user || null
                         })
-                        
+
                         if (showToast && response.data.user) {
                             toast.success(`Welcome back, ${response.data.user.name}!`, {
                                 id: 'login-success',
                             })
                         }
                     } else {
-                        set({ 
+                        set({
                             isAuthenticated: false,
-                            user: null 
+                            user: null
                         })
                     }
                 } catch (error) {
                     console.error("Auth check failed: ", error)
-                    set({ 
+                    set({
                         isAuthenticated: false,
-                        user: null 
+                        user: null
                     })
                 } finally {
                     set({ loading: false })
@@ -76,7 +76,7 @@ export const useAuthStore = create<AuthState>()(
         }),
         {
             name: 'auth-storage',
-            partialize: (state) => ({ 
+            partialize: (state) => ({
                 user: state.user,
                 isAuthenticated: state.isAuthenticated
             }),

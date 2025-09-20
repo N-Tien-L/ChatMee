@@ -46,7 +46,7 @@ export const useChatRoomsStore = create<chatRoomState>((set, get) => ({
     },
 
     addRoom: (room) => {
-        set((state) => ({ 
+        set((state) => ({
             rooms: [...state.rooms, room]
         }))
         get().applyFilters()
@@ -54,7 +54,7 @@ export const useChatRoomsStore = create<chatRoomState>((set, get) => ({
 
     updateRoom: (id, updates) => {
         set((state) => ({
-            rooms: state.rooms.map(room => 
+            rooms: state.rooms.map(room =>
                 room.id === id ? { ...room, ...updates } : room
             )
         }))
@@ -82,7 +82,7 @@ export const useChatRoomsStore = create<chatRoomState>((set, get) => ({
         try {
             set({ loading: true, error: null })
             const response = await chatRoomApi.getChatRooms()
-            
+
             if (response.success) {
                 const roomsWithDisplayNames = await Promise.all(
                     response.data.map(async (room: ChatRoomResponse) => {
@@ -166,7 +166,7 @@ export const useChatRoomsStore = create<chatRoomState>((set, get) => ({
     // Helper method for direct message display names
     getDirectMessageDisplayName: async (room: ChatRoomResponse): Promise<string> => {
         const currentUser = useAuthStore.getState().user
-        
+
         if (
             room.roomType !== RoomType.DIRECT_MESSAGE ||
             !room.participants ||
@@ -179,7 +179,7 @@ export const useChatRoomsStore = create<chatRoomState>((set, get) => ({
         const otherParticipantId = room.participants.find(
             (id) => id !== currentUser.id
         )
-        
+
         if (!otherParticipantId) {
             return "Direct Message"
         }

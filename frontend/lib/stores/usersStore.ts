@@ -50,7 +50,7 @@ export const useUsersStore = create<UsersState>((set, get) => ({
         try {
             set({ loading: true })
             const response = await userApi.getAllUsers()
-            
+
             if (response.success) {
                 get().setUsers(response.data)
             } else {
