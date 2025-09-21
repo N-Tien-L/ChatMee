@@ -12,7 +12,7 @@ import { Button } from "./ui/button";
 import { Github, Google } from "./ui/icon/OAuthIcons";
 import { useEffect, useRef, useState } from "react";
 import { FlipWords } from "./ui/shadcn-io/flip-words";
-import { useAuth } from "@/hooks/useAuth";
+import { useAuthStore } from "@/lib/stores";
 
 export function LoginForm({
   className,
@@ -23,7 +23,7 @@ export function LoginForm({
   const words = ["join", "chat", "share"];
 
   // Use the auth hook
-  const { login, loading, isAuthenticated } = useAuth();
+  const { login, loading, isAuthenticated } = useAuthStore();
 
   useEffect(() => {
     const handleMouseMove = (e: MouseEvent) => {

@@ -6,26 +6,32 @@ import {
   SidebarHeader,
 } from "@/components/ui/sidebar";
 import React, { useState } from "react";
-import { useChatRooms } from "@/hooks/useChatRooms";
 import { RoomType } from "@/lib/type/ChatTypes";
 import { Search, Plus, MessageSquare, Users, Lock, Globe } from "lucide-react";
 import ChatRoomListItem from "./ChatRoomListItem";
+import { useChatRoomsStore } from "@/lib/stores/chatRoomsStore";
+import { useShallow } from "zustand/react/shallow";
 
 const ChatRoomsList = () => {
-  const {
-    filteredRooms,
-    loading,
-    error,
-    searchQuery,
-    setSearchQuery,
-    roomTypeFilter,
-    setRoomTypeFilter,
-    createChatRoom,
-    joinChatRoom,
-    deleteChatRoom,
-  } = useChatRooms();
+  const { filteredRooms, loading, error, searchQuery, roomTypeFilter } =
+    useChatRoomsStore(
+      useShallow((state) => ({
+        filteredRooms: state.filteredRooms,
+        loading: state.loading,
+        error: state.error,
+        searchQuery: state.searchQuery,
+        roomTypeFilter: state.roomTypeFilter,
+      }))
+    );
 
   console.log(filteredRooms);
+
+  const setSearchQuery = useChatRoomsStore((state) => state.setSearchQuery);
+  const setRoomTypeFilter = useChatRoomsStore(
+    (state) => state.setRoomTypeFilter
+  );
+  const joinRoom = useChatRoomsStore((state) => state.joinRoom);
+  const deleteRoomById = useChatRoomsStore((state) => state.deleteRoomById);
 
   const [showCreateModal, setShowCreateModal] = useState(false);
 
@@ -130,8 +136,8 @@ const ChatRoomsList = () => {
                 <ChatRoomListItem
                   key={room.id}
                   room={room}
-                  onJoin={() => joinChatRoom(room.id)}
-                  onDelete={() => deleteChatRoom(room.id)}
+                  onJoin={() => joinRoom(room.id)}
+                  onDelete={() => deleteRoomById(room.id)}
                 />
               ))}
             </div>

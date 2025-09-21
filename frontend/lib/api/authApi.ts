@@ -42,16 +42,25 @@ export const authApi = {
     // login
     // Fallback to 'google' if no provider is passed
     login: (provider = 'google') => {
-        window.location.href = `${API_BASE_URL}/oauth2/authorization/${provider}`
+        // Add prompt=select_account to force account selection
+        const url = `${API_BASE_URL}/oauth2/authorization/${provider}?prompt=select_account`
+        window.location.href = url
     },
 
     // logout
     logout: async () => {
         try {
+            // Logout from application
             window.location.href = `${API_BASE_URL}/logout`
         } catch (error) {
             console.error("Error during logout: ", error)
             throw error
         }
+    },
+
+    // Force logout from Google and then login again
+    loginWithAccountSelection: (provider = 'google') => {
+        // First logout from Google, then redirect to login
+        window.location.href = `https://accounts.google.com/logout?continue=${encodeURIComponent(`${API_BASE_URL}/oauth2/authorization/${provider}?prompt=select_account`)}`
     }
 }

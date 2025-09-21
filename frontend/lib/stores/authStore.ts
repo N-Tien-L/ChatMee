@@ -49,7 +49,7 @@ export const useAuthStore = create<AuthState>()(
                         })
 
                         if (showToast && response.data.user) {
-                            toast.success(`Welcome back, ${response.data.user.name}!`, {
+                            toast.success(`Welcome, ${response.data.user.name}!`, {
                                 id: 'login-success',
                             })
                         }

@@ -1,25 +1,50 @@
 "use client";
 
-import { useAuth } from "@/hooks/useAuth";
-import { useEffect } from "react";
-import toast from "react-hot-toast";
+import { useAuthStore } from "@/lib/stores/authStore";
+import { useChatRoomsStore } from "@/lib/stores/chatRoomsStore";
+import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import React from "react";
 import ChatRoomsList from "@/components/ChatRoomsList";
+import { useShallow } from "zustand/react/shallow";
 
 const Dashboard = () => {
-  const { user, isAuthenticated, loading } = useAuth();
+  const { user, isAuthenticated, loading } = useAuthStore(
+    useShallow((state) => ({
+      user: state.user,
+      isAuthenticated: state.isAuthenticated,
+      loading: state.loading,
+    }))
+  );
+  const checkAuthStatus = useAuthStore((state) => state.checkAuthStatus);
+  const fetchRooms = useChatRoomsStore((state) => state.fetchRooms);
+  const router = useRouter();
+  const [hasCheckedAuth, setHasCheckedAuth] = useState(false);
 
   useEffect(() => {
-    // Show success toast when user successfully reaches dashboard
-    if (isAuthenticated && user) {
-      toast.success(`Welcome to ChatMee, ${user.name}!`, {
-        id: "dashboard-welcome",
-        duration: 3000,
-      });
-    }
-  }, [isAuthenticated, user]);
+    const fetchAuthStatus = async () => {
+      await checkAuthStatus();
+      setHasCheckedAuth(true); // Mark that we've checked
+    };
+    fetchAuthStatus();
+  }, [checkAuthStatus]);
 
-  if (loading) {
+  useEffect(() => {
+    // Only redirect AFTER we've checked auth status
+    if (hasCheckedAuth && !loading && !isAuthenticated) {
+      router.push("/login");
+    }
+  }, [hasCheckedAuth, isAuthenticated, loading, router]);
+
+  useEffect(() => {
+    // Fetch chat rooms when user is authenticated
+    if (hasCheckedAuth && isAuthenticated && !loading) {
+      fetchRooms();
+    }
+  }, [hasCheckedAuth, isAuthenticated, loading, fetchRooms]);
+
+  // Show loading while checking auth OR while loading
+  if (!hasCheckedAuth || loading) {
     return (
       <div className="flex items-center justify-center min-h-screen">
         <div className="text-2xl text-gray-600">Loading...</div>
