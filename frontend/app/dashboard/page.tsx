@@ -7,6 +7,8 @@ import { useRouter } from "next/navigation";
 import React from "react";
 import ChatRoomsList from "@/components/ChatRoomsList";
 import { useShallow } from "zustand/react/shallow";
+import { Button } from "@/components/ui/button";
+import { CreateRoomModal } from "@/components/CreateRoomModal";
 
 const Dashboard = () => {
   const { user, isAuthenticated, loading } = useAuthStore(
@@ -20,6 +22,7 @@ const Dashboard = () => {
   const fetchRooms = useChatRoomsStore((state) => state.fetchRooms);
   const router = useRouter();
   const [hasCheckedAuth, setHasCheckedAuth] = useState(false);
+  const [isCreateRoomModalOpen, setIsCreateRoomModalOpen] = useState(false);
 
   useEffect(() => {
     const fetchAuthStatus = async () => {
@@ -82,6 +85,9 @@ const Dashboard = () => {
         <header className="bg-white shadow-sm border-b h-16 flex items-center px-6">
           <h1 className="text-xl font-semibold text-gray-900">ChatMee</h1>
           <div className="ml-auto flex items-center space-x-4">
+            <Button onClick={() => setIsCreateRoomModalOpen(true)}>
+              Create Room
+            </Button>
             <span className="text-gray-700">Welcome, {user?.name}</span>
             <img
               src={user?.avatarUrl || "/default-avatar.png"}
@@ -104,6 +110,10 @@ const Dashboard = () => {
           </div>
         </main>
       </div>
+      <CreateRoomModal
+        isOpen={isCreateRoomModalOpen}
+        onClose={() => setIsCreateRoomModalOpen(false)}
+      />
     </div>
   );
 };
