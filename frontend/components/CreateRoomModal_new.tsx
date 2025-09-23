@@ -126,7 +126,7 @@ export const CreateRoomModal = ({ isOpen, onClose }: CreateRoomModalProps) => {
             </div>
 
             {/* Form Fields - Only for non-DM rooms */}
-            {roomType !== RoomType.DIRECT_MESSAGE ? (
+            {roomType !== RoomType.DIRECT_MESSAGE && (
               <div className="space-y-5">
                 {/* Room Name */}
                 <div className="space-y-2">
@@ -321,11 +321,6 @@ export const CreateRoomModal = ({ isOpen, onClose }: CreateRoomModalProps) => {
                   </div>
                 </div>
               </div>
-            ) : (
-              <div>
-                <Label>Partner</Label>
-                <Input placeholder="Enter your partner name to find" />
-              </div>
             )}
           </div>
 
@@ -411,33 +406,31 @@ export const CreateRoomModal = ({ isOpen, onClose }: CreateRoomModalProps) => {
             </div>
 
             {/* General Tips */}
-            {roomType !== RoomType.DIRECT_MESSAGE && (
-              <div className="space-y-3">
-                <h4 className="text-md font-medium text-gray-900">
-                  General Guidelines
-                </h4>
-                <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
-                  <div className="space-y-3 text-xs text-gray-600">
-                    <div>
-                      <strong>Room Name:</strong> Choose descriptive names that
-                      clearly indicate the room's purpose.
-                    </div>
-                    <div>
-                      <strong>Max Users:</strong> Consider your community size.
-                      Start small and increase as needed.
-                    </div>
-                    <div>
-                      <strong>File Sharing:</strong> Enable for collaborative
-                      work, disable for focused discussions.
-                    </div>
-                    <div>
-                      <strong>Guest Access:</strong> Great for public engagement
-                      but consider moderation needs.
-                    </div>
+            <div className="space-y-3">
+              <h4 className="text-md font-medium text-gray-900">
+                General Guidelines
+              </h4>
+              <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
+                <div className="space-y-3 text-xs text-gray-600">
+                  <div>
+                    <strong>Room Name:</strong> Choose descriptive names that
+                    clearly indicate the room's purpose.
+                  </div>
+                  <div>
+                    <strong>Max Users:</strong> Consider your community size.
+                    Start small and increase as needed.
+                  </div>
+                  <div>
+                    <strong>File Sharing:</strong> Enable for collaborative
+                    work, disable for focused discussions.
+                  </div>
+                  <div>
+                    <strong>Guest Access:</strong> Great for public engagement
+                    but consider moderation needs.
                   </div>
                 </div>
               </div>
-            )}
+            </div>
           </div>
         </div>
 
