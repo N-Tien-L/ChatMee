@@ -2,17 +2,23 @@ import { create } from 'zustand'
 import { userApi } from '../api/userApi'
 import { UserResponse } from "../type/ResponseType";
 import toast from 'react-hot-toast'
+import { get } from 'http';
+import Fuse from 'fuse.js';
 
 interface UsersState {
     users: UserResponse[],
     usersCache: Map<string, UserResponse>
     loading: boolean
+    searchQuery: string;
+    filteredUsers: UserResponse[];
 
     setUsers: (users: UserResponse[]) => void
     addUserToCache: (user: UserResponse) => void
     getUserFromCache: (id: string) => UserResponse | null
     fetchUsers: () => Promise<void>
     fetchUserById: (id: string) => Promise<UserResponse | null>
+    setSearchQuery: (query: string) => void;
+    applyFilters: () => void;
 }
 
 export const useUsersStore = create<UsersState>((set, get) => ({
@@ -20,6 +26,8 @@ export const useUsersStore = create<UsersState>((set, get) => ({
     users: [],
     usersCache: new Map(),
     loading: false,
+    searchQuery: "",
+    filteredUsers: [],
 
     // Actions
     setUsers: (users) => {
@@ -87,5 +95,26 @@ export const useUsersStore = create<UsersState>((set, get) => ({
             console.error('Failed to fetch user by ID:', error)
             return null
         }
+    },
+
+    setSearchQuery: (query) => {
+        set({ searchQuery: query });
+        get().applyFilters();
+    },
+
+    applyFilters: () => {
+        const { users, searchQuery } = get()
+        let filtered = [...users]
+
+        if (searchQuery.trim()) {
+            const fuse = new Fuse(filtered, {
+                keys: ["name", "email"],
+                threshold: 0.3,
+            })
+            const searchResults = fuse.search(searchQuery);
+            filtered = searchResults.map((result) => result.item)
+        }
+
+        set({ filteredUsers: filtered })
     },
 }))

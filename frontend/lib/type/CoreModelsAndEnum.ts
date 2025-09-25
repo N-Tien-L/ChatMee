@@ -65,30 +65,6 @@ export interface Participant {
   updatedAt: string;
 }
 
-// Request DTOs
-export interface CreateChatRoomRequest {
-  roomType: RoomType;
-  participantId?: string; // for direct messages
-  roomName?: string; // for group chats
-  description?: string;
-  maxUsers?: number;
-  settings?: Partial<RoomSettings>;
-}
-
-export interface UpdateChatRoomRequest {
-  roomName?: string;
-  description?: string;
-  maxUsers?: number;
-  settings?: Partial<RoomSettings>;
-}
-
-export interface JoinChatRoomRequest {
-  userId: string;
-  role?: string;
-}
-
-// Response DTOs
-
 // Extended types for UI
 export interface ChatRoomWithParticipants extends ChatRoom {
   participants: Participant[];

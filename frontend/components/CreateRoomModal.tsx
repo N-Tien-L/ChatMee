@@ -1,7 +1,9 @@
 "use client";
 
 import { useChatRoomsStore } from "@/lib/stores";
-import { CreateChatRoomRequest, RoomType } from "@/lib/type/ChatTypes";
+import { useAuthStore } from "@/lib/stores";
+import { RoomType } from "@/lib/type/CoreModelsAndEnum";
+import { UserResponse } from "@/lib/type/ResponseType";
 import {
   Dialog,
   DialogContent,
@@ -22,6 +24,9 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Checkbox } from "./ui/checkbox";
+import { CreateChatRoomRequest } from "@/lib/type/RequestType";
+import UserSearchList from "./UserSearchList";
+import { X } from "lucide-react";
 
 interface CreateRoomModalProps {
   isOpen: boolean;
@@ -40,10 +45,21 @@ export const CreateRoomModal = ({ isOpen, onClose }: CreateRoomModalProps) => {
   const [allowGuestUsers, setAllowGuestUsers] = useState(false);
   const [moderationRequired, setModerationRequired] = useState(false);
 
+  // Direct Message specific state
+  const [selectedUser, setSelectedUser] = useState<UserResponse | null>(null);
+  const { user: currentUser } = useAuthStore();
+
   // Sync displayMaxUser with maxUser when maxUser changes from buttons
   useEffect(() => {
     setDisplayMaxUser(maxUser.toString());
   }, [maxUser]);
+
+  // Reset selected user when room type changes
+  useEffect(() => {
+    if (roomType !== RoomType.DIRECT_MESSAGE) {
+      setSelectedUser(null);
+    }
+  }, [roomType]);
 
   const increaseMaxUser = () => {
     const newValue = Math.min(1000, maxUser + 1); // Cap at 1000
@@ -55,27 +71,57 @@ export const CreateRoomModal = ({ isOpen, onClose }: CreateRoomModalProps) => {
     setMaxUser(newValue);
   };
 
+  const handleUserAdd = (user: UserResponse) => {
+    setSelectedUser(user);
+  };
+
+  const handleRemoveSelectedUser = () => {
+    setSelectedUser(null);
+  };
+
   const handleCreateRoom = async () => {
     const request: CreateChatRoomRequest = {
-      roomName: roomName,
+      roomName:
+        roomType === RoomType.DIRECT_MESSAGE
+          ? `${currentUser?.name} & ${selectedUser?.name}`
+          : roomName,
       description,
       roomType: roomType,
-      maxUsers: maxUser,
+      maxUsers: roomType === RoomType.DIRECT_MESSAGE ? 2 : maxUser,
       settings: {
         welcomeMessage,
         allowFileSharing,
         allowGuestUsers,
         moderationRequired,
       },
+      // Add participant for Direct Message
+      ...(roomType === RoomType.DIRECT_MESSAGE &&
+        selectedUser && {
+          participantId: selectedUser.id,
+        }),
     };
 
     const success = await createRoom(request);
     if (success) {
+      // Reset form
       setRoomName("");
       setDescription("");
       setRoomType(RoomType.PUBLIC);
+      setSelectedUser(null);
+      setAllowFileSharing(false);
+      setAllowGuestUsers(false);
+      setModerationRequired(false);
+      setWelcomeMessage("");
       onClose();
     }
+  };
+
+  // Check if form is valid
+  const isFormValid = () => {
+    if (roomType === RoomType.DIRECT_MESSAGE) {
+      return selectedUser !== null;
+    }
+    return roomName.trim().length >= 3;
   };
 
   return (
@@ -83,7 +129,9 @@ export const CreateRoomModal = ({ isOpen, onClose }: CreateRoomModalProps) => {
       <DialogContent className="sm:max-w-[900px] max-h-[90vh] overflow-y-auto">
         <DialogHeader className="space-y-3">
           <DialogTitle className="text-2xl font-semibold text-center">
-            Create a New Chat Room
+            {roomType === RoomType.DIRECT_MESSAGE
+              ? "Start a Direct Conversation"
+              : "Create a New Chat Room"}
           </DialogTitle>
         </DialogHeader>
 
@@ -322,9 +370,61 @@ export const CreateRoomModal = ({ isOpen, onClose }: CreateRoomModalProps) => {
                 </div>
               </div>
             ) : (
-              <div>
-                <Label>Partner</Label>
-                <Input placeholder="Enter your partner name to find" />
+              <div className="space-y-4">
+                {/* Selected User Display */}
+                {selectedUser && (
+                  <div className="space-y-2">
+                    <Label className="text-sm font-medium">Selected User</Label>
+                    <div className="flex items-center gap-3 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                      {selectedUser.avatarUrl ? (
+                        <img
+                          src={selectedUser.avatarUrl}
+                          alt={`${selectedUser.name}'s avatar`}
+                          className="w-8 h-8 rounded-full object-cover"
+                        />
+                      ) : (
+                        <div className="w-8 h-8 rounded-full bg-blue-500 flex items-center justify-center text-white text-xs font-medium">
+                          {selectedUser.name
+                            .split(" ")
+                            .map((n) => n[0])
+                            .join("")
+                            .toUpperCase()
+                            .slice(0, 2)}
+                        </div>
+                      )}
+                      <div className="flex-1">
+                        <p className="font-medium text-sm">
+                          {selectedUser.name}
+                        </p>
+                        <p className="text-xs text-gray-600">
+                          {selectedUser.email}
+                        </p>
+                      </div>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={handleRemoveSelectedUser}
+                        className="h-6 w-6 p-0 text-gray-500 hover:text-red-500"
+                      >
+                        <X className="w-4 h-4" />
+                      </Button>
+                    </div>
+                  </div>
+                )}
+
+                {/* User Search */}
+                <div className="space-y-2">
+                  <Label className="text-sm font-medium">
+                    {selectedUser
+                      ? "Change Partner"
+                      : "Choose Your Chat Partner"}
+                  </Label>
+                  <UserSearchList
+                    onUserAdd={handleUserAdd}
+                    excludeUserIds={currentUser?.id ? [currentUser.id] : []}
+                    placeHolder="Search for someone to chat with..."
+                  />
+                </div>
               </div>
             )}
           </div>
@@ -333,7 +433,9 @@ export const CreateRoomModal = ({ isOpen, onClose }: CreateRoomModalProps) => {
           <div className="space-y-4">
             <div className="space-y-3">
               <h3 className="text-lg font-semibold text-gray-900">
-                Room Type Guide
+                {roomType === RoomType.DIRECT_MESSAGE
+                  ? "Direct Message Guide"
+                  : "Room Type Guide"}
               </h3>
 
               {/* Room Type Descriptions */}
@@ -398,14 +500,21 @@ export const CreateRoomModal = ({ isOpen, onClose }: CreateRoomModalProps) => {
                       Direct Message
                     </span>
                   </div>
-                  <p className="text-sm text-blue-700">
+                  <p className="text-sm text-blue-700 mb-3">
                     • One-on-one private conversations
                     <br />
-                    • Created automatically when messaging someone
+                    • Direct and immediate communication
                     <br />
                     • Only visible to participants
-                    <br />• Cannot be configured manually
+                    <br />• Perfect for private discussions
                   </p>
+                  <div className="bg-blue-100 rounded-lg p-3">
+                    <p className="text-xs text-blue-800">
+                      💡 <strong>Direct Message Tip:</strong> Choose your chat
+                      partner carefully. Once created, you can start chatting
+                      immediately with full privacy.
+                    </p>
+                  </div>
                 </div>
               )}
             </div>
@@ -450,10 +559,12 @@ export const CreateRoomModal = ({ isOpen, onClose }: CreateRoomModalProps) => {
           <Button
             type="submit"
             onClick={handleCreateRoom}
-            disabled={roomType !== RoomType.DIRECT_MESSAGE && !roomName.trim()}
+            disabled={!isFormValid()}
             className="flex-1 bg-blue-600 hover:bg-blue-700"
           >
-            Create Room
+            {roomType === RoomType.DIRECT_MESSAGE
+              ? "Start Chat"
+              : "Create Room"}
           </Button>
         </DialogFooter>
       </DialogContent>

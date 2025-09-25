@@ -1,4 +1,4 @@
-import { RoomSettings, RoomType } from "./ChatTypes"
+import { RoomSettings, RoomType } from "./CoreModelsAndEnum"
 
 export interface UserResponse {
     id: string

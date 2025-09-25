@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from "react";
 import { ChatRoomResponse } from "@/lib/type/ResponseType";
-import { RoomType } from "@/lib/type/ChatTypes";
+import { RoomType } from "@/lib/type/CoreModelsAndEnum";
 import {
   MoreVertical,
   Users,

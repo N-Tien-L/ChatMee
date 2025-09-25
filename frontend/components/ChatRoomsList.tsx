@@ -6,7 +6,7 @@ import {
   SidebarHeader,
 } from "@/components/ui/sidebar";
 import React, { useState } from "react";
-import { RoomType } from "@/lib/type/ChatTypes";
+import { RoomType } from "@/lib/type/CoreModelsAndEnum";
 import { Search, Plus, MessageSquare, Users, Lock, Globe } from "lucide-react";
 import ChatRoomListItem from "./ChatRoomListItem";
 import { useChatRoomsStore } from "@/lib/stores/chatRoomsStore";

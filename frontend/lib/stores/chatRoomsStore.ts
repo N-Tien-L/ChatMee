@@ -2,14 +2,13 @@ import { create } from "zustand";
 import { chatRoomApi } from "../api/chatRoomApi";
 import { userApi } from "../api/userApi";
 import {
-    CreateChatRoomRequest,
     RoomType,
-    UpdateChatRoomRequest,
-} from "../type/ChatTypes";
+} from "../type/CoreModelsAndEnum";
 import { ChatRoomResponse, UserResponse } from "../type/ResponseType";
 import { useAuthStore } from "./authStore";
 import toast from "react-hot-toast";
 import Fuse from "fuse.js";
+import { CreateChatRoomRequest } from "../type/RequestType";
 
 interface chatRoomState {
     rooms: ChatRoomResponse[];
@@ -114,7 +113,13 @@ export const useChatRoomsStore = create<chatRoomState>((set, get) => ({
         try {
             const response = await chatRoomApi.createChatRoom(request);
             if (response.success) {
-                get().addRoom(response.data);
+                // For Direct Message rooms, compute the display name before adding
+                if (response.data.roomType === RoomType.DIRECT_MESSAGE) {
+                    const displayName = await get().getDirectMessageDisplayName(response.data);
+                    get().addRoom({ ...response.data, displayName });
+                } else {
+                    get().addRoom(response.data);
+                }
                 toast.success("Room created successfully!");
                 return true;
             } else {
