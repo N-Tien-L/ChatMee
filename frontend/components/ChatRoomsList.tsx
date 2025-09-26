@@ -5,14 +5,19 @@ import {
   SidebarGroup,
   SidebarHeader,
 } from "@/components/ui/sidebar";
-import React, { useState } from "react";
+import React, { useState, Suspense } from "react";
 import { RoomType } from "@/lib/type/CoreModelsAndEnum";
 import { Search, Plus, MessageSquare, Users, Lock, Globe } from "lucide-react";
 import ChatRoomListItem from "./ChatRoomListItem";
 import { useChatRoomsStore } from "@/lib/stores/chatRoomsStore";
 import { useShallow } from "zustand/react/shallow";
+import { useRouter, useSearchParams } from "next/navigation";
 
-const ChatRoomsList = () => {
+const ChatRoomsListContent = () => {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const selectedRoomId = searchParams.get("roomId");
+
   const { filteredRooms, loading, error, searchQuery, roomTypeFilter } =
     useChatRoomsStore(
       useShallow((state) => ({
@@ -35,6 +40,10 @@ const ChatRoomsList = () => {
 
   const [showCreateModal, setShowCreateModal] = useState(false);
 
+  const handleRoomClick = (roomId: string) => {
+    router.push(`/dashboard?roomId=${roomId}`, { scroll: false });
+  };
+
   const roomTypeOptions = [
     { value: "ALL", label: "All Rooms", icon: MessageSquare },
     { value: RoomType.PUBLIC, label: "Public", icon: Globe },
@@ -43,7 +52,7 @@ const ChatRoomsList = () => {
   ];
 
   return (
-    <Sidebar className="border-r bg-white">
+    <Sidebar variant="sidebar" className="border-r bg-white w-120">
       {/* Header */}
       <SidebarHeader className="p-4 border-b">
         <div className="flex items-center justify-between mb-4">
@@ -138,6 +147,8 @@ const ChatRoomsList = () => {
                   room={room}
                   onJoin={() => joinRoom(room.id)}
                   onDelete={() => deleteRoomById(room.id)}
+                  onClick={() => handleRoomClick(room.id)}
+                  isSelected={selectedRoomId === room.id}
                 />
               ))}
             </div>
@@ -155,6 +166,22 @@ const ChatRoomsList = () => {
         </div>
       </SidebarFooter>
     </Sidebar>
+  );
+};
+
+const ChatRoomsList = () => {
+  return (
+    <Suspense
+      fallback={
+        <Sidebar className="border-r bg-white">
+          <div className="flex items-center justify-center h-full">
+            <div className="text-gray-500">Loading...</div>
+          </div>
+        </Sidebar>
+      }
+    >
+      <ChatRoomsListContent />
+    </Suspense>
   );
 };
 

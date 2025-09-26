@@ -16,6 +16,7 @@ interface ChatRoomListItemProps {
   onJoin: () => Promise<boolean>;
   onDelete: () => Promise<boolean>;
   onClick?: () => void;
+  isSelected?: boolean;
 }
 
 const ChatRoomListItem: React.FC<ChatRoomListItemProps> = ({
@@ -23,6 +24,7 @@ const ChatRoomListItem: React.FC<ChatRoomListItemProps> = ({
   onJoin,
   onDelete,
   onClick,
+  isSelected = false,
 }) => {
   const [showActions, setShowActions] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
@@ -105,7 +107,11 @@ const ChatRoomListItem: React.FC<ChatRoomListItemProps> = ({
 
   return (
     <div
-      className="relative group hover:bg-gray-50 cursor-pointer transition-colors"
+      className={`relative group cursor-pointer transition-colors ${
+        isSelected 
+          ? 'bg-blue-50 border-r-2 border-blue-500' 
+          : 'hover:bg-gray-50'
+      }`}
       onClick={onClick}
     >
       <div className="flex items-center p-4">
@@ -135,9 +141,11 @@ const ChatRoomListItem: React.FC<ChatRoomListItemProps> = ({
           </div>
 
           <div className="flex items-center justify-between">
-            <p className="text-xs text-gray-500 truncate">
-              {room.description || "No description"}
-            </p>
+            {room.description && (
+              <p className="text-xs text-gray-500 truncate">
+                {room.description}
+              </p>
+            )}
             <div className="flex items-center text-xs text-gray-400">
               <Users size={12} className="mr-1" />
               {room.maxUsers || "Unlimited"}
