@@ -108,9 +108,9 @@ const ChatRoomListItem: React.FC<ChatRoomListItemProps> = ({
   return (
     <div
       className={`relative group cursor-pointer transition-colors ${
-        isSelected 
-          ? 'bg-blue-50 border-r-2 border-blue-500' 
-          : 'hover:bg-gray-50'
+        isSelected
+          ? "bg-blue-50 border-r-2 border-blue-500"
+          : "hover:bg-gray-50"
       }`}
       onClick={onClick}
     >

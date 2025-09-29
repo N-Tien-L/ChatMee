@@ -10,6 +10,7 @@ import ChatInterface from "@/components/ChatInterface";
 import { useShallow } from "zustand/react/shallow";
 import { Button } from "@/components/ui/button";
 import { CreateRoomModal } from "@/components/CreateRoomModal";
+import { useWebSocket } from "@/hooks/useWebSocket";
 
 const DashboardContent = () => {
   const { user, isAuthenticated, loading } = useAuthStore(
@@ -26,6 +27,7 @@ const DashboardContent = () => {
   const roomId = searchParams.get("roomId");
   const [hasCheckedAuth, setHasCheckedAuth] = useState(false);
   const [isCreateRoomModalOpen, setIsCreateRoomModalOpen] = useState(false);
+  useWebSocket();
 
   useEffect(() => {
     const fetchAuthStatus = async () => {
