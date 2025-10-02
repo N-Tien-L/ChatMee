@@ -121,4 +121,8 @@ public class ParticipantService {
             throw new DatabaseOperationException("Failed to add participant", e);
         }
     }
+
+    public boolean isUserParticipant(String roomId, String userId) {
+        return participantRepository.findByChatRoomIdAndUserId(roomId, userId).isPresent();
+    }
 }
