@@ -72,12 +72,15 @@ public class ChatWebSocketController {
             // Create response
             ChatMessageResponse response = ChatMessageResponse.builder()
                 .id(savedMessage.getId())
-                .roomId(savedMessage.getChatRoomId())
+                .chatRoomId(savedMessage.getChatRoomId())
                 .senderId(savedMessage.getSenderId())
                 .senderName(user.getName())
                 .content(savedMessage.getContent())
-                .messageType(savedMessage.getType())
-                .timestamp(savedMessage.getCreatedAt())
+                .type(savedMessage.getType())
+                .createdAt(savedMessage.getCreatedAt().toString())
+                .updatedAt(savedMessage.getUpdatedAt().toString())
+                .isUpdated(savedMessage.isUpdated())
+                .isDeleted(savedMessage.isDeleted())
                 .build();
 
             // Broadcast to room subscribers
@@ -104,12 +107,15 @@ public class ChatWebSocketController {
             // Create join message
             ChatMessageResponse response = ChatMessageResponse.builder()
                 .id(UUID.randomUUID().toString())
-                .roomId(request.getRoomId())
+                .chatRoomId(request.getRoomId())
                 .senderId(user.getId())
                 .senderName(user.getName())
                 .content(user.getName() + " joined the chat")
-                .messageType(Message.MessageType.SYSTEM)
-                .timestamp(LocalDateTime.now())
+                .type(Message.MessageType.SYSTEM)
+                .createdAt(LocalDateTime.now().toString())
+                .updatedAt(LocalDateTime.now().toString())
+                .isUpdated(false)
+                .isDeleted(false)
                 .build();
 
             // Broadcast join message

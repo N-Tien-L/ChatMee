@@ -1,7 +1,5 @@
 package com.lnt.chatmee.dto.response;
 
-import java.time.LocalDateTime;
-
 import com.lnt.chatmee.model.Message.MessageType;
 
 import lombok.Builder;
@@ -12,12 +10,15 @@ import lombok.Data;
 public class ChatMessageResponse {
     
     private String id;
-    private String roomId;
+    private String chatRoomId;
     private String senderId;
     private String senderName;
     private String content;
-    private MessageType messageType;
-    private LocalDateTime timestamp;
+    private MessageType type;
+    private String createdAt;
+    private String updatedAt;
+    private boolean isUpdated;
+    private boolean isDeleted;
     private boolean isOwn;
     
 }
