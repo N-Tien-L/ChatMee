@@ -43,6 +43,7 @@ export interface Message {
   id: string;
   chatRoomId: string;
   senderId: string;
+  senderName?: string;
   type: MessageType;
   content: string;
   attachments?: string[];
@@ -50,6 +51,7 @@ export interface Message {
   updatedAt: string;
   isUpdated: boolean;
   isDeleted: boolean;
+  isOwn?: boolean;
 }
 
 export interface Participant {

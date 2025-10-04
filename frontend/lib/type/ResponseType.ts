@@ -27,6 +27,23 @@ export interface ChatRoomResponse {
     displayName?: string; // Add computed display name
 }
 
+export interface ChatMessageResponse {
+    id: string;
+    tempId?: string; // For matching optimistic messages
+    chatRoomId: string;
+    senderId: string;
+    senderName: string;
+    content: string;
+    type: 'TEXT' | 'SYSTEM' | 'JOIN' | 'LEAVE' | 'IMAGE' | 'VIDEO' | 'VOICE' | 'FILE';
+    createdAt: string;
+    updatedAt: string;
+    isUpdated: boolean;
+    isDeleted: boolean;
+    isOwn?: boolean;
+}
+
+
+
 export interface ParticipantResponse {
     id: string
     userId: string

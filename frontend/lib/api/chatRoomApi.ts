@@ -3,7 +3,7 @@ import {
     CreateChatRoomRequest,
     UpdateChatRoomRequest,
     JoinChatRoomRequest
-} from "../type/CoreModelsAndEnum";
+} from "../type/RequestType";
 import { apiClient } from "./apiClient";
 
 // Chat room API endpoints

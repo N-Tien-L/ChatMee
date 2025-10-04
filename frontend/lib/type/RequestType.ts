@@ -26,3 +26,10 @@ export interface UpdateUserRequest {
     email?: string
     profilePicURL?: string
 }
+
+export interface ChatMessageRequest {
+    roomId: string;
+    content: string;
+    messageType: 'TEXT' | 'SYSTEM' | 'JOIN' | 'LEAVE' | 'IMAGE' | 'VIDEO' | 'VOICE' | 'FILE';
+    tempId?: string; // For matching optimistic updates
+}
