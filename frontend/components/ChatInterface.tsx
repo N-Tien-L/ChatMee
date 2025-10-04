@@ -1,51 +1,22 @@
-'use client'
+"use client";
 
-import React, { useState, useRef, useEffect } from 'react';
-import { Send, MoreVertical, Phone, Video, Info } from 'lucide-react';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { useChatRoomsStore } from '@/lib/stores/chatRoomsStore';
-import { useShallow } from 'zustand/react/shallow';
-import { ChatRoomResponse } from '@/lib/type/ResponseType';
-
-interface Message {
-  id: string;
-  content: string;
-  sender: string;
-  timestamp: Date;
-  isOwn: boolean;
-}
+import React, { useState, useRef, useEffect } from "react";
+import { Send, MoreVertical, Phone, Video, Info } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { useChatRoomsStore } from "@/lib/stores/chatRoomsStore";
+import { useShallow } from "zustand/react/shallow";
+import { ChatMessageResponse, ChatRoomResponse } from "@/lib/type/ResponseType";
+import { useRoomMessages, MessageWithStatus } from "@/hooks/useRoomMessage";
 
 interface ChatInterfaceProps {
   roomId: string;
 }
 
 const ChatInterface: React.FC<ChatInterfaceProps> = ({ roomId }) => {
-  const [messages, setMessages] = useState<Message[]>([
-    {
-      id: '1',
-      content: 'Hello everyone! Welcome to the chat room.',
-      sender: 'John Doe',
-      timestamp: new Date(Date.now() - 60000),
-      isOwn: false,
-    },
-    {
-      id: '2',
-      content: 'Hi there! Thanks for creating this room.',
-      sender: 'You',
-      timestamp: new Date(Date.now() - 30000),
-      isOwn: true,
-    },
-    {
-      id: '3',
-      content: 'Great to see everyone here! Let\'s have a productive chat.',
-      sender: 'Jane Smith',
-      timestamp: new Date(Date.now() - 15000),
-      isOwn: false,
-    },
-  ]);
-  
-  const [newMessage, setNewMessage] = useState('');
+  const { messages, connected, sendMessage, wsError, loading, sending } =
+    useRoomMessages(roomId);
+  const [newMessage, setNewMessage] = useState("");
   const [isTyping, setIsTyping] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -56,10 +27,10 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ roomId }) => {
     }))
   );
 
-  const currentRoom = rooms.find(room => room.id === roomId);
+  const currentRoom = rooms.find((room) => room.id === roomId);
 
   const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   };
 
   useEffect(() => {
@@ -68,38 +39,15 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ roomId }) => {
 
   const handleSendMessage = (e: React.FormEvent) => {
     e.preventDefault();
-    
-    if (!newMessage.trim()) return;
 
-    const message: Message = {
-      id: Date.now().toString(),
-      content: newMessage.trim(),
-      sender: 'You',
-      timestamp: new Date(),
-      isOwn: true,
-    };
+    if (!newMessage.trim() || !connected) return;
 
-    setMessages(prev => [...prev, message]);
-    setNewMessage('');
-    
-    // Simulate typing indicator
-    setIsTyping(true);
-    setTimeout(() => {
-      setIsTyping(false);
-      // Simulate a response (remove this in real implementation)
-      const responseMessage: Message = {
-        id: (Date.now() + 1).toString(),
-        content: 'Thanks for your message!',
-        sender: 'Bot',
-        timestamp: new Date(),
-        isOwn: false,
-      };
-      setMessages(prev => [...prev, responseMessage]);
-    }, 1000);
+    sendMessage(newMessage.trim());
+    setNewMessage("");
   };
 
   const formatTime = (date: Date) => {
-    return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    return date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
   };
 
   const formatDate = (date: Date) => {
@@ -108,9 +56,9 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ roomId }) => {
     yesterday.setDate(yesterday.getDate() - 1);
 
     if (date.toDateString() === today.toDateString()) {
-      return 'Today';
+      return "Today";
     } else if (date.toDateString() === yesterday.toDateString()) {
-      return 'Yesterday';
+      return "Yesterday";
     } else {
       return date.toLocaleDateString();
     }
@@ -120,8 +68,12 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ roomId }) => {
     return (
       <div className="flex items-center justify-center h-full">
         <div className="text-center">
-          <h2 className="text-xl font-semibold text-gray-900 mb-2">Room not found</h2>
-          <p className="text-gray-500">The chat room you're looking for doesn't exist.</p>
+          <h2 className="text-xl font-semibold text-gray-900 mb-2">
+            Room not found
+          </h2>
+          <p className="text-gray-500">
+            The chat room you're looking for doesn't exist.
+          </p>
         </div>
       </div>
     );
@@ -134,14 +86,26 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ roomId }) => {
         <div className="flex items-center space-x-3">
           <div className="flex items-center space-x-3">
             <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-400 to-purple-500 flex items-center justify-center text-white font-semibold">
-              {(currentRoom.displayName || currentRoom.roomName).charAt(0).toUpperCase()}
+              {(currentRoom.displayName || currentRoom.roomName)
+                .charAt(0)
+                .toUpperCase()}
             </div>
             <div>
-              <h1 className="text-lg font-semibold text-gray-900">
-                {currentRoom.displayName || currentRoom.roomName}
-              </h1>
+              <div className="flex items-center space-x-2">
+                <h1 className="text-lg font-semibold text-gray-900">
+                  {currentRoom.displayName || currentRoom.roomName}
+                </h1>
+                <div
+                  className={`w-2 h-2 rounded-full ${
+                    connected ? "bg-green-500" : "bg-red-500"
+                  }`}
+                  title={connected ? "Connected" : "Disconnected"}
+                />
+              </div>
               <p className="text-sm text-gray-500">
-                {currentRoom.description || `${currentRoom.roomType.toLowerCase()} room`}
+                {currentRoom.description ||
+                  `${currentRoom.roomType.toLowerCase()} room`}
+                {loading && " • Loading messages..."}
               </p>
             </div>
           </div>
@@ -166,64 +130,99 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ roomId }) => {
       {/* Messages Area */}
       <div className="flex-1 overflow-y-auto p-4 space-y-4">
         {messages.map((message, index) => {
-          const showDate = index === 0 || 
-            formatDate(message.timestamp) !== formatDate(messages[index - 1].timestamp);
-          
+          const messageDate = new Date(message.createdAt);
+          const showDate =
+            index === 0 ||
+            formatDate(messageDate) !==
+              formatDate(new Date(messages[index - 1].createdAt));
+
           return (
-            <div key={message.id}>
+            <div key={`${message.id}-${index}`}>
               {showDate && (
                 <div className="flex justify-center my-4">
                   <span className="px-3 py-1 text-xs bg-gray-100 text-gray-600 rounded-full">
-                    {formatDate(message.timestamp)}
+                    {formatDate(messageDate)}
                   </span>
                 </div>
               )}
-              
-              <div className={`flex ${message.isOwn ? 'justify-end' : 'justify-start'}`}>
-                <div className={`max-w-xs lg:max-w-md ${message.isOwn ? 'order-2' : 'order-1'}`}>
+
+              <div
+                className={`flex ${
+                  message.isOwn ? "justify-end" : "justify-start"
+                }`}
+              >
+                <div
+                  className={`max-w-xs lg:max-w-md ${
+                    message.isOwn ? "order-2" : "order-1"
+                  }`}
+                >
                   {!message.isOwn && (
-                    <p className="text-xs text-gray-500 mb-1 px-3">{message.sender}</p>
+                    <p className="text-xs text-gray-500 mb-1 px-3">
+                      {message.senderName}{" "}
+                    </p>
                   )}
                   <div
                     className={`px-4 py-2 rounded-2xl ${
                       message.isOwn
-                        ? 'bg-blue-500 text-white'
-                        : 'bg-gray-100 text-gray-900'
+                        ? "bg-blue-500 text-white"
+                        : "bg-gray-100 text-gray-900"
                     }`}
                   >
                     <p className="text-sm">{message.content}</p>
-                    <p className={`text-xs mt-1 ${
-                      message.isOwn ? 'text-blue-100' : 'text-gray-500'
-                    }`}>
-                      {formatTime(message.timestamp)}
-                    </p>
+                    <div
+                      className={`flex items-center justify-between mt-1 ${
+                        message.isOwn ? "text-blue-100" : "text-gray-500"
+                      }`}
+                    >
+                      <p className="text-xs">{formatTime(messageDate)}</p>
+                      {message.isOwn && (
+                        <div className="text-xs ml-2">
+                          {(message as MessageWithStatus).status ===
+                            "sending" && <span className="opacity-70">⏳</span>}
+                          {(message as MessageWithStatus).status === "sent" && (
+                            <span className="opacity-70">✓</span>
+                          )}
+                          {(message as MessageWithStatus).status ===
+                            "failed" && <span className="text-red-300">✗</span>}
+                        </div>
+                      )}
+                    </div>
                   </div>
                 </div>
               </div>
             </div>
           );
         })}
-        
+
         {isTyping && (
           <div className="flex justify-start">
             <div className="max-w-xs lg:max-w-md">
               <div className="px-4 py-2 rounded-2xl bg-gray-100">
                 <div className="flex space-x-1">
                   <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce"></div>
-                  <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0.1s' }}></div>
-                  <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0.2s' }}></div>
+                  <div
+                    className="w-2 h-2 bg-gray-400 rounded-full animate-bounce"
+                    style={{ animationDelay: "0.1s" }}
+                  ></div>
+                  <div
+                    className="w-2 h-2 bg-gray-400 rounded-full animate-bounce"
+                    style={{ animationDelay: "0.2s" }}
+                  ></div>
                 </div>
               </div>
             </div>
           </div>
         )}
-        
+
         <div ref={messagesEndRef} />
       </div>
 
       {/* Message Input */}
       <div className="p-4 border-t bg-white">
-        <form onSubmit={handleSendMessage} className="flex items-center space-x-2">
+        <form
+          onSubmit={handleSendMessage}
+          className="flex items-center space-x-2"
+        >
           <div className="flex-1 relative">
             <Input
               ref={inputRef}
@@ -236,10 +235,14 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ roomId }) => {
           </div>
           <Button
             type="submit"
-            disabled={!newMessage.trim()}
+            disabled={!newMessage.trim() || !connected || sending}
             className="rounded-full p-3 bg-blue-500 hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            <Send size={18} />
+            {sending ? (
+              <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+            ) : (
+              <Send size={18} />
+            )}
           </Button>
         </form>
       </div>
