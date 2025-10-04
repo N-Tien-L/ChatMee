@@ -5,6 +5,7 @@ import java.util.List;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.core.user.OAuth2User;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -35,7 +36,7 @@ public class MessageController {
     @GetMapping("/room/{roomId}")
     public ResponseEntity<ApiResponse<List<ChatMessageResponse>>> getRecentMessages(
             @PathVariable String roomId,
-            OAuth2User principle) {
+            @AuthenticationPrincipal OAuth2User principle) {
         try {
             String provider = oAuthUtil.determineProvider(principle);
             String providerId = oAuthUtil.getProviderId(principle, provider);

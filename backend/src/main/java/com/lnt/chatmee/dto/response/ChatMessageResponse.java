@@ -10,6 +10,7 @@ import lombok.Data;
 public class ChatMessageResponse {
     
     private String id;
+    private String tempId;
     private String chatRoomId;
     private String senderId;
     private String senderName;
@@ -19,6 +20,5 @@ public class ChatMessageResponse {
     private String updatedAt;
     private boolean isUpdated;
     private boolean isDeleted;
-    private boolean isOwn;
     
 }

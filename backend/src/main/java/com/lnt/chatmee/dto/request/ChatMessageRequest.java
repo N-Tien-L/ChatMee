@@ -23,4 +23,5 @@ public class ChatMessageRequest {
 
     private String senderName;
 
+    private String tempId;
 }

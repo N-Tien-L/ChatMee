@@ -72,6 +72,7 @@ public class ChatWebSocketController {
             // Create response
             ChatMessageResponse response = ChatMessageResponse.builder()
                 .id(savedMessage.getId())
+                .tempId(request.getTempId())
                 .chatRoomId(savedMessage.getChatRoomId())
                 .senderId(savedMessage.getSenderId())
                 .senderName(user.getName())
@@ -90,6 +91,21 @@ public class ChatWebSocketController {
 
         } catch (Exception e) {
             logger.error("Error sending message: ", e);
+
+            ChatMessageResponse failResponse = ChatMessageResponse.builder()
+                .tempId(request.getTempId())
+                .chatRoomId(request.getRoomId())
+                .senderId(null)
+                .senderName(null)
+                .content(null)
+                .type(Message.MessageType.SYSTEM)
+                .createdAt(LocalDateTime.now().toString())
+                .updatedAt(LocalDateTime.now().toString())
+                .isUpdated(false)
+                .isDeleted(false)
+                .build();
+            
+            messagingTemplate.convertAndSend("/topic/public/" + request.getRoomId() + "/failed", failResponse);
         }
     }
 
