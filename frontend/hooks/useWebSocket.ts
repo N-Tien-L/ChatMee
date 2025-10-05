@@ -10,6 +10,11 @@ export interface WebSocketState {
     error: string | null
 }
 
+export interface StompError {
+    tempId: string;
+    message: string;
+}
+
 export const useWebSocket = () => {
     // state management
     const [state, setState] = useState<WebSocketState>({
@@ -113,6 +118,29 @@ export const useWebSocket = () => {
         }
     }, [])
 
+    const subscribeToErrorQueue = useCallback((onError: (error: StompError) => void) => {
+        if (!clientRef.current?.connected) return;
+
+        const errorQueue = '/user/queue/errors';
+
+        // Prevent duplicate subscriptions
+        if (subscriptionsRef.current.has(errorQueue)) {
+            return;
+        }
+
+        const subscription = clientRef.current.subscribe(errorQueue, (message) => {
+            try {
+                const errorPayload: StompError = JSON.parse(message.body);
+                onError(errorPayload);
+            } catch (error) {
+                console.error("Error parsing error queue message:", error);
+            }
+        });
+
+        subscriptionsRef.current.set(errorQueue, subscription);
+        console.log("Subscribed to error queue");
+    }, [])
+
     const sendMessage = useCallback((roomId: string, content: string, tempId?: string) => {
         if (!clientRef.current?.connected || !user) return
 
@@ -155,7 +183,8 @@ export const useWebSocket = () => {
         subscribeToRoom,
         unsubscribeFromRoom,
         sendMessage,
-        joinRoom
+        joinRoom,
+        subscribeToErrorQueue
     }
 }
 

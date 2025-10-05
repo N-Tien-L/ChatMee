@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { useWebSocket } from "./useWebSocket";
+import { StompError, useWebSocket } from "./useWebSocket";
 import { messageApi } from "@/lib/api/messageApi";
 import { ChatMessageResponse } from "@/lib/type/ResponseType";
 import { useAuthStore } from "@/lib/stores/authStore";
@@ -9,6 +9,7 @@ export interface MessageWithStatus extends ChatMessageResponse {
     status?: 'sending' | 'sent' | 'failed';
     isOptimistic?: boolean;
     clientTempId?: string; // Client-side temp ID for matching
+    errorMessage?: string;
 }
 
 const sessionCache = new Map<string, {
@@ -43,7 +44,8 @@ export const useRoomMessages = (roomId: string) => {
         subscribeToRoom,
         unsubscribeFromRoom,
         sendMessage: sendWebSocketMessage,
-        joinRoom
+        joinRoom,
+        subscribeToErrorQueue
     } = useWebSocket();
 
     // load messages
@@ -186,6 +188,26 @@ export const useRoomMessages = (roomId: string) => {
             unsubscribeFromRoom(roomId);
         };
     }, [roomId, connected, subscribeToRoom, unsubscribeFromRoom, user?.id]);
+
+    // WebSocket subscription for handling failed messages
+    useEffect(() => {
+        if (!connected || !subscribeToErrorQueue) return;
+
+        const handleError = (error: StompError) => {
+            console.error('Received message failure from server:', error);
+
+            setMessages(prev =>
+                prev.map(msg =>
+                    msg.isOptimistic && msg.clientTempId === error.tempId
+                        ? { ...msg, status: 'failed' as const, errorMessage: error.message }
+                        : msg
+                )
+            );
+        };
+
+        subscribeToErrorQueue(handleError);
+
+    }, [connected, subscribeToErrorQueue]);
 
     // Join room effect - only runs when user first accesses a room
     useEffect(() => {
