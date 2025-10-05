@@ -15,6 +15,7 @@ import org.springframework.stereotype.Controller;
 
 import com.lnt.chatmee.dto.request.ChatMessageRequest;
 import com.lnt.chatmee.dto.response.ChatMessageResponse;
+import com.lnt.chatmee.dto.StompError;
 import com.lnt.chatmee.model.Message;
 import com.lnt.chatmee.model.User;
 import com.lnt.chatmee.repository.MessageRepository;
@@ -92,20 +93,13 @@ public class ChatWebSocketController {
         } catch (Exception e) {
             logger.error("Error sending message: ", e);
 
-            ChatMessageResponse failResponse = ChatMessageResponse.builder()
+            // Send error to user-specific error queue 
+            StompError errorPayload = StompError.builder()
                 .tempId(request.getTempId())
-                .chatRoomId(request.getRoomId())
-                .senderId(null)
-                .senderName(null)
-                .content(null)
-                .type(Message.MessageType.SYSTEM)
-                .createdAt(LocalDateTime.now().toString())
-                .updatedAt(LocalDateTime.now().toString())
-                .isUpdated(false)
-                .isDeleted(false)
+                .message("Failed to send message: " + e.getMessage())
                 .build();
             
-            messagingTemplate.convertAndSend("/topic/public/" + request.getRoomId() + "/failed", failResponse);
+            messagingTemplate.convertAndSendToUser(principal.getName(), "/queue/errors", errorPayload);
         }
     }
 
