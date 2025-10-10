@@ -6,7 +6,7 @@ import { useEffect, useState, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import React from "react";
 import ChatRoomsList from "@/components/ChatRoomsList";
-import ChatInterface from "@/components/ChatInterface";
+import ChatInterface from "@/components/chat/ChatInterface";
 import { useShallow } from "zustand/react/shallow";
 import { Button } from "@/components/ui/button";
 import { CreateRoomModal } from "@/components/CreateRoomModal";
