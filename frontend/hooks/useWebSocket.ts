@@ -1,8 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from "react"
-import { Client } from '@stomp/stompjs'
-import { useAuthStore } from "@/lib/stores"
+import { Client, IMessage, StompSubscription } from '@stomp/stompjs'
+import { useAuthStore, useUsersStore } from "@/lib/stores"
 import SockJS from "sockjs-client"
-import { ChatMessageResponse } from "@/lib/type/ResponseType"
+
+import { PresenceMessage, TypingMessage, useChatStore } from "@/lib/stores/chatStore"
+import { Message } from "@/lib/types"
 
 export interface WebSocketState {
     connected: boolean
@@ -25,10 +27,17 @@ export const useWebSocket = () => {
 
     // Refs for STOMP client and subscriptions
     const clientRef = useRef<Client | null>(null)
-    const subscriptionsRef = useRef<Map<string, any>>(new Map())
+    const subsRef = useRef<Map<string, StompSubscription>>(new Map());
 
     // Get auth state
     const { isAuthenticated, user } = useAuthStore()
+
+    // Get chat state and actions
+    const { updatePresence, updateTyping } = useChatStore();
+
+    /** ==============================
+    *        CONNECTION HANDLING
+    *  ============================== */
 
     const connect = useCallback(() => {
         if (!isAuthenticated || clientRef.current?.connected) return
@@ -37,43 +46,56 @@ export const useWebSocket = () => {
 
         const client = new Client({
             webSocketFactory: () => new SockJS(process.env.NEXT_PUBLIC_WS_URL || 'http://localhost:8080/ws'),
-            connectHeaders: {},
-            debug: (str) => console.log('STOMP debug:', str),
+            connectHeaders: {
+                userId: user?.id ?? ""
+            },
+            debug: (str) => console.log('[STOMP]', str),
             onConnect: () => {
                 setState(prev => ({ ...prev, connected: true, connecting: false }))
-                console.log("Websocket connected")
+                console.log("✅ WebSocket connected for user:", user?.id);
+                console.log("Subscribing to presence after connection...")
+                subscribePresence();
+
+                if (user?.id) {
+                    sendPresence(true); // announce online
+                }
             },
             onStompError: (frame) => {
+                console.log("STOMP error:", frame)
                 setState(prev => ({
                     ...prev,
                     connected: false,
                     connecting: false,
                     error: frame.headers['message']
                 }))
-                console.log("STOMP error:", frame)
             },
             onWebSocketClose: () => {
-                setState(prev => ({ ...prev, connected: false, connecting: false }))
-                console.log("Websocket connection closed")
+                console.warn("⚠️ WebSocket closed");
+                setState({ connected: false, connecting: false, error: null });
+                sendPresence(false); // fallback offline notice
             }
         })
 
         clientRef.current = client
         client.activate()
-    }, [isAuthenticated])
+    }, [isAuthenticated, user])
 
     const disconnect = useCallback(() => {
-        if (clientRef.current) {
-            subscriptionsRef.current.forEach((subscription) => {
-                subscription.unsubscribe()
-            })
-            subscriptionsRef.current.clear()
+        const client = clientRef.current;
+        if (!client) return;
 
-            clientRef.current.deactivate()
-            clientRef.current = null
-            setState({ connected: false, connecting: false, error: null })
-        }
-    }, [])
+        sendPresence(false);
+        subsRef.current.forEach((s) => s.unsubscribe());
+        subsRef.current.clear();
+
+        client.deactivate();
+        clientRef.current = null;
+        setState({ connected: false, connecting: false, error: null });
+    }, [user])
+
+    /** ==============================
+    *       AUTO CONNECT / CLEANUP
+    *  ============================== */
 
     useEffect(() => {
         if (isAuthenticated) {
@@ -83,108 +105,183 @@ export const useWebSocket = () => {
         }
     }, [isAuthenticated, connect, disconnect])
 
-    // Cleanup on unmount
     useEffect(() => {
-        return () => {
-            disconnect()
+        window.addEventListener("beforeunload", () => sendPresence(false));
+        return () => disconnect();
+    }, [disconnect]);
+
+    /** ==============================
+    *       HEARTBEAT (PRESENCE)
+    *  ============================== */
+
+    useEffect(() => {
+        if (!state.connected || !user?.id) return;
+        const id = setInterval(() => sendPresence(true), 30000);
+        return () => clearInterval(id);
+    }, [state.connected, user?.id]);
+
+    /** ==============================
+    *          SUBSCRIPTIONS
+    *  ============================== */
+
+    const subscribe = useCallback(
+        (dest: string, handler: (msg: IMessage) => void) => {
+            const client = clientRef.current;
+            if (!client?.connected) return;
+            if (subsRef.current.has(dest)) return;
+
+            const sub = client.subscribe(dest, handler);
+            subsRef.current.set(dest, sub);
+        },
+        []
+    );
+
+    const unsubscribe = useCallback((dest: string) => {
+        const sub = subsRef.current.get(dest);
+        if (sub) {
+            sub.unsubscribe();
+            subsRef.current.delete(dest);
         }
-    }, [disconnect])
+    }, []);
 
-    const subscribeToRoom = useCallback((roomId: string, onMessage: (message: ChatMessageResponse) => void) => {
-        if (!clientRef.current?.connected) return
-
-        const destination = `/topic/public/${roomId}`
-
-        const subscription = clientRef.current.subscribe(destination, (message) => {
+    const subscribePresence = useCallback(() => {
+        subscribe("/topic/presence", (msg) => {
             try {
-                const chatMessage = JSON.parse(message.body)
-                chatMessage.isOwn = chatMessage.senderId === user?.id
-                onMessage(chatMessage)
-            } catch (error) {
-                console.error("Error parsing message:", error)
-            }
-        })
-
-        subscriptionsRef.current.set(roomId, subscription)
-        console.log(`Subscribed to room: ${roomId}`)
-    }, [user?.id])
-
-    const unsubscribeFromRoom = useCallback((roomId: string) => {
-        const subscription = subscriptionsRef.current.get(roomId)
-        if (subscription) {
-            subscription.unsubscribe()
-            subscriptionsRef.current.delete(roomId)
-            console.log(`Unsubscribed from room: ${roomId}`)
-        }
-    }, [])
-
-    const subscribeToErrorQueue = useCallback((onError: (error: StompError) => void) => {
-        if (!clientRef.current?.connected) return;
-
-        const errorQueue = '/user/queue/errors';
-
-        // Prevent duplicate subscriptions
-        if (subscriptionsRef.current.has(errorQueue)) {
-            return;
-        }
-
-        const subscription = clientRef.current.subscribe(errorQueue, (message) => {
-            try {
-                const errorPayload: StompError = JSON.parse(message.body);
-                onError(errorPayload);
-            } catch (error) {
-                console.error("Error parsing error queue message:", error);
+                const data: PresenceMessage = JSON.parse(msg.body);
+                updatePresence(data);
+            } catch (err) {
+                console.error("Presence parse error:", err);
             }
         });
+    }, [subscribe, updatePresence]);
 
-        subscriptionsRef.current.set(errorQueue, subscription);
-        console.log("Subscribed to error queue");
-    }, [])
+    const subscribeTyping = useCallback(
+        (roomId: string) => {
+            subscribe(`/topic/typing/${roomId}`, async (msg) => {
+                try {
+                    const data: TypingMessage = JSON.parse(msg.body);
+                    if (data.userId === user?.id) return;
 
-    const sendMessage = useCallback((roomId: string, content: string, tempId?: string) => {
-        if (!clientRef.current?.connected || !user) return
+                    const userCache = useUsersStore.getState().getUserFromCache(data.userId);
+                    if (!userCache)
+                        await useUsersStore.getState().fetchUserById(data.userId);
 
-        const message = {
-            roomId,
-            content,
-            messageType: 'TEXT',
-            senderName: user.name,
-            tempId: tempId // Include tempId for optimistic updates
-        }
+                    updateTyping(data);
+                } catch (err) {
+                    console.error("Typing parse error:", err);
+                }
+            });
+        },
+        [subscribe, updateTyping, user?.id]
+    );
 
-        clientRef.current.publish({
-            destination: `/app/chat.sendMessage`,
-            body: JSON.stringify(message)
-        })
-    }, [user])
+    const subscribeRoom = useCallback(
+        (roomId: string, onMessage: (msg: Message) => void) => {
+            subscribe(`/topic/public/${roomId}`, (msg) => {
+                try {
+                    const message: Message = JSON.parse(msg.body);
+                    message.isOwn = message.senderId === user?.id;
+                    onMessage(message);
+                } catch (err) {
+                    console.error("Room message parse error:", err);
+                }
+            });
+        },
+        [subscribe, user?.id]
+    );
 
-    const joinRoom = useCallback((roomId: string) => {
-        if (!clientRef.current?.connected || !user) return
+    const subscribeErrors = useCallback(
+        (onError: (e: StompError) => void) => {
+            subscribe("/user/queue/errors", (msg) => {
+                try {
+                    const err: StompError = JSON.parse(msg.body);
+                    onError(err);
+                } catch (error) {
+                    console.error("Error queue parse error:", error);
+                }
+            });
+        },
+        [subscribe]
+    );
 
-        const message = {
-            roomId,
-            content: '',
-            messageType: 'SYSTEM',
-            senderName: user.name,
-            tempId: `join-${Date.now()}` // Add tempId for join messages too
-        }
+    /** ==============================
+    *             SENDERS
+    *  ============================== */
 
-        clientRef.current.publish({
-            destination: `/app/chat.addUser`,
-            body: JSON.stringify(message)
-        })
-    }, [user])
+    const sendPresence = useCallback(
+        (online: boolean) => {
+            if (!clientRef.current?.connected || !user?.id) return;
+            clientRef.current.publish({
+                destination: "/app/presence",
+                body: JSON.stringify({ userId: user.id, online }),
+            });
+        },
+        [user?.id]
+    );
 
+    const sendTyping = useCallback(
+        (roomId: string, typing: boolean) => {
+            if (!clientRef.current?.connected || !user?.id) return;
+            clientRef.current.publish({
+                destination: "/app/typing",
+                body: JSON.stringify({ roomId, userId: user.id, typing }),
+            });
+        },
+        [user?.id]
+    );
+
+    const sendMessage = useCallback(
+        (roomId: string, content: string, tempId?: string) => {
+            if (!clientRef.current?.connected || !user) return;
+            const message = {
+                roomId,
+                content,
+                messageType: "TEXT",
+                senderName: user.name,
+                tempId,
+            };
+            clientRef.current.publish({
+                destination: "/app/chat.sendMessage",
+                body: JSON.stringify(message),
+            });
+        },
+        [user]
+    );
+
+    const joinRoom = useCallback(
+        (roomId: string) => {
+            if (!clientRef.current?.connected || !user) return;
+            const message = {
+                roomId,
+                messageType: "SYSTEM",
+                senderName: user.name,
+                content: "",
+                tempId: `join-${Date.now()}`,
+            };
+            clientRef.current.publish({
+                destination: "/app/chat.addUser",
+                body: JSON.stringify(message),
+            });
+        },
+        [user]
+    );
+
+
+    /** ==============================
+    *             EXPORT
+    *  ============================== */
     return {
         ...state,
-
         connect,
         disconnect,
-        subscribeToRoom,
-        unsubscribeFromRoom,
+        subscribeRoom,
+        unsubscribe,
+        subscribeTyping,
+        subscribePresence,
+        subscribeErrors,
         sendMessage,
+        sendTyping,
         joinRoom,
-        subscribeToErrorQueue
     }
 }
 
