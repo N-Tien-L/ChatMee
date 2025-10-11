@@ -6,7 +6,6 @@ import { useShallow } from "zustand/react/shallow";
 import { useRoomMessages } from "@/hooks/useRoomMessage";
 import { useChatStore } from "@/lib/stores/chatStore";
 import { useWebSocket } from "@/hooks/useWebSocket";
-import { useAuthStore } from "@/lib/stores";
 import { useUsersStore } from "@/lib/stores/usersStore";
 import ChatHeader from "./ChatHeader";
 import MessageList from "./MessageList";
@@ -135,7 +134,6 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ roomId }) => {
     <div className="flex flex-col h-full bg-white">
       <ChatHeader
         room={currentRoom}
-        connected={wsConnected}
         loading={loading}
         onlineCount={onlineCount}
       />

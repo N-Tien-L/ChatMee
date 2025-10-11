@@ -7,14 +7,12 @@ import { ChatRoom } from "@/lib/types";
 
 interface ChatHeaderProps {
   room: ChatRoom;
-  connected: boolean;
   loading: boolean;
   onlineCount: number;
 }
 
 const ChatHeader: React.FC<ChatHeaderProps> = ({
   room,
-  connected,
   loading,
   onlineCount,
 }) => {
@@ -30,12 +28,6 @@ const ChatHeader: React.FC<ChatHeaderProps> = ({
               <h1 className="text-lg font-semibold text-gray-900">
                 {room.displayName || room.roomName}
               </h1>
-              <div
-                className={`w-2 h-2 rounded-full ${
-                  connected ? "bg-green-500" : "bg-red-500"
-                }`}
-                title={connected ? "Connected" : "Disconnected"}
-              />
             </div>
             <div className="flex items-center space-x-2">
               <p className="text-sm text-gray-500">
