@@ -1,294 +1,137 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useReducer, useState } from "react";
 import { StompError, useWebSocket } from "./useWebSocket";
 import { messageApi } from "@/lib/api/messageApi";
-import { ChatMessageResponse } from "@/lib/type/ResponseType";
 import { useAuthStore } from "@/lib/stores/authStore";
+import { Message, MessageResponse, MessageType } from "@/lib/types";
+import {
+    addIsOwnToMessages,
+    deduplicateMessages,
+    updateSessionCache,
+} from "@/lib/utils/messageUtils";
+import { initialState, messageReducer } from "./reducers/messageReducer";
 
-// Extended message type with status for optimistic updates
-export interface MessageWithStatus extends ChatMessageResponse {
-    status?: 'sending' | 'sent' | 'failed';
-    isOptimistic?: boolean;
-    clientTempId?: string; // Client-side temp ID for matching
-    errorMessage?: string;
-}
-
-const sessionCache = new Map<string, {
-    messages: ChatMessageResponse[];
-    hasMoreMessages: boolean;
-    lastLoaded: number;
-}>();
+// Cache messages per room for current session
+const sessionCache = new Map<
+    string,
+    { messages: MessageResponse[]; hasMoreMessages: boolean; lastLoaded: number }
+>();
 
 export const useRoomMessages = (roomId: string) => {
-    const [messages, setMessages] = useState<MessageWithStatus[]>([]);
-    const [loading, setLoading] = useState(false);
-    const [loadingMore, setLoadingMore] = useState(false);
-    const [hasMoreMessages, setHasMoreMessages] = useState(true);
-    const [error, setError] = useState<string | null>(null);
-    const [sending, setSending] = useState(false);
-
+    const [state, dispatch] = useReducer(messageReducer, initialState)
     const { user } = useAuthStore();
-
-    // Helper function to add isOwn property to messages
-    const addIsOwnToMessages = useCallback((msgs: ChatMessageResponse[]): MessageWithStatus[] => {
-        return msgs.map(msg => ({
-            ...msg,
-            isOwn: user?.id === msg.senderId,
-            status: 'sent' as const
-        }));
-    }, [user?.id]);
-
     const {
         connected,
         connecting,
         error: wsError,
-        subscribeToRoom,
-        unsubscribeFromRoom,
+        subscribeRoom,
+        unsubscribe,
         sendMessage: sendWebSocketMessage,
         joinRoom,
-        subscribeToErrorQueue
+        subscribeErrors,
     } = useWebSocket();
 
-    // load messages
+    // Effect for loading 50 most recent messages (from cache or API)
     useEffect(() => {
         const loadMessages = async () => {
             if (!roomId) return;
 
-            // check in cache
             const cached = sessionCache.get(roomId);
             if (cached) {
-                const messagesWithIsOwn = addIsOwnToMessages(cached.messages);
-                setMessages(messagesWithIsOwn);
-                setHasMoreMessages(cached.hasMoreMessages);
+                dispatch({
+                    type: "FETCH_SUCCESS",
+                    payload: { messages: cached.messages, hasMore: cached.hasMoreMessages, userId: user?.id }
+                })
                 return;
             }
 
-            console.log(`Loading ${roomId} from API`)
             try {
-                setLoading(true)
-                setError(null)
+                const res = await messageApi.get50RecentMessages(roomId);
+                if (!res.success) throw new Error(res.message || "Failed to load messages");
 
-                const initialMessagesResponse = await messageApi.get50RecentMessages(roomId);
-                console.log('API response:', initialMessagesResponse); // Debug log
-
-                // Check if the API call was successful
-                if (!initialMessagesResponse.success) {
-                    console.error('API call failed:', initialMessagesResponse.message);
-                    setError(initialMessagesResponse.message || 'Failed to load messages');
-                    return;
-                }
-
-                const initialMessages = initialMessagesResponse.data || [];
-
-                // Ensure initialMessages is an array
-                if (!Array.isArray(initialMessages)) {
-                    console.error('Expected array but got:', typeof initialMessages, initialMessages);
-                    setMessages([]);
-                    setHasMoreMessages(false);
-                    return;
-                }
-
-                // Deduplicate messages by ID (in case backend returns duplicates)
-                const uniqueMessages = initialMessages.filter((message, index, array) =>
-                    array.findIndex(m => m.id === message.id) === index
-                );
-
-                // Reverse messages to show chronologically (oldest first)
-                // Backend returns newest first, but chat should display oldest first
-                const chronologicalMessages = uniqueMessages.reverse();
-
-                console.log(`Loaded ${chronologicalMessages.length} unique messages for room ${roomId}`);
-
-                const messagesWithIsOwn = addIsOwnToMessages(chronologicalMessages);
-                setMessages(messagesWithIsOwn);
-                setHasMoreMessages(chronologicalMessages.length === 50);
-
-                // Cache for instant future access (store original messages without isOwn)
-                sessionCache.set(roomId, {
-                    messages: chronologicalMessages,
-                    hasMoreMessages: chronologicalMessages.length === 50,
-                    lastLoaded: Date.now(),
-                });
-
+                const data = Array.isArray(res.data) ? res.data : [];
+                const unique = deduplicateMessages(data).reverse();
+                const hasMore = data.length === 50;
+                dispatch({ type: "FETCH_SUCCESS", payload: { messages: unique, hasMore, userId: user?.id } });
+                sessionCache.set(roomId, { messages: unique, hasMoreMessages: hasMore, lastLoaded: Date.now() });
             } catch (err: any) {
-                const errorMessage = err?.response?.data?.message || err?.message || 'Failed to load messages';
-                setError(errorMessage);
-                console.error('Failed to load messages:', err);
-
-                // Set empty messages array on error
-                setMessages([]);
-                setHasMoreMessages(false);
-            } finally {
-                setLoading(false);
+                const msg = err?.response?.data?.message || err.message || "Failed to load messages";
+                dispatch({ type: "FETCH_ERROR", payload: msg });
             }
         };
 
         loadMessages();
-    }, [roomId, addIsOwnToMessages]);
+    }, [roomId, user?.id]);
 
-    // WebSocket subscription for real-time messages
+    // Effect for WebSocket subscriptions
     useEffect(() => {
         if (!roomId || !connected) return;
 
-        const handleNewMessage = (message: ChatMessageResponse) => {
-            console.log('Received WebSocket message:', message.id, message.content);
-
-            setMessages(prev => {
-                // 1. Find an optimistic message to replace using tempId
-                let optimisticIndex = prev.findIndex(
-                    m => m.isOptimistic && m.clientTempId && m.clientTempId === message.tempId
-                );
-
-                // 2. Avoid duplicates: if the message is already in list (not optimistic), skip
-                const existingMessage = prev.find(m => m.id === message.id);
-                if (existingMessage && !existingMessage.isOptimistic) {
-                    console.log('Duplicate message detected, skipping:', message.id);
-                    return prev;
-                }
-
-                // 3. Prepare the final message object
-                const messageWithStatus: MessageWithStatus = {
-                    ...message,
-                    isOwn: user?.id === message.senderId,
-                    status: 'sent',
-                    isOptimistic: false
-                };
-
-                let newMessages: MessageWithStatus[];
-
-                if (optimisticIndex !== -1) {
-                    // 4a. Replace optimistic message with the real one
-                    newMessages = [...prev];
-                    newMessages[optimisticIndex] = messageWithStatus;
-                    console.log('Replaced optimistic message with real message:', message.id);
-                } else {
-                    // 4b. No optimistic message found → just add it
-                    newMessages = [...prev, messageWithStatus];
-                    console.log('Added new incoming message:', message.id);
-                }
-
-                // 5. Update session cache (store original server message without isOwn/status)
-                const cached = sessionCache.get(roomId);
-                if (cached) {
-                    const cacheHasDuplicate = cached.messages.some(m => m.id === message.id);
-                    if (!cacheHasDuplicate) {
-                        sessionCache.set(roomId, {
-                            ...cached,
-                            messages: [...cached.messages, message], // store server version
-                        });
-                    }
-                }
-
-                return newMessages;
-            });
+        // 1. Subscribe to new messages
+        const handleNewMessage = (message: Message) => {
+            // Check if this message confirms one we sent optimistically
+            if (message.tempId && message.senderId === user?.id) {
+                dispatch({ type: "CONFIRM_SENT_MESSAGE", payload: message });
+            } else {
+                dispatch({ type: "RECEIVE_WEBSOCKET_MESSAGE", payload: { message, userId: user?.id } });
+            }
+            updateSessionCache(sessionCache, roomId, [message]);
         };
 
-        subscribeToRoom(roomId, handleNewMessage);
-
-        return () => {
-            unsubscribeFromRoom(roomId);
-        };
-    }, [roomId, connected, subscribeToRoom, unsubscribeFromRoom, user?.id]);
-
-    // WebSocket subscription for handling failed messages
-    useEffect(() => {
-        if (!connected || !subscribeToErrorQueue) return;
-
+        // 2. Subscribe to delivery errors
         const handleError = (error: StompError) => {
-            console.error('Received message failure from server:', error);
-
-            setMessages(prev =>
-                prev.map(msg =>
-                    msg.isOptimistic && msg.clientTempId === error.tempId
-                        ? { ...msg, status: 'failed' as const, errorMessage: error.message }
-                        : msg
-                )
-            );
+            console.error("Message delivery failed:", error);
+            if (error.tempId) {
+                dispatch({ type: "FAIL_SENT_MESSAGE", payload: { tempId: error.tempId, error: error.message } });
+            }
         };
+        subscribeErrors(handleError);
 
-        subscribeToErrorQueue(handleError);
-
-    }, [connected, subscribeToErrorQueue]);
-
-    // Join room effect - only runs when user first accesses a room
-    useEffect(() => {
-        if (!roomId || !connected) return;
-
-        // Check if user has already joined this room in this session
-        const cached = sessionCache.get(roomId);
-        if (!cached) {
-            // Only join if this is the first time accessing this room
+        // 3. Join the room logic
+        if (!sessionCache.has(roomId)) {
             joinRoom(roomId);
         }
-    }, [roomId, connected, joinRoom]);
 
-    // Create optimistic message
-    const createOptimisticMessage = useCallback((content: string) => {
+        subscribeRoom(roomId, handleNewMessage);
+        return () => unsubscribe(roomId);
+    }, [roomId, connected, subscribeRoom, unsubscribe, user?.id]);
+
+    // Action for sending a message
+    const sendMessage = useCallback(async (content: string) => {
+        if (!connected || !content.trim() || !user) return;
+
         const tempId = `temp-${Date.now()}-${Math.random()}`;
-        const optimisticMessage: MessageWithStatus = {
-            id: `optimistic-${tempId}`, // Temporary client-side ID
-            tempId: tempId, // This will be sent to backend
-            clientTempId: tempId, // Store for matching
+        const optimisticMessage: Message = {
+            id: `optimistic-${tempId}`,
+            tempId,
             chatRoomId: roomId,
-            senderId: user?.id || '',
-            senderName: user?.name || 'You',
+            senderId: user.id,
+            senderName: user.name,
             content: content.trim(),
-            type: 'TEXT',
+            type: MessageType.TEXT,
             createdAt: new Date().toISOString(),
             updatedAt: new Date().toISOString(),
-            isUpdated: false,
-            isDeleted: false,
             isOwn: true,
-            status: 'sending',
-            isOptimistic: true
+            status: "sending",
+            isOptimistic: true,
+            isDeleted: false,
+            isUpdated: false,
         };
-        return { message: optimisticMessage, tempId };
-    }, [roomId, user?.id, user?.name]);
 
-    // Send message function with optimistic updates
-    const sendMessage = useCallback(async (content: string) => {
-        if (!connected || !content.trim()) return;
-
-        const trimmedContent = content.trim();
-        setSending(true);
-
-        // 1. Create optimistic message with tempId
-        const { message: optimisticMessage, tempId } = createOptimisticMessage(trimmedContent);
-        setMessages(prev => [...prev, optimisticMessage]);
+        dispatch({ type: "ADD_OPTIMISTIC_MESSAGE", payload: optimisticMessage });
 
         try {
-            // 2. Send via WebSocket with tempId
-            // We need to update sendWebSocketMessage to accept tempId
-            sendWebSocketMessage(roomId, trimmedContent, tempId);
-
-            // Note: The real message will come back via WebSocket subscription
-            // and we'll replace the optimistic one in handleNewMessage
-
-        } catch (error) {
-            // 3. Mark as failed if send fails
-            setMessages(prev =>
-                prev.map(msg =>
-                    msg.id === optimisticMessage.id
-                        ? { ...msg, status: 'failed' as const }
-                        : msg
-                )
-            );
-            console.error('Failed to send message:', error);
-        } finally {
-            setSending(false);
+            sendWebSocketMessage(roomId, content.trim(), tempId);
+        } catch (err) {
+            console.error("Send message failed:", err);
+            dispatch({ type: "FAIL_SENT_MESSAGE", payload: { tempId, error: "Failed to send" } });
         }
-    }, [connected, roomId, sendWebSocketMessage, createOptimisticMessage]);
+    }, [connected, roomId, user, sendWebSocketMessage]);
 
     return {
-        messages,
-        loading,
-        loadingMore,
-        hasMoreMessages,
-        error,
+        ...state,
         connected,
         connecting,
         wsError,
-        sending,
         sendMessage,
-        // loadMoreMessages - will add later
     };
-}
+};
