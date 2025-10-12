@@ -176,6 +176,24 @@ public class ChatRoomController {
         }
     }
 
+    @PostMapping("/{roomId}/leave")
+    public ResponseEntity<ApiResponse<String>> leaveChatRoom(
+        @AuthenticationPrincipal OAuth2User principal,
+        @PathVariable String roomId
+    ) {
+        try {
+            String provider = oAuthUtil.determineProvider(principal);
+            String providerId = oAuthUtil.getProviderId(principal, provider);
+
+            chatRoomService.leaveChatRoomById(provider, providerId, roomId);
+
+            return ResponseEntity.ok(ApiResponse.success("User successfully left the room"));
+        } catch (Exception e) {
+            logger.error("Error leaving from chat room: ", e);
+            throw e;
+        }
+    }
+
     private ChatRoomResponse convertToChatRoomResponse(ChatRoom chatRoom) {
         return ChatRoomResponse.builder()
             .id(chatRoom.getId())

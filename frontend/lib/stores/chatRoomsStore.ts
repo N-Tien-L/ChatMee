@@ -18,6 +18,7 @@ interface chatRoomState {
     loading: boolean;
     error: string | null;
     usersCache: Map<string, UserResponse>;
+    isCreateRoomModalOpen: boolean;
 
     setRooms: (rooms: ChatRoomResponse[]) => void;
     addRoom: (room: ChatRoomResponse) => void;
@@ -27,10 +28,13 @@ interface chatRoomState {
     setRoomTypeFilter: (filter: RoomType | "ALL") => void;
     fetchRooms: () => Promise<void>;
     joinRoom: (roomId: string) => Promise<boolean>;
+    leaveRoom: (roomId: string) => Promise<boolean>;
     deleteRoomById: (roomId: string) => Promise<boolean>;
     applyFilters: () => void;
     createRoom: (request: CreateChatRoomRequest) => Promise<boolean>;
     getDirectMessageDisplayName: (room: ChatRoomResponse) => Promise<string>;
+    openCreateRoomModal: () => void;
+    closeCreateRoomModal: () => void;
 }
 
 export const useChatRoomsStore = create<chatRoomState>((set, get) => ({
@@ -42,6 +46,7 @@ export const useChatRoomsStore = create<chatRoomState>((set, get) => ({
     loading: false,
     error: null,
     usersCache: new Map(),
+    isCreateRoomModalOpen: false,
 
     // Actions
     setRooms: (rooms) => {
@@ -150,6 +155,24 @@ export const useChatRoomsStore = create<chatRoomState>((set, get) => ({
         }
     },
 
+    leaveRoom: async (roomId: string) => {
+        try {
+            const response = await chatRoomApi.leaveChatRoom(roomId);
+            if (response.success) {
+                toast.success("Successfully left the room!");
+                await get().fetchRooms(); // Refresh rooms
+                return true;
+            } else {
+                toast.error(response.message || "Failed to leave room");
+                return false;
+            }
+        } catch (error) {
+            console.error("Failed to leave room:", error);
+            toast.error("Failed to leave room");
+            return false;
+        }
+    },
+
     deleteRoomById: async (roomId: string) => {
         try {
             const response = await chatRoomApi.deleteChatRoom(roomId);
@@ -235,4 +258,8 @@ export const useChatRoomsStore = create<chatRoomState>((set, get) => ({
 
         return "Direct Message";
     },
+
+    // Actions on create room modal
+    openCreateRoomModal: () => set({ isCreateRoomModalOpen: true }),
+    closeCreateRoomModal: () => set({ isCreateRoomModalOpen: false }),
 }));

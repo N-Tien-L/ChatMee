@@ -36,9 +36,11 @@ const ChatRoomsListContent = () => {
     (state) => state.setRoomTypeFilter
   );
   const joinRoom = useChatRoomsStore((state) => state.joinRoom);
+  const leaveRoom = useChatRoomsStore((state) => state.leaveRoom);
   const deleteRoomById = useChatRoomsStore((state) => state.deleteRoomById);
-
-  const [showCreateModal, setShowCreateModal] = useState(false);
+  const openCreateRoomModal = useChatRoomsStore(
+    (state) => state.openCreateRoomModal
+  );
 
   const handleRoomClick = (roomId: string) => {
     router.push(`/dashboard?roomId=${roomId}`, { scroll: false });
@@ -58,7 +60,7 @@ const ChatRoomsListContent = () => {
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-lg font-semibold text-gray-900">Chats</h2>
           <button
-            onClick={() => setShowCreateModal(true)}
+            onClick={() => openCreateRoomModal()}
             className="p-2 rounded-lg bg-blue-500 text-white hover:bg-blue-600 transition-colors"
             title="Create new chat room"
           >
@@ -130,7 +132,7 @@ const ChatRoomsListContent = () => {
                   : "Create your first chat room to get started"}
               </p>
               <button
-                onClick={() => setShowCreateModal(true)}
+                onClick={() => openCreateRoomModal()}
                 className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors"
               >
                 Create Chat Room
@@ -146,6 +148,7 @@ const ChatRoomsListContent = () => {
                   key={room.id}
                   room={room}
                   onJoin={() => joinRoom(room.id)}
+                  onLeave={() => leaveRoom(room.id)}
                   onDelete={() => deleteRoomById(room.id)}
                   onClick={() => handleRoomClick(room.id)}
                   isSelected={selectedRoomId === room.id}

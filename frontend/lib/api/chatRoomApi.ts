@@ -84,5 +84,16 @@ export const chatRoomApi = {
             console.error(`Error adding participant to chat room with ID ${roomId}: `, error)
             throw error
         }
+    },
+
+    // leave chat room by ID
+    leaveChatRoom: async (roomId: string): Promise<ApiResponse<string>> => {
+        try {
+            const response = await apiClient.post<ApiResponse<string>>(`/api/v1/chatrooms/${roomId}/leave`)
+            return response.data;
+        } catch (error) {
+            console.error(`Error leaving chat room with ID ${roomId}: `, error)
+            throw error
+        }
     }
 }

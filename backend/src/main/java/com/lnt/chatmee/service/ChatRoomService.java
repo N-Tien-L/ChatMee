@@ -16,6 +16,7 @@ import com.lnt.chatmee.dto.request.UpdateChatRoomRequest;
 import com.lnt.chatmee.dto.response.ChatRoomResponse;
 import com.lnt.chatmee.exception.ChatRoomNotFoundException;
 import com.lnt.chatmee.exception.DatabaseOperationException;
+import com.lnt.chatmee.exception.ForbiddenActionException;
 import com.lnt.chatmee.exception.IllegalArgumentException;
 import com.lnt.chatmee.exception.UnauthorizedRoomActionException;
 import com.lnt.chatmee.exception.UserNotFoundException;
@@ -24,6 +25,7 @@ import com.lnt.chatmee.model.Participant;
 import com.lnt.chatmee.model.User;
 import com.lnt.chatmee.model.ChatRoom.RoomType;
 import com.lnt.chatmee.repository.ChatRoomRepository;
+import com.lnt.chatmee.repository.ParticipantRepository;
 import com.lnt.chatmee.repository.UserRepository;
 import com.lnt.chatmee.util.ValidationUtil;
 
@@ -39,6 +41,7 @@ public class ChatRoomService {
     private final ChatRoomRepository chatRoomRepository;
     private final UserRepository userRepository;
     private final ParticipantService participantService;
+    private final ParticipantRepository participantRepository;
 
     public ChatRoomResponse createRoom(CreateChatRoomRequest request, String provider, String providerId) {
 
@@ -288,6 +291,55 @@ public class ChatRoomService {
 
         // Save the updated room to database
         return chatRoomRepository.save(room);
+    }
+
+    @Transactional
+    public void leaveChatRoomById(String provider, String providerId, String roomId) {
+        try {
+            User authenticatedUser = userRepository.findByProviderAndProviderId(provider, providerId)
+                .orElseThrow(() -> new UserNotFoundException("Authenticated user not found"));
+
+            ChatRoom room = getChatRoomById(provider, providerId, roomId);
+
+            // Prevent leaving direct message rooms
+            if(room.getType() == RoomType.DIRECT_MESSAGE) {
+                throw new ForbiddenActionException("Cannot leave direct message rooms. Please delete the room instead.");
+            }
+
+            // Check if user is actually a participant
+            if(!room.getParticipants().contains(authenticatedUser.getId())) {
+                throw new UnauthorizedRoomActionException("User is not a participant of this room");
+            }
+
+            // Prevent room creator from leaving - they must delete the room or transfer ownership first
+            if(room.getCreatedBy().equals(authenticatedUser.getId())) {
+                throw new ForbiddenActionException("Room creator cannot leave the room. Please delete the room or transfer ownership first.");
+            }
+
+            // Remove user from participants set
+            Set<String> roomParticipants = room.getParticipants();
+            roomParticipants.remove(authenticatedUser.getId());
+            room.setParticipants(roomParticipants);
+            room.setLastActivity(LocalDateTime.now());
+
+            // Delete participant record
+            participantRepository.deleteByChatRoomIdAndUserId(roomId, authenticatedUser.getId());
+
+            // Save updated room to database
+            chatRoomRepository.save(room);
+            
+            logger.info("User {} successfully left room {}", authenticatedUser.getId(), roomId);
+            
+        } catch (UserNotFoundException | ChatRoomNotFoundException | ForbiddenActionException | UnauthorizedRoomActionException e) {
+            // Re-throw business logic exceptions as-is
+            throw e;
+        } catch (DataAccessException e) {
+            logger.error("Database error while leaving room: ", e);
+            throw new DatabaseOperationException("Failed to leave room due to database error", e);
+        } catch (Exception e) {
+            logger.error("Unexpected error while leaving room: ", e);
+            throw new DatabaseOperationException("Failed to leave room", e);
+        }
     }
 
     private void validateDirectMessageUpdate(UpdateChatRoomRequest request) {

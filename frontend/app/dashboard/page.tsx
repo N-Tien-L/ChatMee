@@ -8,7 +8,6 @@ import React from "react";
 import ChatRoomsList from "@/components/ChatRoomsList";
 import ChatInterface from "@/components/chat/ChatInterface";
 import { useShallow } from "zustand/react/shallow";
-import { Button } from "@/components/ui/button";
 import { CreateRoomModal } from "@/components/CreateRoomModal";
 import { useWebSocket } from "@/hooks/useWebSocket";
 
@@ -20,13 +19,20 @@ const DashboardContent = () => {
       loading: state.loading,
     }))
   );
+  const { isCreateRoomModalOpen } = useChatRoomsStore(
+    useShallow((state) => ({
+      isCreateRoomModalOpen: state.isCreateRoomModalOpen,
+    }))
+  );
   const checkAuthStatus = useAuthStore((state) => state.checkAuthStatus);
   const fetchRooms = useChatRoomsStore((state) => state.fetchRooms);
+  const closeCreateRoomModal = useChatRoomsStore(
+    (state) => state.closeCreateRoomModal
+  );
   const router = useRouter();
   const searchParams = useSearchParams();
   const roomId = searchParams.get("roomId");
   const [hasCheckedAuth, setHasCheckedAuth] = useState(false);
-  const [isCreateRoomModalOpen, setIsCreateRoomModalOpen] = useState(false);
   useWebSocket();
 
   useEffect(() => {
@@ -93,9 +99,6 @@ const DashboardContent = () => {
           <header className="bg-white shadow-sm border-b h-16 flex items-center px-6">
             <h1 className="text-xl font-semibold text-gray-900">ChatMee</h1>
             <div className="ml-auto flex items-center space-x-4">
-              <Button onClick={() => setIsCreateRoomModalOpen(true)}>
-                Create Room
-              </Button>
               <span className="text-gray-700">Welcome, {user?.name}</span>
               <img
                 src={user?.avatarUrl || "/default-avatar.png"}
@@ -126,7 +129,7 @@ const DashboardContent = () => {
         </div>
         <CreateRoomModal
           isOpen={isCreateRoomModalOpen}
-          onClose={() => setIsCreateRoomModalOpen(false)}
+          onClose={() => closeCreateRoomModal()}
         />
       </div>
     </div>

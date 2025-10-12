@@ -8,12 +8,16 @@ import {
   Globe,
   Trash2,
   UserPlus,
+  UserMinus,
   Settings,
+  Check,
 } from "lucide-react";
+import { useAuthStore } from "@/lib/stores/authStore";
 
 interface ChatRoomListItemProps {
   room: ChatRoomResponse;
   onJoin: () => Promise<boolean>;
+  onLeave?: () => Promise<boolean>;
   onDelete: () => Promise<boolean>;
   onClick?: () => void;
   isSelected?: boolean;
@@ -22,6 +26,7 @@ interface ChatRoomListItemProps {
 const ChatRoomListItem: React.FC<ChatRoomListItemProps> = ({
   room,
   onJoin,
+  onLeave,
   onDelete,
   onClick,
   isSelected = false,
@@ -29,6 +34,10 @@ const ChatRoomListItem: React.FC<ChatRoomListItemProps> = ({
   const [showActions, setShowActions] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
+  const { user } = useAuthStore();
+
+  // Check if current user is already in the room
+  const isUserInRoom = room.participants?.includes(user?.id || "");
 
   useEffect(() => {
     const handleClickOutSide = (event: MouseEvent) => {
@@ -83,6 +92,25 @@ const ChatRoomListItem: React.FC<ChatRoomListItemProps> = ({
     } finally {
       setIsLoading(false);
       setShowActions(false);
+    }
+  };
+
+  const handleLeave = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (
+      window.confirm(
+        `Are you sure you want to leave "${room.displayName || room.roomName}"?`
+      )
+    ) {
+      setIsLoading(true);
+      try {
+        if (onLeave) {
+          await onLeave();
+        }
+      } finally {
+        setIsLoading(false);
+        setShowActions(false);
+      }
     }
   };
 
@@ -180,14 +208,42 @@ const ChatRoomListItem: React.FC<ChatRoomListItemProps> = ({
             {showActions && (
               <div className="absolute right-0 top-8 w-48 bg-white border border-gray-200 rounded-lg shadow-lg z-10">
                 <div className="py-1">
-                  <button
-                    onClick={handleJoin}
-                    disabled={isLoading}
-                    className="w-full flex items-center px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 disabled:opacity-50"
-                  >
-                    <UserPlus size={16} className="mr-2" />
-                    Join Room
-                  </button>
+                  {/* Show Join button only if user is NOT in the room */}
+                  {!isUserInRoom && (
+                    <button
+                      onClick={handleJoin}
+                      disabled={isLoading}
+                      className="w-full flex items-center px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 disabled:opacity-50"
+                    >
+                      <UserPlus size={16} className="mr-2" />
+                      Join Room
+                    </button>
+                  )}
+
+                  {/* Show Leave button only if user IS in the room, onLeave is provided, AND it's NOT a Direct Message */}
+                  {isUserInRoom &&
+                    onLeave &&
+                    room.roomType !== RoomType.DIRECT_MESSAGE && (
+                      <button
+                        onClick={handleLeave}
+                        disabled={isLoading}
+                        className="w-full flex items-center px-4 py-2 text-sm text-orange-600 hover:bg-orange-50 disabled:opacity-50"
+                      >
+                        <UserMinus size={16} className="mr-2" />
+                        Leave Room
+                      </button>
+                    )}
+
+                  {/* Show "Already Joined" as disabled option if user is in room, no onLeave, AND it's NOT a Direct Message */}
+                  {isUserInRoom &&
+                    !onLeave &&
+                    room.roomType !== RoomType.DIRECT_MESSAGE && (
+                      <div className="w-full flex items-center px-4 py-2 text-sm text-green-600 bg-green-50 cursor-not-allowed">
+                        <Check size={16} className="mr-2" />
+                        Already Joined
+                      </div>
+                    )}
+
                   <button
                     onClick={(e) => {
                       e.stopPropagation();
