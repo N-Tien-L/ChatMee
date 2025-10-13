@@ -1,9 +1,9 @@
 import { UserResponse } from "@/lib/type/ResponseType";
 import React from "react";
-import { Github } from "./ui/icon/OAuthIcons";
+import { Github } from "../ui/icon/OAuthIcons";
 import { Check, Mail, Plus, User } from "lucide-react";
-import { Card, CardContent } from "./ui/card";
-import { Button } from "./ui/button";
+import { Card, CardContent } from "../ui/card";
+import { Button } from "../ui/button";
 
 export interface UserSearchItemProps {
   user: UserResponse;

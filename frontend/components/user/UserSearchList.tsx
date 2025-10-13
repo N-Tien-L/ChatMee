@@ -3,8 +3,8 @@ import { UserResponse } from "@/lib/type/ResponseType";
 import { Search, User } from "lucide-react";
 import React, { useEffect, useMemo, useState } from "react";
 import { useShallow } from "zustand/react/shallow";
-import { Input } from "./ui/input";
-import { Card, CardContent } from "./ui/card";
+import { Input } from "../ui/input";
+import { Card, CardContent } from "../ui/card";
 import UserSearchItem from "./UserSearchItem";
 
 interface UserSearchListProps {

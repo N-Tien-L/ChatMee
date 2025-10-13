@@ -1,11 +1,4 @@
-import {
-  Sidebar,
-  SidebarContent,
-  SidebarFooter,
-  SidebarGroup,
-  SidebarHeader,
-} from "@/components/ui/sidebar";
-import React, { useState, Suspense } from "react";
+import React, { Suspense } from "react";
 import { RoomType } from "@/lib/type/CoreModelsAndEnum";
 import { Search, Plus, MessageSquare, Users, Lock, Globe } from "lucide-react";
 import ChatRoomListItem from "./ChatRoomListItem";
@@ -54,9 +47,9 @@ const ChatRoomsListContent = () => {
   ];
 
   return (
-    <Sidebar variant="sidebar" className="border-r bg-white w-120">
+    <div className="h-full flex flex-col border-r bg-white">
       {/* Header */}
-      <SidebarHeader className="p-4 border-b">
+      <div className="p-4 border-b flex-shrink-0">
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-lg font-semibold text-gray-900">Chats</h2>
           <button
@@ -100,11 +93,11 @@ const ChatRoomsListContent = () => {
             </button>
           ))}
         </div>
-      </SidebarHeader>
+      </div>
 
       {/* Content */}
-      <SidebarContent className="flex-1 overflow-hidden">
-        <SidebarGroup className="p-0">
+      <div className="flex-1 overflow-y-auto">
+        <div className="h-full">
           {/* Loading State */}
           {loading && (
             <div className="flex items-center justify-center py-8">
@@ -156,19 +149,19 @@ const ChatRoomsListContent = () => {
               ))}
             </div>
           )}
-        </SidebarGroup>
-      </SidebarContent>
+        </div>
+      </div>
 
       {/* Footer */}
-      <SidebarFooter className="p-4 border-t bg-gray-50">
+      <div className="p-4 border-t bg-gray-50 flex-shrink-0">
         <div className="text-center">
           <p className="text-xs text-gray-500">
             {filteredRooms.length}{" "}
             {filteredRooms.length === 1 ? "room" : "rooms"}
           </p>
         </div>
-      </SidebarFooter>
-    </Sidebar>
+      </div>
+    </div>
   );
 };
 
@@ -176,11 +169,11 @@ const ChatRoomsList = () => {
   return (
     <Suspense
       fallback={
-        <Sidebar className="border-r bg-white">
+        <div className="border-r bg-white h-full">
           <div className="flex items-center justify-center h-full">
             <div className="text-gray-500">Loading...</div>
           </div>
-        </Sidebar>
+        </div>
       }
     >
       <ChatRoomsListContent />

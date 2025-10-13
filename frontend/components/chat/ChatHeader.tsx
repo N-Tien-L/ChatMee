@@ -31,7 +31,7 @@ const ChatHeader: React.FC<ChatHeaderProps> = ({
             </div>
             <div className="flex items-center space-x-2">
               <p className="text-sm text-gray-500">
-                {room.description || `${room.roomType.toLowerCase()} room`}
+                {room.description}
                 {loading && " • Loading messages..."}
               </p>
               <p className="text-sm text-gray-500">• {onlineCount} online</p>

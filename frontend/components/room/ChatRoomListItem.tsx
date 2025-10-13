@@ -11,6 +11,7 @@ import {
   UserMinus,
   Settings,
   Check,
+  Info,
 } from "lucide-react";
 import { useAuthStore } from "@/lib/stores/authStore";
 
@@ -22,6 +23,29 @@ interface ChatRoomListItemProps {
   onClick?: () => void;
   isSelected?: boolean;
 }
+
+const roomTypeConfig = {
+  [RoomType.PUBLIC]: {
+    Icon: Globe,
+    color: "green",
+    label: "Public",
+  },
+  [RoomType.PRIVATE]: {
+    Icon: Lock,
+    color: "orange",
+    label: "Private",
+  },
+  [RoomType.DIRECT_MESSAGE]: {
+    Icon: Users,
+    color: "blue",
+    label: "Direct",
+  },
+  default: {
+    Icon: Users,
+    color: "gray",
+    label: "Room",
+  },
+};
 
 const ChatRoomListItem: React.FC<ChatRoomListItemProps> = ({
   room,
@@ -35,9 +59,14 @@ const ChatRoomListItem: React.FC<ChatRoomListItemProps> = ({
   const [isLoading, setIsLoading] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const { user } = useAuthStore();
+  const roomUI = roomTypeConfig[room.roomType] || roomTypeConfig.default;
+  const { Icon, color, label } = roomUI;
 
   // Check if current user is already in the room
   const isUserInRoom = room.participants?.includes(user?.id || "");
+
+  // Check if current user is the room's creator
+  const isUserCreator = room.createdBy == user?.id;
 
   useEffect(() => {
     const handleClickOutSide = (event: MouseEvent) => {
@@ -57,32 +86,6 @@ const ChatRoomListItem: React.FC<ChatRoomListItemProps> = ({
       document.removeEventListener("mousedown", handleClickOutSide);
     };
   }, [showActions]);
-
-  const getRoomIcon = () => {
-    switch (room.roomType) {
-      case RoomType.PUBLIC:
-        return <Globe size={16} className="text-green-500" />;
-      case RoomType.PRIVATE:
-        return <Lock size={16} className="text-orange-500" />;
-      case RoomType.DIRECT_MESSAGE:
-        return <Users size={16} className="text-blue-500" />;
-      default:
-        return <Users size={16} className="text-gray-500" />;
-    }
-  };
-
-  const getRoomTypeColor = () => {
-    switch (room.roomType) {
-      case RoomType.PUBLIC:
-        return "bg-green-100 text-green-700";
-      case RoomType.PRIVATE:
-        return "bg-orange-100 text-orange-700";
-      case RoomType.DIRECT_MESSAGE:
-        return "bg-blue-100 text-blue-700";
-      default:
-        return "bg-gray-100 text-gray-700";
-    }
-  };
 
   const handleJoin = async (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -159,11 +162,9 @@ const ChatRoomListItem: React.FC<ChatRoomListItemProps> = ({
               {room.displayName || room.roomName}
             </h3>
             <div className="flex items-center space-x-1">
-              {getRoomIcon()}
-              <span
-                className={`text-xs px-2 py-1 rounded-full ${getRoomTypeColor()}`}
-              >
-                {room.roomType.toLowerCase()}
+              <Icon size={16} className={`text-${color}-500`} />
+              <span className={`text-xs px-2 py-1 rounded-full ${color}`}>
+                {label}
               </span>
             </div>
           </div>
@@ -244,24 +245,34 @@ const ChatRoomListItem: React.FC<ChatRoomListItemProps> = ({
                       </div>
                     )}
 
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setShowActions(false);
-                      // Add room settings logic here
-                    }}
-                    className="w-full flex items-center px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
-                  >
-                    <Settings size={16} className="mr-2" />
-                    Room Settings
-                  </button>
-                  <button
-                    onClick={handleDelete}
-                    disabled={isLoading}
-                    className="w-full flex items-center px-4 py-2 text-sm text-red-600 hover:bg-red-50 disabled:opacity-50"
-                  >
-                    <Trash2 size={16} className="mr-2" />
-                    Delete Room
+                  {isUserCreator && (
+                    <>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setShowActions(false);
+                          // Add room settings logic here
+                        }}
+                        className="w-full flex items-center px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+                      >
+                        <Settings size={16} className="mr-2" />
+                        Room Settings
+                      </button>
+
+                      <button
+                        onClick={handleDelete}
+                        disabled={isLoading}
+                        className="w-full flex items-center px-4 py-2 text-sm text-red-600 hover:bg-red-50 disabled:opacity-50"
+                      >
+                        <Trash2 size={16} className="mr-2" />
+                        Delete Room
+                      </button>
+                    </>
+                  )}
+
+                  <button className="w-full flex items-center px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">
+                    <Info size={16} className="mr-2"></Info>
+                    Info
                   </button>
                 </div>
               </div>

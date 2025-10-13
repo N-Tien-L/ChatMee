@@ -23,9 +23,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Checkbox } from "./ui/checkbox";
+import { Checkbox } from "../ui/checkbox";
 import { CreateChatRoomRequest } from "@/lib/type/RequestType";
-import UserSearchList from "./UserSearchList";
+import UserSearchList from "../user/UserSearchList";
 import { X } from "lucide-react";
 
 interface CreateRoomModalProps {

@@ -5,11 +5,12 @@ import { useChatRoomsStore } from "@/lib/stores/chatRoomsStore";
 import { useEffect, useState, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import React from "react";
-import ChatRoomsList from "@/components/ChatRoomsList";
+import ChatRoomsList from "@/components/room/ChatRoomsList";
 import ChatInterface from "@/components/chat/ChatInterface";
 import { useShallow } from "zustand/react/shallow";
-import { CreateRoomModal } from "@/components/CreateRoomModal";
+import { CreateRoomModal } from "@/components/room/CreateRoomModal";
 import { useWebSocket } from "@/hooks/useWebSocket";
+import { Panel, PanelGroup, PanelResizeHandle } from "react-resizable-panels";
 
 const DashboardContent = () => {
   const { user, isAuthenticated, loading } = useAuthStore(
@@ -86,52 +87,62 @@ const DashboardContent = () => {
   }
 
   return (
-    <div className="min-h-screen w-full bg-gray-50 flex">
-      {/* Sidebar */}
-      <div className="w-120">
-        <ChatRoomsList />
-      </div>
-
-      <div className="flex-1">
-        {/* Main Content Area */}
-        <div className="flex-1 flex flex-col h-screen">
-          {/* Header */}
-          <header className="bg-white shadow-sm border-b h-16 flex items-center px-6">
-            <h1 className="text-xl font-semibold text-gray-900">ChatMee</h1>
-            <div className="ml-auto flex items-center space-x-4">
-              <span className="text-gray-700">Welcome, {user?.name}</span>
-              <img
-                src={user?.avatarUrl || "/default-avatar.png"}
-                alt="Profile"
-                className="w-8 h-8 rounded-full"
-              />
-            </div>
-          </header>
-
-          {/* Main Chat Area */}
-          <main className="flex-1 bg-gray-100 h-full">
-            {roomId ? (
-              <ChatInterface roomId={roomId} />
-            ) : (
-              <div className="flex items-center justify-center h-full">
-                <div className="text-center">
-                  <div className="text-6xl mb-4">💬</div>
-                  <h2 className="text-2xl font-semibold text-gray-700 mb-2">
-                    Select a chat room
-                  </h2>
-                  <p className="text-gray-500">
-                    Choose a chat room from the sidebar to start messaging
-                  </p>
-                </div>
-              </div>
-            )}
-          </main>
+    <div className="h-screen w-full bg-gray-50 flex flex-col">
+      {/* Header */}
+      <header className="bg-white shadow-sm border-b h-16 flex items-center px-6">
+        <h1 className="text-xl font-semibold text-gray-900">ChatMee</h1>
+        <div className="ml-auto flex items-center space-x-4">
+          <span className="text-gray-700">Welcome, {user?.name}</span>
+          <img
+            src={user?.avatarUrl || "/default-avatar.png"}
+            alt="Profile"
+            className="w-8 h-8 rounded-full"
+          />
         </div>
-        <CreateRoomModal
-          isOpen={isCreateRoomModalOpen}
-          onClose={() => closeCreateRoomModal()}
-        />
+      </header>
+
+      <div className="flex-1 overflow-hidden">
+        <PanelGroup direction="horizontal" className="h-full">
+          {/* Sidebar Panel */}
+          <Panel collapsible={true} defaultSize={25} minSize={15} maxSize={25}>
+            <div className="h-full">
+              <ChatRoomsList />
+            </div>
+          </Panel>
+
+          {/* Resize Handle */}
+          <PanelResizeHandle className="w-1.5 bg-gray-200 hover:bg-blue-500 transition-colors">
+            <div className="w-0.5 h-full bg-gray-300" />
+          </PanelResizeHandle>
+
+          {/* Main Content Panel */}
+          <Panel defaultSize={85} minSize={65} maxSize={85}>
+            <main className="bg-gray-100 h-full w-full">
+              {roomId ? (
+                <ChatInterface roomId={roomId} />
+              ) : (
+                <div className="flex items-center justify-center h-full">
+                  <div className="text-center">
+                    <div className="text-6xl mb-4">💬</div>
+                    <h2 className="text-2xl font-semibold text-gray-700 mb-2">
+                      Select a chat room
+                    </h2>
+                    <p className="text-gray-500">
+                      Choose a chat room from the sidebar to start messaging
+                    </p>
+                  </div>
+                </div>
+              )}
+            </main>
+          </Panel>
+        </PanelGroup>
       </div>
+
+      {/* Modal remains at the top level */}
+      <CreateRoomModal
+        isOpen={isCreateRoomModalOpen}
+        onClose={() => closeCreateRoomModal()}
+      />
     </div>
   );
 };
