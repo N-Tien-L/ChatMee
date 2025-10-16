@@ -48,18 +48,19 @@ const Login = () => {
   }, [searchParams]);
 
   return (
-    <div className="flex flex-col justify-center items-center space-y-10">
+    <div className="flex flex-col justify-center items-center space-y-6 sm:space-y-10 px-4 sm:px-6 lg:px-8">
       <BlurText
         text="Welcome to Chatmee"
         delay={333}
         animateBy="words"
         direction="top"
-        className="text-7xl text-green-300 font-semibold borel-regular text-center max-w-4xl"
+        className="text-4xl sm:text-5xl md:text-6xl lg:text-7xl text-green-300 font-semibold borel-regular text-center max-w-4xl"
       />
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 1, duration: 0.5 }}
+        className="w-full"
       >
         <LoginForm />
       </motion.div>

@@ -47,8 +47,10 @@ export function LoginForm({
   // If already authenticated, you might want to redirect or show a different UI
   if (isAuthenticated) {
     return (
-      <div className={cn("w-full max-w-md mx-auto text-center", className)}>
-        <p className="text-white text-5xl jersey-10-regular">
+      <div
+        className={cn("w-full max-w-md mx-auto text-center px-4", className)}
+      >
+        <p className="text-white text-3xl sm:text-4xl md:text-5xl jersey-10-regular">
           You are already logged in!
         </p>
       </div>
@@ -56,7 +58,10 @@ export function LoginForm({
   }
 
   return (
-    <div className={cn("w-full max-w-md mx-auto", className)} {...props}>
+    <div
+      className={cn("w-full max-w-md mx-auto px-4 sm:px-0", className)}
+      {...props}
+    >
       {/* Animated border wrapper */}
       <div
         ref={cardRef}
@@ -75,10 +80,10 @@ export function LoginForm({
 
         {/* Main card with backdrop blur */}
         <Card className="relative backdrop-blur-sm bg-white/10 border-white/20 shadow-2xl rounded-2xl z-10">
-          <CardHeader className="text-center space-y-4">
+          <CardHeader className="text-center space-y-2 sm:space-y-4 p-4 sm:p-6">
             <CardTitle className="font-bold text-white">
-              <div className="flex justify-center items-center p-4">
-                <div className="text-7xl font-bold text-center max-w-2xl jersey-10-regular">
+              <div className="flex justify-center items-center p-2 sm:p-4">
+                <div className="text-4xl sm:text-5xl md:text-6xl lg:text-7xl font-bold text-center max-w-2xl jersey-10-regular">
                   Let's{" "}
                   <FlipWords
                     words={words}
@@ -89,45 +94,49 @@ export function LoginForm({
                 </div>
               </div>
             </CardTitle>
-            <CardDescription className="text-gray-200">
+            <CardDescription className="text-gray-200 text-sm sm:text-base px-2">
               Login with your Google or Github account
             </CardDescription>
           </CardHeader>
-          <CardContent className="space-y-4">
+          <CardContent className="space-y-3 sm:space-y-4 p-4 sm:p-6">
             <Button
               variant="outline"
-              className="w-full h-14 bg-white/10 border-white/20 text-white hover:bg-white/20 hover:shadow-[0_0_20px_rgba(34,197,94,0.6)] hover:border-green-400/50 transition-all duration-300 group"
+              className="w-full h-12 sm:h-14 text-sm sm:text-base bg-white/10 border-white/20 text-white hover:bg-white/20 hover:shadow-[0_0_20px_rgba(34,197,94,0.6)] hover:border-green-400/50 transition-all duration-300 group"
               onClick={() => login("google")}
               disabled={loading}
             >
-              <Google className="w-6 h-6 mr-3 group-hover:scale-110 transition-transform duration-300" />
-              {loading ? "Redirecting..." : "Continue with Google"}
+              <Google className="w-5 h-5 sm:w-6 sm:h-6 mr-2 sm:mr-3 group-hover:scale-110 transition-transform duration-300" />
+              <span className="truncate">
+                {loading ? "Redirecting..." : "Continue with Google"}
+              </span>
             </Button>
             <Button
               variant="outline"
-              className="w-full h-14 bg-white/10 border-white/20 text-white hover:bg-white/20 hover:shadow-[0_0_20px_rgba(88,166,255,0.5)] hover:border-blue-400/50 transition-all duration-300 group"
+              className="w-full h-12 sm:h-14 text-sm sm:text-base bg-white/10 border-white/20 text-white hover:bg-white/20 hover:shadow-[0_0_20px_rgba(88,166,255,0.5)] hover:border-blue-400/50 transition-all duration-300 group"
               onClick={() => login("github")}
               disabled={loading}
             >
-              <Github className="w-6 h-6 mr-3 group-hover:scale-110 transition-transform duration-300" />
-              {loading ? "Redirecting..." : "Continue with Github"}
+              <Github className="w-5 h-5 sm:w-6 sm:h-6 mr-2 sm:mr-3 group-hover:scale-110 transition-transform duration-300" />
+              <span className="truncate">
+                {loading ? "Redirecting..." : "Continue with Github"}
+              </span>
             </Button>
           </CardContent>
         </Card>
       </div>
 
-      <div className="mt-4 text-center text-xs text-gray-500">
+      <div className="mt-3 sm:mt-4 text-center text-xs sm:text-sm text-gray-500 px-4">
         By continuing, you agree to our{" "}
         <a
           href="#"
-          className="underline underline-offset-2 hover:text-gray-400"
+          className="underline underline-offset-2 hover:text-gray-400 whitespace-nowrap"
         >
           Terms of Service
         </a>{" "}
         and{" "}
         <a
           href="#"
-          className="underline underline-offset-2 hover:text-gray-400"
+          className="underline underline-offset-2 hover:text-gray-400 whitespace-nowrap"
         >
           Privacy Policy
         </a>

@@ -34,6 +34,7 @@ const DashboardContent = () => {
   const searchParams = useSearchParams();
   const roomId = searchParams.get("roomId");
   const [hasCheckedAuth, setHasCheckedAuth] = useState(false);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   useWebSocket();
 
   useEffect(() => {
@@ -101,41 +102,49 @@ const DashboardContent = () => {
         </div>
       </header>
 
+      {/* page.tsx */}
       <div className="flex-1 overflow-hidden">
-        <PanelGroup direction="horizontal" className="h-full">
-          {/* Sidebar Panel */}
-          <Panel collapsible={true} defaultSize={25} minSize={15} maxSize={25}>
-            <div className="h-full">
-              <ChatRoomsList />
+        <div className="h-full flex flex-col md:flex-row">
+          {/* Sidebar - Hidden on mobile */}
+          <aside
+            className={`fixed md:static inset-y-0 left-0 z-30 
+    bg-white border-r transform md:translate-x-0 transition-transform duration-300
+    w-full sm:w-72 md:w-80 lg:w-96
+    ${isSidebarOpen ? "translate-x-0" : "-translate-x-full"}`}
+          >
+            <ChatRoomsList onCloseSidebar={() => setIsSidebarOpen(false)} />
+          </aside>
+
+          {/* Main content */}
+          <main className="flex-1 bg-gray-100 h-full w-full overflow-hidden">
+            {/* Mobile header toggle */}
+            <div className="md:hidden flex items-center justify-between px-4 py-2 bg-white border-b">
+              <button
+                onClick={() => setIsSidebarOpen(true)}
+                className="text-gray-700"
+              >
+                ☰
+              </button>
+              <h1 className="font-semibold text-gray-800">ChatMee</h1>
             </div>
-          </Panel>
 
-          {/* Resize Handle */}
-          <PanelResizeHandle className="w-1.5 bg-gray-200 hover:bg-blue-500 transition-colors">
-            <div className="w-0.5 h-full bg-gray-300" />
-          </PanelResizeHandle>
-
-          {/* Main Content Panel */}
-          <Panel defaultSize={85} minSize={65} maxSize={85}>
-            <main className="bg-gray-100 h-full w-full">
-              {roomId ? (
-                <ChatInterface roomId={roomId} />
-              ) : (
-                <div className="flex items-center justify-center h-full">
-                  <div className="text-center">
-                    <div className="text-6xl mb-4">💬</div>
-                    <h2 className="text-2xl font-semibold text-gray-700 mb-2">
-                      Select a chat room
-                    </h2>
-                    <p className="text-gray-500">
-                      Choose a chat room from the sidebar to start messaging
-                    </p>
-                  </div>
+            {roomId ? (
+              <ChatInterface roomId={roomId} />
+            ) : (
+              <div className="flex items-center justify-center h-full">
+                <div className="text-center">
+                  <div className="text-6xl mb-4">💬</div>
+                  <h2 className="text-2xl font-semibold text-gray-700 mb-2">
+                    Select a chat room
+                  </h2>
+                  <p className="text-gray-500">
+                    Choose a chat room from the sidebar to start messaging
+                  </p>
                 </div>
-              )}
-            </main>
-          </Panel>
-        </PanelGroup>
+              </div>
+            )}
+          </main>
+        </div>
       </div>
 
       {/* Modal remains at the top level */}
