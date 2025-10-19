@@ -14,6 +14,9 @@ import {
   Info,
 } from "lucide-react";
 import { useAuthStore } from "@/lib/stores/authStore";
+import { useChatRoomsStore } from "@/lib/stores/chatRoomsStore";
+import { RoomInfoDialog } from "./RoomInfoDialog";
+import { RoomSettingsDialog } from "./RoomSettingsDialog";
 
 interface ChatRoomListItemProps {
   room: ChatRoomResponse;
@@ -57,8 +60,11 @@ const ChatRoomListItem: React.FC<ChatRoomListItemProps> = ({
 }) => {
   const [showActions, setShowActions] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [showInfoDialog, setShowInfoDialog] = useState(false);
+  const [showSettingsDialog, setShowSettingsDialog] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const { user } = useAuthStore();
+  const { updateRoom } = useChatRoomsStore();
   const roomUI = roomTypeConfig[room.roomType] || roomTypeConfig.default;
   const { Icon, color, label } = roomUI;
 
@@ -254,7 +260,7 @@ const ChatRoomListItem: React.FC<ChatRoomListItemProps> = ({
                         onClick={(e) => {
                           e.stopPropagation();
                           setShowActions(false);
-                          // Add room settings logic here
+                          setShowSettingsDialog(true);
                         }}
                         className="w-full flex items-center px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
                       >
@@ -273,7 +279,14 @@ const ChatRoomListItem: React.FC<ChatRoomListItemProps> = ({
                     </>
                   )}
 
-                  <button className="w-full flex items-center px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setShowActions(false);
+                      setShowInfoDialog(true);
+                    }}
+                    className="w-full flex items-center px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+                  >
                     <Info size={16} className="mr-2"></Info>
                     Info
                   </button>
@@ -289,6 +302,27 @@ const ChatRoomListItem: React.FC<ChatRoomListItemProps> = ({
         <div className="absolute inset-0 bg-white bg-opacity-50 flex items-center justify-center">
           <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-500"></div>
         </div>
+      )}
+
+      {/* Room Info Dialog */}
+      <RoomInfoDialog
+        roomId={room.id}
+        isOpen={showInfoDialog}
+        onClose={() => setShowInfoDialog(false)}
+        onOpenSettings={() => setShowSettingsDialog(true)}
+      />
+
+      {/* Room Settings Dialog */}
+      {isUserCreator && (
+        <RoomSettingsDialog
+          roomId={room.id}
+          isOpen={showSettingsDialog}
+          onClose={() => setShowSettingsDialog(false)}
+          onSaved={(updatedRoom) => {
+            // Update the room in the store
+            updateRoom(room.id, updatedRoom);
+          }}
+        />
       )}
     </div>
   );

@@ -25,10 +25,10 @@ const TypingIndicator: React.FC<TypingIndicatorProps> = ({
       : "Someone is typing...";
 
   return (
-    <div className="flex justify-start">
-      <div className="max-w-xs lg:max-w-md">
-        <p className="text-xs text-gray-500 mb-1 px-3">{typingText}</p>
-        <div className="px-4 py-2 rounded-2xl bg-gray-100">
+    <div className="flex justify-start px-3 sm:px-4 pb-2 flex-shrink-0">
+      <div className="max-w-[85%] sm:max-w-sm md:max-w-md lg:max-w-lg">
+        <p className="text-xs text-gray-500 mb-1 px-3 truncate">{typingText}</p>
+        <div className="px-3 sm:px-4 py-2 rounded-2xl bg-gray-100">
           <div className="flex space-x-1">
             <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce"></div>
             <div

@@ -14,9 +14,13 @@ import MessageInput from "./MessageInput";
 
 interface ChatInterfaceProps {
   roomId: string;
+  onToggleSidebar?: () => void;
 }
 
-const ChatInterface: React.FC<ChatInterfaceProps> = ({ roomId }) => {
+const ChatInterface: React.FC<ChatInterfaceProps> = ({
+  roomId,
+  onToggleSidebar,
+}) => {
   const { messages, connected, sendMessage, wsError, loading, sending } =
     useRoomMessages(roomId);
   const [newMessage, setNewMessage] = useState("");
@@ -131,20 +135,23 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ roomId }) => {
     currentRoom.participants?.filter((id) => onlineUsers.has(id)).length || 0;
 
   return (
-    <div className="flex flex-col h-full bg-white">
+    <div className="flex flex-col h-full w-full bg-white overflow-hidden">
       <ChatHeader
         room={currentRoom}
         loading={loading}
         onlineCount={onlineCount}
+        onToggleSidebar={onToggleSidebar}
       />
 
-      <MessageList
-        messages={messages}
-        onlineUsers={onlineUsers}
-        formatDate={formatDate}
-        formatTime={formatTime}
-        messagesEndRef={messagesEndRef}
-      />
+      <div className="flex-1 min-h-0 overflow-y-auto">
+        <MessageList
+          messages={messages}
+          onlineUsers={onlineUsers}
+          formatDate={formatDate}
+          formatTime={formatTime}
+          messagesEndRef={messagesEndRef}
+        />
+      </div>
 
       <TypingIndicator
         typingUserNames={typingUserNames}

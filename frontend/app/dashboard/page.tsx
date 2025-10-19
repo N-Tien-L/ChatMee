@@ -88,12 +88,14 @@ const DashboardContent = () => {
   }
 
   return (
-    <div className="h-screen w-full bg-gray-50 flex flex-col">
+    <div className="h-dvh w-full bg-gray-50 flex flex-col overflow-hidden">
       {/* Header */}
-      <header className="bg-white shadow-sm border-b h-16 flex items-center px-6">
+      <header className="bg-white shadow-sm border-b h-16 flex items-center px-6 flex-shrink-0 z-10">
         <h1 className="text-xl font-semibold text-gray-900">ChatMee</h1>
         <div className="ml-auto flex items-center space-x-4">
-          <span className="text-gray-700">Welcome, {user?.name}</span>
+          <span className="text-gray-700 hidden sm:inline">
+            Welcome, {user?.name}
+          </span>
           <img
             src={user?.avatarUrl || "/default-avatar.png"}
             alt="Profile"
@@ -104,44 +106,60 @@ const DashboardContent = () => {
 
       {/* page.tsx */}
       <div className="flex-1 overflow-hidden">
-        <div className="h-full flex flex-col md:flex-row">
+        <div className="h-full flex flex-row">
           {/* Sidebar - Hidden on mobile */}
           <aside
-            className={`fixed md:static inset-y-0 left-0 z-30 
+            className={`fixed md:static inset-y-0 left-0 z-30 top-16 md:top-0
     bg-white border-r transform md:translate-x-0 transition-transform duration-300
-    w-full sm:w-72 md:w-80 lg:w-96
+    w-full sm:w-80 md:w-80 lg:w-96
     ${isSidebarOpen ? "translate-x-0" : "-translate-x-full"}`}
           >
             <ChatRoomsList onCloseSidebar={() => setIsSidebarOpen(false)} />
           </aside>
 
-          {/* Main content */}
-          <main className="flex-1 bg-gray-100 h-full w-full overflow-hidden">
-            {/* Mobile header toggle */}
-            <div className="md:hidden flex items-center justify-between px-4 py-2 bg-white border-b">
-              <button
-                onClick={() => setIsSidebarOpen(true)}
-                className="text-gray-700"
-              >
-                ☰
-              </button>
-              <h1 className="font-semibold text-gray-800">ChatMee</h1>
-            </div>
+          {/* Backdrop overlay for mobile */}
+          {isSidebarOpen && (
+            <div
+              className="fixed inset-0 bg-black/50 z-20 md:hidden top-16"
+              onClick={() => setIsSidebarOpen(false)}
+              aria-hidden="true"
+            />
+          )}
 
+          {/* Main content */}
+          <main className="flex-1 bg-gray-100 w-full overflow-hidden min-w-0 flex flex-col">
             {roomId ? (
-              <ChatInterface roomId={roomId} />
+              <ChatInterface
+                roomId={roomId}
+                onToggleSidebar={() => setIsSidebarOpen(true)}
+              />
             ) : (
-              <div className="flex items-center justify-center h-full">
-                <div className="text-center">
-                  <div className="text-6xl mb-4">💬</div>
-                  <h2 className="text-2xl font-semibold text-gray-700 mb-2">
-                    Select a chat room
-                  </h2>
-                  <p className="text-gray-500">
-                    Choose a chat room from the sidebar to start messaging
-                  </p>
+              <>
+                {/* Mobile header toggle - only show when no room selected */}
+                <div className="md:hidden flex items-center justify-between px-4 py-2 bg-white border-b flex-shrink-0">
+                  <button
+                    onClick={() => setIsSidebarOpen(true)}
+                    className="text-gray-700 p-2 hover:bg-gray-100 rounded-md"
+                    aria-label="Open sidebar"
+                  >
+                    ☰
+                  </button>
+                  <h1 className="font-semibold text-gray-800">ChatMee</h1>
+                  <div className="w-10" /> {/* Spacer for centering */}
                 </div>
-              </div>
+
+                <div className="flex-1 flex items-center justify-center">
+                  <div className="text-center px-4">
+                    <div className="text-6xl mb-4">💬</div>
+                    <h2 className="text-2xl font-semibold text-gray-700 mb-2">
+                      Select a chat room
+                    </h2>
+                    <p className="text-gray-500">
+                      Choose a chat room from the sidebar to start messaging
+                    </p>
+                  </div>
+                </div>
+              </>
             )}
           </main>
         </div>

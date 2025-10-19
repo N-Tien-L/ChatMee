@@ -59,7 +59,7 @@ const ChatRoomsListContent: React.FC<ChatRoomsListProps> = ({
   ];
 
   return (
-    <div className="h-full flex flex-col bg-white border-r min-w-0 w-full">
+    <div className="h-full flex flex-col bg-white border-r min-w-0 w-full overflow-hidden">
       {/* Header */}
       <div className="p-3 sm:p-4 border-b flex-shrink-0 sticky top-0 bg-white z-10">
         <div className="flex items-center justify-between mb-3 sm:mb-4">
@@ -100,14 +100,14 @@ const ChatRoomsListContent: React.FC<ChatRoomsListProps> = ({
               }`}
             >
               <Icon className="w-3.5 h-3.5 sm:w-4 sm:h-4 sm:mr-1.5" />
-              <span className="hidden sm:inline">{label}</span>
+              <span className="hidden sm:inline truncate">{label}</span>
             </button>
           ))}
         </div>
       </div>
 
       {/* Rooms List */}
-      <div className="flex-1 overflow-y-auto">
+      <div className="flex-1 overflow-y-auto min-h-0">
         {loading && (
           <div className="flex items-center justify-center py-8">
             <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
