@@ -4,13 +4,13 @@ import { LoginForm } from "@/components/LoginForm";
 import BlurText from "@/components/ui/shadcn-io/blur-text";
 import { motion } from "framer-motion";
 import { useSearchParams, useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useState, Suspense } from "react";
 import { useAuthStore } from "@/lib/stores/authStore";
 import toast from "react-hot-toast";
 import React from "react";
 import { useShallow } from "zustand/react/shallow";
 
-const Login = () => {
+const LoginContent = () => {
   const searchParams = useSearchParams();
   const router = useRouter();
   const { user, isAuthenticated, loading } = useAuthStore(
@@ -65,6 +65,14 @@ const Login = () => {
         <LoginForm />
       </motion.div>
     </div>
+  );
+};
+
+const Login = () => {
+  return (
+    <Suspense fallback={<div className="flex justify-center items-center min-h-screen">Loading...</div>}>
+      <LoginContent />
+    </Suspense>
   );
 };
 
