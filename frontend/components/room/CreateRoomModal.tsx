@@ -529,7 +529,7 @@ export const CreateRoomModal = ({ isOpen, onClose }: CreateRoomModalProps) => {
                   <div className="space-y-3 text-xs text-gray-600">
                     <div>
                       <strong>Room Name:</strong> Choose descriptive names that
-                      clearly indicate the room's purpose.
+                      clearly indicate the room&apos;s purpose.
                     </div>
                     <div>
                       <strong>Max Users:</strong> Consider your community size.

@@ -84,7 +84,7 @@ export function LoginForm({
             <CardTitle className="font-bold text-white">
               <div className="flex justify-center items-center p-2 sm:p-4">
                 <div className="text-4xl sm:text-5xl md:text-6xl lg:text-7xl font-bold text-center max-w-2xl jersey-10-regular">
-                  Let's{" "}
+                  Let&apos;s{" "}
                   <FlipWords
                     words={words}
                     duration={1800}

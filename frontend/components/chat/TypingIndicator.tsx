@@ -1,7 +1,7 @@
 import React from "react";
 
 interface TypingIndicatorProps {
-  typingUserNames: String[];
+  typingUserNames: string[];
   typingUsersCount: number;
 }
 
@@ -11,7 +11,7 @@ const TypingIndicator: React.FC<TypingIndicatorProps> = ({
 }) => {
   if (typingUsersCount === 0) return null;
 
-  let typingText =
+  const typingText =
     typingUserNames.length === 1
       ? `${typingUserNames[0]} is typing...`
       : typingUserNames.length === 2

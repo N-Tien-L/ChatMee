@@ -1,8 +1,10 @@
 "use client";
 
 import React, { useRef, useEffect, forwardRef } from "react";
-// @ts-ignore
-import { Renderer, Program, Mesh, Triangle, Vec2 } from "ogl";
+// Import as any to satisfy types when ogl types are not installed
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+const ogl: any = require("ogl");
+const { Renderer, Program, Mesh, Triangle, Vec2 } = ogl;
 // Simple classNames utility
 function cn(...classes: (string | undefined | false | null)[]) {
   return classes.filter(Boolean).join(" ");
