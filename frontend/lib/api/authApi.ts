@@ -39,12 +39,42 @@ export const authApi = {
         }
     },
 
-    // login
-    // Fallback to 'google' if no provider is passed
+    // login with popup (better for cross-origin cookies)
     login: (provider = 'google') => {
-        // Add prompt=select_account to force account selection
-        const url = `${API_BASE_URL}/oauth2/authorization/${provider}?prompt=select_account`
-        window.location.href = url
+        const width = 500;
+        const height = 600;
+        const left = window.screen.width / 2 - width / 2;
+        const top = window.screen.height / 2 - height / 2;
+
+        const url = `${API_BASE_URL}/oauth2/authorization/${provider}?prompt=select_account`;
+
+        const popup = window.open(
+            url,
+            'OAuth Login',
+            `width=${width},height=${height},left=${left},top=${top},toolbar=no,menubar=no`
+        );
+
+        // Listen for message from popup
+        const messageHandler = (event: MessageEvent) => {
+            if (event.origin !== API_BASE_URL) return;
+
+            if (event.data.type === 'oauth-success') {
+                console.log('OAuth success! Session ID:', event.data.sessionId);
+                window.removeEventListener('message', messageHandler);
+                // Redirect to dashboard
+                window.location.href = '/dashboard';
+            }
+        };
+
+        window.addEventListener('message', messageHandler);
+
+        // Fallback: Poll for popup close
+        const checkPopup = setInterval(() => {
+            if (!popup || popup.closed) {
+                clearInterval(checkPopup);
+                window.removeEventListener('message', messageHandler);
+            }
+        }, 500);
     },
 
     // logout
