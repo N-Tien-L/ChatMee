@@ -32,29 +32,12 @@ public class OAuth2AuthenticationSuccessHandler extends SimpleUrlAuthenticationS
         
         // Log for debugging
         log.info("=== OAuth2 Success Handler ===");
-        log.info("Setting session cookie. Session ID: {}", sessionId);
-        log.info("Client URL: {}", clientUrl);
+        log.info("Session ID: {}", sessionId);
+        log.info("Authenticated User: {}", authentication.getName());
+        log.info("Redirecting to: {}/dashboard", clientUrl);
         
-        // The session cookie should be automatically set by Spring
-        // Just ensure proper CORS headers are set
-        response.setHeader("Access-Control-Allow-Credentials", "true");
-        response.setHeader("Access-Control-Allow-Origin", clientUrl);
-        
-        // Return HTML that closes the popup and notifies parent
-        String redirectUrl = clientUrl + "/dashboard";
-        log.info("Redirecting to: {}", redirectUrl);
-        log.info("=== End OAuth2 Success Handler ===");
-        
-        // Instead of redirect, close popup window
-        response.setContentType("text/html");
-        response.getWriter().println(
-            "<html><body>" +
-            "<script>" +
-            "window.opener.postMessage({type: 'oauth-success', sessionId: '" + sessionId + "'}, '" + clientUrl + "');" +
-            "window.close();" +
-            "</script>" +
-            "<p>Login successful! This window will close automatically...</p>" +
-            "</body></html>"
-        );
+        // Simple redirect to dashboard
+        // Since we're using Vercel proxy, this will be same-origin
+        getRedirectStrategy().sendRedirect(request, response, clientUrl + "/dashboard");
     }
 }

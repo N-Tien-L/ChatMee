@@ -1,6 +1,8 @@
 import axios from "axios"
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
+// Using Vercel proxy - all API calls go through same domain
+// No need for external URL, requests will be rewritten by Next.js
+const API_BASE_URL = "";
 
 // create axios instance
 export const apiClient = axios.create({

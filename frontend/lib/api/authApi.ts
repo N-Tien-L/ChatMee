@@ -1,4 +1,5 @@
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
+// Using Vercel proxy - all API calls go through same domain
+const API_BASE_URL = "";
 
 import { ApiResponse, AuthResponse, UserResponse } from "../type/ResponseType";
 import { apiClient } from "./apiClient";
@@ -39,49 +40,17 @@ export const authApi = {
         }
     },
 
-    // login with popup (better for cross-origin cookies)
+    // login with OAuth2 - using same domain via Vercel proxy
     login: (provider = 'google') => {
-        const width = 500;
-        const height = 600;
-        const left = window.screen.width / 2 - width / 2;
-        const top = window.screen.height / 2 - height / 2;
-
-        const url = `${API_BASE_URL}/oauth2/authorization/${provider}?prompt=select_account`;
-
-        const popup = window.open(
-            url,
-            'OAuth Login',
-            `width=${width},height=${height},left=${left},top=${top},toolbar=no,menubar=no`
-        );
-
-        // Listen for message from popup
-        const messageHandler = (event: MessageEvent) => {
-            if (event.origin !== API_BASE_URL) return;
-
-            if (event.data.type === 'oauth-success') {
-                console.log('OAuth success! Session ID:', event.data.sessionId);
-                window.removeEventListener('message', messageHandler);
-                // Redirect to dashboard
-                window.location.href = '/dashboard';
-            }
-        };
-
-        window.addEventListener('message', messageHandler);
-
-        // Fallback: Poll for popup close
-        const checkPopup = setInterval(() => {
-            if (!popup || popup.closed) {
-                clearInterval(checkPopup);
-                window.removeEventListener('message', messageHandler);
-            }
-        }, 500);
+        // Direct redirect - no popup needed since we're on same domain now
+        window.location.href = `/oauth2/authorization/${provider}?prompt=select_account`;
     },
 
     // logout
     logout: async () => {
         try {
             // Logout from application
-            window.location.href = `${API_BASE_URL}/logout`
+            window.location.href = `/logout`
         } catch (error) {
             console.error("Error during logout: ", error)
             throw error
@@ -91,6 +60,7 @@ export const authApi = {
     // Force logout from Google and then login again
     loginWithAccountSelection: (provider = 'google') => {
         // First logout from Google, then redirect to login
-        window.location.href = `https://accounts.google.com/logout?continue=${encodeURIComponent(`${API_BASE_URL}/oauth2/authorization/${provider}?prompt=select_account`)}`
+        const currentDomain = window.location.origin;
+        window.location.href = `https://accounts.google.com/logout?continue=${encodeURIComponent(`${currentDomain}/oauth2/authorization/${provider}?prompt=select_account`)}`
     }
 }
