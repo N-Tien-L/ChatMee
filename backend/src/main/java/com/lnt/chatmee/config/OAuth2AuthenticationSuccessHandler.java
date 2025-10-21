@@ -8,7 +8,6 @@ import org.springframework.security.web.authentication.SimpleUrlAuthenticationSu
 import org.springframework.stereotype.Component;
 
 import jakarta.servlet.ServletException;
-import jakarta.servlet.http.Cookie;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import jakarta.servlet.http.HttpSession;
@@ -26,17 +25,22 @@ public class OAuth2AuthenticationSuccessHandler extends SimpleUrlAuthenticationS
         // Ensure session is created
         HttpSession session = request.getSession(true);
         
-        // Explicitly set the JSESSIONID cookie with proper attributes
-        Cookie sessionCookie = new Cookie("JSESSIONID", session.getId());
-        sessionCookie.setPath("/");
-        sessionCookie.setHttpOnly(true);
-        sessionCookie.setSecure(true); // Required for SameSite=None
-        sessionCookie.setMaxAge(60 * 60 * 24); // 24 hours
-        sessionCookie.setAttribute("SameSite", "None");
+        // Get the session ID
+        String sessionId = session.getId();
         
-        response.addCookie(sessionCookie);
+        // Log for debugging
+        logger.info("Setting session cookie. Session ID: " + sessionId);
+        logger.info("Session attributes: " + session.getAttributeNames());
+        
+        // The session cookie should be automatically set by Spring
+        // Just ensure proper CORS headers are set
+        response.setHeader("Access-Control-Allow-Credentials", "true");
+        response.setHeader("Access-Control-Allow-Origin", clientUrl);
         
         // Redirect to frontend dashboard
-        getRedirectStrategy().sendRedirect(request, response, clientUrl + "/dashboard");
+        String redirectUrl = clientUrl + "/dashboard";
+        logger.info("Redirecting to: " + redirectUrl);
+        
+        getRedirectStrategy().sendRedirect(request, response, redirectUrl);
     }
 }
