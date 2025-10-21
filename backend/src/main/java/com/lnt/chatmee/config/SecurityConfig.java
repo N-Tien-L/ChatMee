@@ -19,6 +19,7 @@ public class SecurityConfig {
 
     private final CustomOAuth2UserService customOAuth2UserService;
     private final CorsConfigurationSource corsConfigurationSource;
+    private final OAuth2AuthenticationSuccessHandler successHandler;
     
     @Value("${app.client.url}")
     private String clientUrl;
@@ -36,7 +37,7 @@ public class SecurityConfig {
                 .oauth2Login(oauth2 -> oauth2
                         .userInfoEndpoint(userInfo -> userInfo
                                 .userService(customOAuth2UserService))
-                        .defaultSuccessUrl(clientUrl + "/dashboard", true)
+                        .successHandler(successHandler)
                         .failureUrl(clientUrl + "/login?error=true"))
                 .logout(logout -> logout
                         .logoutSuccessUrl(clientUrl)
