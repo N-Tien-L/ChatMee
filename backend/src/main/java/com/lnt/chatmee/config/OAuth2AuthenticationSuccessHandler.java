@@ -11,7 +11,9 @@ import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import jakarta.servlet.http.HttpSession;
+import lombok.extern.slf4j.Slf4j;
 
+@Slf4j
 @Component
 public class OAuth2AuthenticationSuccessHandler extends SimpleUrlAuthenticationSuccessHandler {
 
@@ -29,8 +31,9 @@ public class OAuth2AuthenticationSuccessHandler extends SimpleUrlAuthenticationS
         String sessionId = session.getId();
         
         // Log for debugging
-        logger.info("Setting session cookie. Session ID: " + sessionId);
-        logger.info("Session attributes: " + session.getAttributeNames());
+        log.info("=== OAuth2 Success Handler ===");
+        log.info("Setting session cookie. Session ID: {}", sessionId);
+        log.info("Client URL: {}", clientUrl);
         
         // The session cookie should be automatically set by Spring
         // Just ensure proper CORS headers are set
@@ -39,7 +42,8 @@ public class OAuth2AuthenticationSuccessHandler extends SimpleUrlAuthenticationS
         
         // Redirect to frontend dashboard
         String redirectUrl = clientUrl + "/dashboard";
-        logger.info("Redirecting to: " + redirectUrl);
+        log.info("Redirecting to: {}", redirectUrl);
+        log.info("=== End OAuth2 Success Handler ===");
         
         getRedirectStrategy().sendRedirect(request, response, redirectUrl);
     }
