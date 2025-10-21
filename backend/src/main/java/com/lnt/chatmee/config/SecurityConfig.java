@@ -1,5 +1,6 @@
 package com.lnt.chatmee.config;
 
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
@@ -18,6 +19,9 @@ public class SecurityConfig {
 
     private final CustomOAuth2UserService customOAuth2UserService;
     private final CorsConfigurationSource corsConfigurationSource;
+    
+    @Value("${app.client.url}")
+    private String clientUrl;
 
     @Bean
     public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
@@ -32,10 +36,10 @@ public class SecurityConfig {
                 .oauth2Login(oauth2 -> oauth2
                         .userInfoEndpoint(userInfo -> userInfo
                                 .userService(customOAuth2UserService))
-                        .defaultSuccessUrl("http://localhost:3000/dashboard", true)
-                        .failureUrl("http://localhost:3000/login?error=true"))
+                        .defaultSuccessUrl(clientUrl + "/dashboard", true)
+                        .failureUrl(clientUrl + "/login?error=true"))
                 .logout(logout -> logout
-                        .logoutSuccessUrl("http://localhost:3000")
+                        .logoutSuccessUrl(clientUrl)
                         .invalidateHttpSession(true)
                         .clearAuthentication(true));
 
