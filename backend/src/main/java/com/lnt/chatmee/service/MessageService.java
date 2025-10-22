@@ -76,11 +76,13 @@ public class MessageService {
      */
     @Async("messageIOExecutor")
     public void persistMessageAsync(Message message) {
+        logger.info("🟢 ASYNC PERSIST START: messageId={}, thread={}", 
+            message.getId(), Thread.currentThread().getName());
         try {
             messageRepository.save(message);
-            logger.debug("Message {} persisted asynchronously", message.getId());
+            logger.info("✅ ASYNC PERSIST SUCCESS: messageId={}", message.getId());
         } catch (Exception e) {
-            logger.error("Failed to persist message {} asynchronously", message.getId(), e);
+            logger.error("❌ ASYNC PERSIST FAILED: messageId={}", message.getId(), e);
             // You could add retry logic or dead-letter queue here if needed
         }
     }

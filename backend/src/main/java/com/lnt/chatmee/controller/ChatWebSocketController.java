@@ -39,6 +39,8 @@ public class ChatWebSocketController {
 
     @MessageMapping("/chat.sendMessage")
     public void sendMessage(@Payload ChatMessageRequest request, Principal principal) {
+        logger.info("🔵 RECEIVED MESSAGE REQUEST: roomId={}, content={}, tempId={}", 
+            request.getRoomId(), request.getContent(), request.getTempId());
         try {
             // Get authenticated user info
             OAuth2User oAuth2User = (OAuth2User) ((org.springframework.security.authentication.AbstractAuthenticationToken) principal).getPrincipal();
@@ -84,13 +86,14 @@ public class ChatWebSocketController {
                 .build();
 
             // STEP 1: Broadcast immediately (fast path - no I/O)
+            logger.info("📤 BROADCASTING message: messageId={}, roomId={}", message.getId(), request.getRoomId());
             messagingTemplate.convertAndSend("/topic/public/" + request.getRoomId(), response);
             
             // STEP 2: Persist asynchronously (slow path - off the hot path)
+            logger.info("🚀 CALLING persistMessageAsync: messageId={}", message.getId());
             messageService.persistMessageAsync(message);
+            logger.info("✔️ RETURNED from persistMessageAsync (async in progress)");
             
-            logger.info("Message sent to room {} by user {}", request.getRoomId(), user.getName());
-
         } catch (Exception e) {
             logger.error("Error sending message: ", e);
 
