@@ -1,0 +1,24 @@
+{
+  "rewrites": [
+    {
+      "source": "/api/:path*",
+      "destination": "https://chatmee-wxvk.onrender.com/api/:path*"
+    },
+    {
+      "source": "/oauth2/:path*",
+      "destination": "https://chatmee-wxvk.onrender.com/oauth2/:path*"
+    },
+    {
+      "source": "/login/:path*",
+      "destination": "https://chatmee-wxvk.onrender.com/login/:path*"
+    },
+    {
+      "source": "/logout",
+      "destination": "https://chatmee-wxvk.onrender.com/logout"
+    },
+    {
+      "source": "/ws",
+      "destination": "https://chatmee-wxvk.onrender.com/ws"
+    }
+  ]
+}
