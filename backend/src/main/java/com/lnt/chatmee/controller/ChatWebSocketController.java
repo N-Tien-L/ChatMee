@@ -18,8 +18,8 @@ import com.lnt.chatmee.dto.response.ChatMessageResponse;
 import com.lnt.chatmee.dto.StompError;
 import com.lnt.chatmee.model.Message;
 import com.lnt.chatmee.model.User;
-import com.lnt.chatmee.repository.MessageRepository;
 import com.lnt.chatmee.repository.UserRepository;
+import com.lnt.chatmee.service.MessageService;
 import com.lnt.chatmee.service.ParticipantService;
 import com.lnt.chatmee.util.OAuthUtil;
 
@@ -32,7 +32,7 @@ public class ChatWebSocketController {
     private static final Logger logger = LoggerFactory.getLogger(ChatWebSocketController.class);
     
     private final SimpMessagingTemplate messagingTemplate;
-    private final MessageRepository messageRepository;
+    private final MessageService messageService;
     private final UserRepository userRepository;
     private final ParticipantService participantService;
     private final OAuthUtil oAuthUtil;
@@ -55,7 +55,7 @@ public class ChatWebSocketController {
                 return;
             }
 
-            // Create and save message
+            // Create message object
             Message message = Message.builder()
                 .id(UUID.randomUUID().toString())
                 .chatRoomId(request.getRoomId())
@@ -68,25 +68,26 @@ public class ChatWebSocketController {
                 .isDeleted(false)
                 .build();
 
-            Message savedMessage = messageRepository.save(message);
-
             // Create response
             ChatMessageResponse response = ChatMessageResponse.builder()
-                .id(savedMessage.getId())
+                .id(message.getId())
                 .tempId(request.getTempId())
-                .chatRoomId(savedMessage.getChatRoomId())
-                .senderId(savedMessage.getSenderId())
+                .chatRoomId(message.getChatRoomId())
+                .senderId(message.getSenderId())
                 .senderName(user.getName())
-                .content(savedMessage.getContent())
-                .type(savedMessage.getType())
-                .createdAt(savedMessage.getCreatedAt().toString())
-                .updatedAt(savedMessage.getUpdatedAt().toString())
-                .isUpdated(savedMessage.isUpdated())
-                .isDeleted(savedMessage.isDeleted())
+                .content(message.getContent())
+                .type(message.getType())
+                .createdAt(message.getCreatedAt().toString())
+                .updatedAt(message.getUpdatedAt().toString())
+                .isUpdated(message.isUpdated())
+                .isDeleted(message.isDeleted())
                 .build();
 
-            // Broadcast to room subscribers
+            // STEP 1: Broadcast immediately (fast path - no I/O)
             messagingTemplate.convertAndSend("/topic/public/" + request.getRoomId(), response);
+            
+            // STEP 2: Persist asynchronously (slow path - off the hot path)
+            messageService.persistMessageAsync(message);
             
             logger.info("Message sent to room {} by user {}", request.getRoomId(), user.getName());
 

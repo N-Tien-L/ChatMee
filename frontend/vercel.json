@@ -15,10 +15,6 @@
     {
       "source": "/logout",
       "destination": "https://chatmee-wxvk.onrender.com/logout"
-    },
-    {
-      "source": "/ws",
-      "destination": "https://chatmee-wxvk.onrender.com/ws"
     }
   ]
 }

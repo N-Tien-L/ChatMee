@@ -3,7 +3,10 @@ package com.lnt.chatmee.service;
 import java.util.List;
 import java.util.stream.Collectors;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.dao.DataAccessException;
+import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 
 import com.lnt.chatmee.dto.response.ChatMessageResponse;
@@ -22,6 +25,8 @@ import lombok.RequiredArgsConstructor;
 @Service
 @RequiredArgsConstructor
 public class MessageService {
+
+    private static final Logger logger = LoggerFactory.getLogger(MessageService.class);
 
     private final ChatRoomRepository chatRoomRepository;
     private final ParticipantRepository participantRepository;
@@ -63,5 +68,20 @@ public class MessageService {
             .isUpdated(message.isUpdated())
             .isDeleted(message.isDeleted())
             .build();
+    }
+
+    /**
+     * Asynchronously persist a message to the database.
+     * This method runs on a separate thread pool to avoid blocking the WebSocket message broker.
+     */
+    @Async("messageIOExecutor")
+    public void persistMessageAsync(Message message) {
+        try {
+            messageRepository.save(message);
+            logger.debug("Message {} persisted asynchronously", message.getId());
+        } catch (Exception e) {
+            logger.error("Failed to persist message {} asynchronously", message.getId(), e);
+            // You could add retry logic or dead-letter queue here if needed
+        }
     }
 }
