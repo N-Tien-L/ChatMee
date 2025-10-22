@@ -21,6 +21,7 @@ public class ChatMessageRequest {
     @NotNull(message = "Message type is required")
     private MessageType messageType = MessageType.TEXT; // default to TEXT
 
+    private String senderId;  // User ID sending the message
     private String senderName;
 
     private String tempId;

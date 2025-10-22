@@ -242,6 +242,7 @@ export const useWebSocket = () => {
                 roomId,
                 content,
                 messageType: "TEXT",
+                senderId: user.id,  // Add userId
                 senderName: user.name,
                 tempId,
             };
@@ -259,6 +260,7 @@ export const useWebSocket = () => {
             const message = {
                 roomId,
                 messageType: "SYSTEM",
+                senderId: user.id,  // Add userId
                 senderName: user.name,
                 content: "",
                 tempId: `join-${Date.now()}`,

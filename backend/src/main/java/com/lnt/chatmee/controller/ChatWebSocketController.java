@@ -1,16 +1,16 @@
 // File: backend/src/main/java/com/lnt/chatmee/controller/ChatWebSocketController.java
 package com.lnt.chatmee.controller;
 
-import java.security.Principal;
 import java.time.LocalDateTime;
+import java.util.Map;
 import java.util.UUID;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.messaging.handler.annotation.Header;
 import org.springframework.messaging.handler.annotation.MessageMapping;
 import org.springframework.messaging.handler.annotation.Payload;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
-import org.springframework.security.oauth2.core.user.OAuth2User;
 import org.springframework.stereotype.Controller;
 
 import com.lnt.chatmee.dto.request.ChatMessageRequest;
@@ -21,7 +21,6 @@ import com.lnt.chatmee.model.User;
 import com.lnt.chatmee.repository.UserRepository;
 import com.lnt.chatmee.service.MessageService;
 import com.lnt.chatmee.service.ParticipantService;
-import com.lnt.chatmee.util.OAuthUtil;
 
 import lombok.RequiredArgsConstructor;
 
@@ -35,20 +34,21 @@ public class ChatWebSocketController {
     private final MessageService messageService;
     private final UserRepository userRepository;
     private final ParticipantService participantService;
-    private final OAuthUtil oAuthUtil;
 
     @MessageMapping("/chat.sendMessage")
-    public void sendMessage(@Payload ChatMessageRequest request, Principal principal) {
-        logger.info("🔵 RECEIVED MESSAGE REQUEST: roomId={}, content={}, tempId={}", 
-            request.getRoomId(), request.getContent(), request.getTempId());
+    public void sendMessage(@Payload ChatMessageRequest request, @Header("simpSessionAttributes") Map<String, Object> sessionAttributes) {
+        logger.info("🔵 RECEIVED MESSAGE REQUEST: roomId={}, content={}, tempId={}, senderId={}", 
+            request.getRoomId(), request.getContent(), request.getTempId(), request.getSenderId());
         try {
-            // Get authenticated user info
-            OAuth2User oAuth2User = (OAuth2User) ((org.springframework.security.authentication.AbstractAuthenticationToken) principal).getPrincipal();
-            String provider = oAuthUtil.determineProvider(oAuth2User);
-            String providerId = oAuthUtil.getProviderId(oAuth2User, provider);
+            // Get user from senderId in request (sent from frontend)
+            String userId = request.getSenderId();
+            if (userId == null || userId.isEmpty()) {
+                logger.error("❌ SenderId is missing in request");
+                return;
+            }
             
-            User user = userRepository.findByProviderAndProviderId(provider, providerId)
-                .orElseThrow(() -> new RuntimeException("User not found"));
+            User user = userRepository.findById(userId)
+                .orElseThrow(() -> new RuntimeException("User not found: " + userId));
 
             // Verify user is participant of the room
             if (!participantService.isUserParticipant(request.getRoomId(), user.getId())) {
@@ -95,28 +95,31 @@ public class ChatWebSocketController {
             logger.info("✔️ RETURNED from persistMessageAsync (async in progress)");
             
         } catch (Exception e) {
-            logger.error("Error sending message: ", e);
+            logger.error("❌ Error sending message: ", e);
 
-            // Send error to user-specific error queue 
+            // Send error to room (can't use principal.getName() since it's null)
             StompError errorPayload = StompError.builder()
                 .tempId(request.getTempId())
                 .message("Failed to send message: " + e.getMessage())
                 .build();
             
-            messagingTemplate.convertAndSendToUser(principal.getName(), "/queue/errors", errorPayload);
+            // Broadcast error to the room
+            messagingTemplate.convertAndSend("/topic/errors/" + request.getRoomId(), errorPayload);
         }
     }
 
     @MessageMapping("/chat.addUser")
-    public void addUser(@Payload ChatMessageRequest request, Principal principal) {
+    public void addUser(@Payload ChatMessageRequest request, @Header("simpSessionAttributes") Map<String, Object> sessionAttributes) {
         try {
-            // Get authenticated user info
-            OAuth2User oAuth2User = (OAuth2User) ((org.springframework.security.authentication.AbstractAuthenticationToken) principal).getPrincipal();
-            String provider = oAuthUtil.determineProvider(oAuth2User);
-            String providerId = oAuthUtil.getProviderId(oAuth2User, provider);
+            // Get user from senderId in request
+            String userId = request.getSenderId();
+            if (userId == null || userId.isEmpty()) {
+                logger.error("❌ SenderId is missing in addUser request");
+                return;
+            }
             
-            User user = userRepository.findByProviderAndProviderId(provider, providerId)
-                .orElseThrow(() -> new RuntimeException("User not found"));
+            User user = userRepository.findById(userId)
+                .orElseThrow(() -> new RuntimeException("User not found: " + userId));
 
             // Create join message
             ChatMessageResponse response = ChatMessageResponse.builder()
