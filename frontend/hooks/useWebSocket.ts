@@ -46,10 +46,7 @@ export const useWebSocket = () => {
 
         const client = new Client({
             webSocketFactory: () => new SockJS(
-                process.env.NEXT_PUBLIC_WS_URL ||
-                (process.env.NODE_ENV === 'production'
-                    ? 'https://chatmee-wxvk.onrender.com/ws'
-                    : 'http://localhost:8080/ws')
+                process.env.NEXT_PUBLIC_WS_URL || 'http://localhost:8080/ws'
             ),
             connectHeaders: {
                 userId: user?.id ?? ""

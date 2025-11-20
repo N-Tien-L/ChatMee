@@ -70,7 +70,13 @@ const LoginContent = () => {
 
 const Login = () => {
   return (
-    <Suspense fallback={<div className="flex justify-center items-center min-h-screen">Loading...</div>}>
+    <Suspense
+      fallback={
+        <div className="flex justify-center items-center min-h-screen">
+          Loading...
+        </div>
+      }
+    >
       <LoginContent />
     </Suspense>
   );

@@ -114,7 +114,9 @@ const UserSearchList = ({
           // No Results State
           <div className="text-center py-8 text-gray-500">
             <User className="w-12 h-12 mx-auto mb-3 text-gray-300" />
-            <p className="text-sm">No users found matching &ldquo;{searchQuery}&rdquo;</p>
+            <p className="text-sm">
+              No users found matching &ldquo;{searchQuery}&rdquo;
+            </p>
             <p className="text-xs text-gray-400 mt-1">
               Try searching with a different name or email
             </p>

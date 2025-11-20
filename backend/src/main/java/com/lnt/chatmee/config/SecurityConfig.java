@@ -6,8 +6,10 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 import org.springframework.web.cors.CorsConfigurationSource;
 
+import com.lnt.chatmee.security.RateLimitingFilter;
 import com.lnt.chatmee.service.CustomOAuth2UserService;
 
 import lombok.RequiredArgsConstructor;
@@ -20,6 +22,7 @@ public class SecurityConfig {
     private final CustomOAuth2UserService customOAuth2UserService;
     private final CorsConfigurationSource corsConfigurationSource;
     private final OAuth2AuthenticationSuccessHandler successHandler;
+    private final RateLimitingFilter rateLimitingFilter;
     
     @Value("${app.client.url}")
     private String clientUrl;
@@ -29,6 +32,7 @@ public class SecurityConfig {
         http
                 .cors(cors -> cors.configurationSource(corsConfigurationSource))
                 .csrf(csrf -> csrf.disable())
+                .addFilterBefore(rateLimitingFilter, UsernamePasswordAuthenticationFilter.class)
                 .authorizeHttpRequests(authz -> authz
                         .requestMatchers("/", "/login", "/error", "/actuator/**", "/api/v1/auth/status", "/ws/**").permitAll()
                         .requestMatchers("/api/v1/**").authenticated()
