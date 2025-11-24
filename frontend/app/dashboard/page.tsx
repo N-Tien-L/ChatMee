@@ -11,13 +11,15 @@ import { useShallow } from "zustand/react/shallow";
 import { CreateRoomModal } from "@/components/room/CreateRoomModal";
 import { useWebSocket } from "@/hooks/useWebSocket";
 import { Panel, PanelGroup, PanelResizeHandle } from "react-resizable-panels";
+import { LogOut } from "lucide-react";
 
 const DashboardContent = () => {
-  const { user, isAuthenticated, loading } = useAuthStore(
+  const { user, isAuthenticated, loading, logout } = useAuthStore(
     useShallow((state) => ({
       user: state.user,
       isAuthenticated: state.isAuthenticated,
       loading: state.loading,
+      logout: state.logout,
     }))
   );
   const { isCreateRoomModalOpen } = useChatRoomsStore(
@@ -101,6 +103,13 @@ const DashboardContent = () => {
             alt="Profile"
             className="w-8 h-8 rounded-full"
           />
+          <button
+            onClick={() => logout()}
+            className="p-2 hover:bg-gray-100 rounded-full text-gray-600 hover:text-red-600 transition-colors"
+            title="Logout"
+          >
+            <LogOut className="w-5 h-5" />
+          </button>
         </div>
       </header>
 

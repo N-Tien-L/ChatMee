@@ -5,9 +5,12 @@
 ![Next.js 15.5.2](https://img.shields.io/badge/Next.js-15.5.2-000000?logo=nextdotjs&logoColor=white)
 ![MongoDB](https://img.shields.io/badge/MongoDB-Document%20Store-47A248?logo=mongodb&logoColor=white)
 ![Redis](https://img.shields.io/badge/Redis-Pub%2FSub-CB1914?logo=redis&logoColor=white)
+[![Live Demo](https://img.shields.io/badge/Live%20Demo-View%20Project-blue?style=flat&logo=vercel)](https://chat-mee-wine.vercel.app/)
 
 ## Project Name and Description
 ChatMee is a full-stack, OAuth2-secured chat platform that combines a Spring Boot backend with a modern Next.js frontend. It delivers real-time messaging, typing indicators, and presence tracking over STOMP/WebSocket channels while persisting room metadata and message history in MongoDB.
+
+**Live Demo:** [https://chat-mee-wine.vercel.app/](https://chat-mee-wine.vercel.app/)
 
 ## Technology Stack
 | Layer | Technologies |
