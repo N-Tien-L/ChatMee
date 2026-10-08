@@ -138,6 +138,7 @@ const DashboardContent = () => {
           <main className="flex-1 bg-gray-100 w-full overflow-hidden min-w-0 flex flex-col">
             {roomId ? (
               <ChatInterface
+                key={roomId}
                 roomId={roomId}
                 onToggleSidebar={() => setIsSidebarOpen(true)}
               />

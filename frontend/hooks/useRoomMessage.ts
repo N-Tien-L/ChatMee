@@ -98,7 +98,7 @@ export const useRoomMessages = (roomId: string) => {
         }
 
         subscribeRoom(roomId, handleNewMessage);
-        return () => unsubscribe(roomId);
+        return () => unsubscribe(`/topic/public/${roomId}`);
     }, [roomId, connected, subscribeRoom, unsubscribe, user?.id]);
 
     // Action for sending a message
