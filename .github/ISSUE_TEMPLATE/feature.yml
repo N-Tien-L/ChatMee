@@ -1,0 +1,20 @@
+name: Feature request
+description: Propose a new feature (will be converted to a SPEC)
+labels: [type:feature, status:triage]
+body:
+  - type: textarea
+    id: problem
+    attributes: { label: Problem / Goal, description: Who needs what and why? }
+    validations: { required: true }
+  - type: textarea
+    id: stories
+    attributes: { label: User stories, placeholder: "As a ..., I want to ... so that ..." }
+  - type: textarea
+    id: ac
+    attributes: { label: Acceptance criteria (Given/When/Then) }
+  - type: textarea
+    id: nongoals
+    attributes: { label: Non-goals }
+  - type: dropdown
+    id: area
+    attributes: { label: Area, options: [backend, frontend, ws, auth, infra, docs] }
