@@ -12,7 +12,7 @@ Updated by master. Status: todo | in-progress | review | changes-requested | mer
 | CM-007 | Enable Bean Validation | 0 | codex | fix/CM-007-bean-validation | merged (2 rounds) | validation tests + actuator test green, package OK | 6e820d5 |
 | CM-008 | Restrict join/role rules | 0 | codex | fix/CM-008-join-role-rules | merged | mvnw verify green (ParticipantServiceTest 17, ChatRoomControllerAuthorizationTest 7) | 66d63b5 |
 | CM-009 | Local environment setup (compose, .env) | 0 | agy2 | chore/CM-009-local-compose | merged (2 rounds) | compose healthy, local profile + full profile start; reviewed by master | 57bd232 |
-| CM-010 | Remove sensitive logs and fix CSRF | 0 | agy2 | | todo (unblocked: CM-004 merged) | | |
+| CM-010 | Remove sensitive logs and fix CSRF | 0 | agy2 | fix/CM-010-logs-csrf | in-progress | | |
 | CM-011 | Fix presence Redis channel (minimal) | 0 | codex | feat/CM-003-ws-token-auth | merged (folded into CM-003) | PresenceEventListenerTest | 7204e72 |
 | CM-012 | Fix frontend linting | 0 | agy | fix/CM-012-frontend-lint | merged | lint 0 errors/11 warnings, tsc OK, build OK; reviewed by master | 570636d |
 | CM-013 | Fix frontend room switch leakage | 0 | agy | fix/CM-013-room-switch | merged (manual GIF test pending: owner) | lint/tsc/build OK; reviewed by master | 56b1be3 |
@@ -39,7 +39,7 @@ Updated by master. Status: todo | in-progress | review | changes-requested | mer
 | CM-048 | PUBLIC room discovery | 2 | agy | | todo | | |
 | CM-049 | DM unique member keys | 2 | agy | | todo | | |
 | CM-050 | Professional README rewrite | 2 | agy | | todo | | |
-| CM-051 | Dockerfile improvements | 2 | agy2 | chore/CM-051-dockerfile | in-progress (part a: Dockerfile; b: JSON logs after CM-010) | | |
+| CM-051 | Dockerfile improvements | 2 | agy2 | chore/CM-051-dockerfile | a merged (non-root, layered jar, actuator healthcheck); b (JSON logs/MDC) todo after CM-010 | compose full: healthy, uid 100 | 4a68c62 |
 | CM-052 | Major framework upgrades | 2 | agy | | todo | | |
 | CM-053 | Replace SockJS with pure WebSocket | 2 | agy | | todo | | |
 | CM-054 | TypeScript types cleanup | 2 | agy | | todo | | |
