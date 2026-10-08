@@ -48,4 +48,4 @@ Updated by master. Status: todo | in-progress | review | changes-requested | mer
 - CM-011 is folded into CM-003. CM-006 already aligned the subscriber channel with the publisher ("presence-channel").
 - Step 0: develop created from main at f8a2855. Worktrees: ChatMee-codex, ChatMee-agy, ChatMee-agy2.
 - Untracked `.github/prompts/` and the two empty workflow files are still in the main checkout: deleting them needs the owner (D8). CM-027 must not start until they are gone.
-- Follow-up: frontend/components/user/UserProfile.tsx and UsersList.tsx are 0-byte and unreferenced; remove in a frontend ticket (master deletion blocked by auto mode).
+- CM-005c: removed the empty UserProfile.tsx and UsersList.tsx (tsc + build OK).
