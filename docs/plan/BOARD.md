@@ -4,14 +4,14 @@ Updated by master. Status: todo | in-progress | review | changes-requested | mer
 | Ticket | Title | Phase | Owner | Branch | Status | Verification | Merge commit |
 |---|---|---|---|---|---|---|---|
 | CM-001 | Close actuator/env and rotate secrets | 0 | codex | fix/CM-001-close-actuator-env | merged (secret rotation pending: owner) | ActuatorSecurityTest 5/5, package OK | 5594152 |
-| CM-002 | Patch CVE dependencies | 0 | agy2 | | todo | | |
+| CM-002 | Patch CVE dependencies | 0 | agy2 | build/CM-002-dependency-patches | in-progress | | |
 | CM-003 | WS token authentication (+ CM-011) | 0 | codex | feat/CM-003-ws-token-auth | in-progress | | |
 | CM-004 | WS subscribe/send authorization | 0 | codex | | todo | | |
 | CM-005 | Agent rules, templates, ADRs (part a) + junk cleanup (part b) | 0 | agy / agy2 | docs/CM-005-agent-rules | in-progress (a merged) | a: docs reviewed by master | 765979b (a) |
 | CM-006 | Fix typos and names | 0 | agy | refactor/CM-006-fix-typos | merged | grep 0 hits, test-compile OK, tsc OK; reviewed by master (rename-only, codex review skipped) | f010b8d |
 | CM-007 | Enable Bean Validation | 0 | codex | fix/CM-007-bean-validation | merged (2 rounds) | validation tests + actuator test green, package OK | 6e820d5 |
 | CM-008 | Restrict join/role rules | 0 | codex | | todo | | |
-| CM-009 | Local environment setup (compose, .env) | 0 | agy2 | chore/CM-009-local-compose | in-progress | | |
+| CM-009 | Local environment setup (compose, .env) | 0 | agy2 | chore/CM-009-local-compose | merged (2 rounds) | compose healthy, local profile + full profile start; reviewed by master | 57bd232 |
 | CM-010 | Remove sensitive logs and fix CSRF | 0 | agy2 | | todo | | |
 | CM-011 | Fix presence Redis channel (minimal) | 0 | codex | | todo | | |
 | CM-012 | Fix frontend linting | 0 | agy | fix/CM-012-frontend-lint | merged | lint 0 errors/11 warnings, tsc OK, build OK; reviewed by master | 570636d |
