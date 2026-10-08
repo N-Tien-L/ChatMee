@@ -19,7 +19,7 @@ Updated by master. Status: todo | in-progress | review | changes-requested | mer
 | CM-020 | Setup testing infrastructure | 1 | agy | test/CM-020-test-infra | merged | mvnw verify green (40 unit + 1 IT, contextLoads green), JaCoCo 28% lines; npm test/lint/tsc/build OK | b6fb35d |
 | CM-021 | Service layer unit tests | 1 | agy | test/CM-021-service-tests | in-progress | | |
 | CM-022 | Controller slice tests | 1 | agy2 | | todo | | |
-| CM-023 | WS/Mongo integration tests | 1 | codex | | todo | | |
+| CM-023 | WS/Mongo integration tests | 1 | codex | test/CM-023-ws-integration-tests | in-progress (ParticipantRepositoryIT moved to CM-028) | | |
 | CM-024 | Global exception handler (ProblemDetail) | 1 | codex | | todo | | |
 | CM-025 | Full validation constraints | 1 | codex | | todo | | |
 | CM-026 | OpenAPI/Swagger setup | 1 | agy2 | | todo | | |
