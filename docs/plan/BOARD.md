@@ -23,7 +23,7 @@ Updated by master. Status: todo | in-progress | review | changes-requested | mer
 | CM-024 | Global exception handler (ProblemDetail) | 1 | codex | | todo | | |
 | CM-025 | Full validation constraints | 1 | codex | | todo | | |
 | CM-026 | OpenAPI/Swagger setup | 1 | agy2 | | todo | | |
-| CM-027 | CI setup (GitHub Actions) | 1 | agy2 | | todo | | |
+| CM-027 | CI setup (GitHub Actions) | 1 | agy2 | ci/CM-027-github-actions | approved, merge blocked (owner must delete untracked empty .github/workflows/*.yml in main checkout) | YAML parsed; reviewed by master | |
 | CM-028 | Room membership data integrity | 1 | codex | | todo | | |
 | CM-029 | Async message saving and timestamps | 1 | codex | | todo | | |
 | CM-030 | Rate limiting enhancements | 1 | codex | | todo | | |
@@ -47,6 +47,6 @@ Updated by master. Status: todo | in-progress | review | changes-requested | mer
 ## Notes
 - CM-011 is folded into CM-003. CM-006 already aligned the subscriber channel with the publisher ("presence-channel").
 - Step 0: develop created from main at f8a2855. Worktrees: ChatMee-codex, ChatMee-agy, ChatMee-agy2.
-- Untracked `.github/prompts/` and the two empty workflow files are still in the main checkout: deleting them needs the owner (D8). CM-027 must not start until they are gone.
+- `.github/prompts/` is gone. The two empty untracked `.github/workflows/*.yml` files remain in the main checkout and block merging CM-027 (owner must delete them).
 - CM-005c: removed the empty UserProfile.tsx and UsersList.tsx (tsc + build OK).
 - Follow-up for CM-045: `/user/queue/errors` is subscribed once with the first room's handler (subscribe() skips existing destinations), so delivery errors in later rooms dispatch to a stale reducer.
