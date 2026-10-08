@@ -1,5 +1,4 @@
-// Using Vercel proxy - all API calls go through same domain
-const API_BASE_URL = "";
+
 
 import { ApiResponse, AuthResponse, UserResponse } from "../type/ResponseType";
 import { apiClient } from "./apiClient";
