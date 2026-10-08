@@ -1,8 +1,7 @@
 package com.lnt.chatmee.exception;
 
-public class ChatRoomNotFoundException extends RuntimeException {
+public class ChatRoomNotFoundException extends ChatMeeException {
     public ChatRoomNotFoundException(String message) {
-        super(message);
+        super(ErrorCode.ROOM_NOT_FOUND, message);
     }
 }
-

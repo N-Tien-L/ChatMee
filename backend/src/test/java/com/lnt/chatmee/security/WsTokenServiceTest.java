@@ -133,7 +133,7 @@ class WsTokenServiceTest {
         @Test
         void getWsToken_unauthenticatedSession_doesNotIssueToken() throws Exception {
             mvc.perform(post("/api/v1/auth/ws-token"))
-                    .andExpect(status().is3xxRedirection());
+                    .andExpect(status().isUnauthorized());
             verifyNoInteractions(endpointTokens);
         }
 

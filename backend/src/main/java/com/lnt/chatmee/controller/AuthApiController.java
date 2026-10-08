@@ -1,5 +1,7 @@
 package com.lnt.chatmee.controller;
 
+import com.lnt.chatmee.exception.UserNotFoundException;
+
 import org.springframework.http.CacheControl;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -34,16 +36,11 @@ public class AuthApiController {
         return ResponseEntity.ok().cacheControl(CacheControl.noStore())
                 .body(new WsTokenResponse(wsTokenService.issueToken(principal)));
     }
-    
+
     @GetMapping("/me")
     public ResponseEntity<ApiResponse<AuthResponse>> getCurrentUser(@AuthenticationPrincipal OAuth2User principal) {
         if (principal == null) {
-            AuthResponse authResponse = AuthResponse.builder()
-                    .authenticated(false)
-                    .message(("User not authenticated"))
-                    .build();
-
-            return ResponseEntity.ok(ApiResponse.success(authResponse));
+            throw new org.springframework.security.authentication.AuthenticationCredentialsNotFoundException("Authentication required");
         }
 
         String provider = oAuthUtil.determineProvider(principal);
@@ -69,12 +66,7 @@ public class AuthApiController {
 
             return ResponseEntity.ok(ApiResponse.success(authResponse));
         } else {
-            AuthResponse authResponse = AuthResponse.builder()
-                    .authenticated(false)
-                    .message("User not found in database")
-                    .build();
-
-            return ResponseEntity.ok(ApiResponse.success(authResponse));
+            throw new UserNotFoundException("User not found in database");
         }
     }
 
@@ -87,7 +79,7 @@ public class AuthApiController {
     @GetMapping("/user")
     public ResponseEntity<ApiResponse<UserResponse>> getUserInfo(@AuthenticationPrincipal OAuth2User principal) {
         if (principal == null) {
-            return ResponseEntity.ok(ApiResponse.error("User not authenticated"));
+            throw new org.springframework.security.authentication.AuthenticationCredentialsNotFoundException("Authentication required");
         }
 
         String provider = oAuthUtil.determineProvider(principal);
@@ -107,7 +99,7 @@ public class AuthApiController {
 
             return ResponseEntity.ok(ApiResponse.success(userResponse));
         } else {
-            return ResponseEntity.ok(ApiResponse.error("User not found in database"));
+            throw new UserNotFoundException("User not found in database");
         }
     }
 }

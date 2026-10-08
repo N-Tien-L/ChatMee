@@ -1,12 +1,15 @@
 package com.lnt.chatmee.security;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.lnt.chatmee.exception.GlobalExceptionHandler;
+import com.lnt.chatmee.exception.ErrorCode;
+
 import com.lnt.chatmee.service.RateLimitingService;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
-import org.springframework.http.HttpStatus;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Component;
@@ -18,6 +21,7 @@ import java.io.IOException;
 @RequiredArgsConstructor
 public class RateLimitingFilter extends OncePerRequestFilter {
 
+    private final ObjectMapper objectMapper;
     private final RateLimitingService rateLimitingService;
 
     @Override
@@ -27,12 +31,12 @@ public class RateLimitingFilter extends OncePerRequestFilter {
         String clientIp = getClientIp(request);
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
         boolean isAuthenticated = authentication != null && authentication.isAuthenticated() && !"anonymousUser".equals(authentication.getPrincipal());
-        
+
         String key = isAuthenticated ? authentication.getName() : clientIp;
 
         if (!rateLimitingService.isAllowed(key, isAuthenticated)) {
-            response.setStatus(HttpStatus.TOO_MANY_REQUESTS.value());
-            response.getWriter().write("Too many requests");
+            GlobalExceptionHandler.writeProblem(objectMapper, request, response,
+                    ErrorCode.RATE_LIMITED, "Too many requests");
             return;
         }
 

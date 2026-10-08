@@ -3,8 +3,6 @@ package com.lnt.chatmee.service;
 import java.util.List;
 import java.util.stream.Collectors;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.springframework.dao.DataAccessException;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
@@ -26,13 +24,12 @@ import lombok.RequiredArgsConstructor;
 @RequiredArgsConstructor
 public class MessageService {
 
-    private static final Logger logger = LoggerFactory.getLogger(MessageService.class);
 
     private final ChatRoomRepository chatRoomRepository;
     private final ParticipantRepository participantRepository;
     private final MessageRepository messageRepository;
     private final UserRepository userRepository;
-    
+
     public List<ChatMessageResponse> getRecentMessages(String roomId, String userId) {
         if(!chatRoomRepository.existsById(roomId)) {
             throw new ChatRoomNotFoundException("Chat room not found: " + roomId);
@@ -55,7 +52,7 @@ public class MessageService {
         String senderName = userRepository.findById(message.getSenderId())
             .map(User::getName)
             .orElse("Unknown User");
-            
+
         return ChatMessageResponse.builder()
             .id(message.getId())
             .chatRoomId(message.getChatRoomId())
@@ -63,8 +60,8 @@ public class MessageService {
             .senderName(senderName)
             .content(message.getContent())
             .type(message.getType())
-            .createdAt(message.getCreatedAt().toString()) 
-            .updatedAt(message.getUpdatedAt().toString()) 
+            .createdAt(message.getCreatedAt().toString())
+            .updatedAt(message.getUpdatedAt().toString())
             .isUpdated(message.isUpdated())
             .isDeleted(message.isDeleted())
             .build();
@@ -76,14 +73,10 @@ public class MessageService {
      */
     @Async("messageIOExecutor")
     public void persistMessageAsync(Message message) {
-        logger.info("🟢 ASYNC PERSIST START: messageId={}, thread={}", 
-            message.getId(), Thread.currentThread().getName());
         try {
             messageRepository.save(message);
-            logger.info("✅ ASYNC PERSIST SUCCESS: messageId={}", message.getId());
-        } catch (Exception e) {
-            logger.error("❌ ASYNC PERSIST FAILED: messageId={}", message.getId(), e);
-            // You could add retry logic or dead-letter queue here if needed
+        } catch (DataAccessException ex) {
+            org.slf4j.LoggerFactory.getLogger(MessageService.class).error("Asynchronous message persistence failed", ex);
         }
     }
 }

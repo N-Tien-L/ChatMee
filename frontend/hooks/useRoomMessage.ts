@@ -15,7 +15,7 @@ const sessionCache = new Map<
     { messages: MessageResponse[]; hasMoreMessages: boolean; lastLoaded: number }
 >();
 
-function isApiError(err: unknown): err is { response?: { data?: { message?: string } }, message?: string } {
+function isApiError(err: unknown): err is { response?: { data?: { detail?: string } }, message?: string } {
     return typeof err === "object" && err !== null;
 }
 
@@ -59,7 +59,7 @@ export const useRoomMessages = (roomId: string) => {
             } catch (err: unknown) {
                 let msg = "Failed to load messages";
                 if (isApiError(err)) {
-                    msg = err?.response?.data?.message || err.message || "Failed to load messages";
+                    msg = err?.response?.data?.detail || err.message || "Failed to load messages";
                 }
                 dispatch({ type: "FETCH_ERROR", payload: msg });
             }
