@@ -39,7 +39,7 @@ Updated by master. Status: todo | in-progress | review | changes-requested | mer
 | CM-048 | PUBLIC room discovery | 2 | agy | | todo | | |
 | CM-049 | DM unique member keys | 2 | agy | | todo | | |
 | CM-050 | Professional README rewrite | 2 | agy | | todo | | |
-| CM-051 | Dockerfile improvements | 2 | agy | | todo | | |
+| CM-051 | Dockerfile improvements | 2 | agy2 | chore/CM-051-dockerfile | in-progress (part a: Dockerfile; b: JSON logs after CM-010) | | |
 | CM-052 | Major framework upgrades | 2 | agy | | todo | | |
 | CM-053 | Replace SockJS with pure WebSocket | 2 | agy | | todo | | |
 | CM-054 | TypeScript types cleanup | 2 | agy | | todo | | |
