@@ -131,7 +131,7 @@ export const useChatRoomsStore = create<chatRoomState>((set, get) => ({
                 toast.error(response.message || "Failed to create room");
                 return false;
             }
-        } catch (error) {
+        } catch {
             toast.error("Failed to create room");
             return false;
         }

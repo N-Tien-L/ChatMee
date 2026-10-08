@@ -21,7 +21,7 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
   roomId,
   onToggleSidebar,
 }) => {
-  const { messages, connected, sendMessage, wsError, loading, sending } =
+  const { messages, connected, sendMessage, loading, sending } =
     useRoomMessages(roomId);
   const [newMessage, setNewMessage] = useState("");
   const messagesEndRef = useRef<HTMLDivElement>(null);

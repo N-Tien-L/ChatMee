@@ -10,7 +10,6 @@ import ChatInterface from "@/components/chat/ChatInterface";
 import { useShallow } from "zustand/react/shallow";
 import { CreateRoomModal } from "@/components/room/CreateRoomModal";
 import { useWebSocket } from "@/hooks/useWebSocket";
-import { Panel, PanelGroup, PanelResizeHandle } from "react-resizable-panels";
 import { LogOut } from "lucide-react";
 
 const DashboardContent = () => {

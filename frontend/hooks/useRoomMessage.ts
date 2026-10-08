@@ -1,10 +1,9 @@
-import { useCallback, useEffect, useReducer, useState } from "react";
+import { useCallback, useEffect, useReducer } from "react";
 import { StompError, useWebSocket } from "./useWebSocket";
 import { messageApi } from "@/lib/api/messageApi";
 import { useAuthStore } from "@/lib/stores/authStore";
 import { Message, MessageResponse, MessageType } from "@/lib/types";
 import {
-    addIsOwnToMessages,
     deduplicateMessages,
     updateSessionCache,
 } from "@/lib/utils/messageUtils";
@@ -15,6 +14,10 @@ const sessionCache = new Map<
     string,
     { messages: MessageResponse[]; hasMoreMessages: boolean; lastLoaded: number }
 >();
+
+function isApiError(err: unknown): err is { response?: { data?: { message?: string } }, message?: string } {
+    return typeof err === "object" && err !== null;
+}
 
 export const useRoomMessages = (roomId: string) => {
     const [state, dispatch] = useReducer(messageReducer, initialState)
@@ -53,8 +56,11 @@ export const useRoomMessages = (roomId: string) => {
                 const hasMore = data.length === 50;
                 dispatch({ type: "FETCH_SUCCESS", payload: { messages: unique, hasMore, userId: user?.id } });
                 sessionCache.set(roomId, { messages: unique, hasMoreMessages: hasMore, lastLoaded: Date.now() });
-            } catch (err: any) {
-                const msg = err?.response?.data?.message || err.message || "Failed to load messages";
+            } catch (err: unknown) {
+                let msg = "Failed to load messages";
+                if (isApiError(err)) {
+                    msg = err?.response?.data?.message || err.message || "Failed to load messages";
+                }
                 dispatch({ type: "FETCH_ERROR", payload: msg });
             }
         };

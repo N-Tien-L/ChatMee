@@ -2,7 +2,6 @@ import { create } from 'zustand'
 import { userApi } from '../api/userApi'
 import { UserResponse } from "../type/ResponseType";
 import toast from 'react-hot-toast'
-import { get } from 'http';
 import Fuse from 'fuse.js';
 
 interface UsersState {

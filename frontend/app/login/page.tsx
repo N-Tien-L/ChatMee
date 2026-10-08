@@ -13,9 +13,8 @@ import { useShallow } from "zustand/react/shallow";
 const LoginContent = () => {
   const searchParams = useSearchParams();
   const router = useRouter();
-  const { user, isAuthenticated, loading } = useAuthStore(
+  const { isAuthenticated, loading } = useAuthStore(
     useShallow((state) => ({
-      user: state.user,
       isAuthenticated: state.isAuthenticated,
       loading: state.loading,
     }))
