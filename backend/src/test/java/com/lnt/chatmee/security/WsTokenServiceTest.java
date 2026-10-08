@@ -133,7 +133,7 @@ class WsTokenServiceTest {
 
         @Test
         void getWsToken_unauthenticatedSession_doesNotIssueToken() throws Exception {
-            mvc.perform(post("/api/v1/auth/ws-token").with(csrf()))
+            mvc.perform(post("/api/v1/auth/ws-token").with(csrf().asHeader()))
                     .andExpect(status().is3xxRedirection());
             verifyNoInteractions(endpointTokens);
         }
@@ -141,7 +141,7 @@ class WsTokenServiceTest {
         @Test
         void getWsToken_authenticatedSession_returnsUncachedToken() throws Exception {
             when(endpointTokens.issueToken(any(OAuth2User.class))).thenReturn("issued-token");
-            mvc.perform(post("/api/v1/auth/ws-token").with(oauth2Login()).with(csrf()))
+            mvc.perform(post("/api/v1/auth/ws-token").with(oauth2Login()).with(csrf().asHeader()))
                     .andExpect(status().isOk())
                     .andExpect(header().string("Cache-Control", "no-store"))
                     .andExpect(jsonPath("$.token").value("issued-token"));
