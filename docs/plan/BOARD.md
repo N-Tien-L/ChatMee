@@ -35,7 +35,7 @@ Updated by master. Status: todo | in-progress | review | changes-requested | mer
 | CM-044 | Message pagination with cursor | 2 | codex | | todo | | |
 | CM-045 | Frontend STOMP refactor | 2 | claude-w | | todo | | |
 | CM-046 | Frontend UI state and a11y | 2 | agy | | todo | | |
-| CM-047 | Server-side user search | 2 | agy | | todo | | |
+| CM-047 | Server-side user search | 2 | agy | feat/CM-047-user-search | in-progress | | |
 | CM-048 | PUBLIC room discovery | 2 | agy | | todo | | |
 | CM-049 | DM unique member keys | 2 | agy | | todo | | |
 | CM-050 | Professional README rewrite | 2 | agy | | todo | | |
