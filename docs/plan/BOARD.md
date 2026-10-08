@@ -17,7 +17,7 @@ Updated by master. Status: todo | in-progress | review | changes-requested | mer
 | CM-012 | Fix frontend linting | 0 | agy | fix/CM-012-frontend-lint | merged | lint 0 errors/11 warnings, tsc OK, build OK; reviewed by master | 570636d |
 | CM-013 | Fix frontend room switch leakage | 0 | agy | fix/CM-013-room-switch | merged (manual GIF test pending: owner) | lint/tsc/build OK; reviewed by master | 56b1be3 |
 | CM-020 | Setup testing infrastructure | 1 | agy | test/CM-020-test-infra | merged | mvnw verify green (40 unit + 1 IT, contextLoads green), JaCoCo 28% lines; npm test/lint/tsc/build OK | b6fb35d |
-| CM-021 | Service layer unit tests | 1 | agy | test/CM-021-service-tests | merged (part 1; service coverage 66.1% < 80% target, total 62.5%) | mvnw verify green; reviewed by master | b5917f9 |
+| CM-021 | Service layer unit tests | 1 | agy | test/CM-021-service-tests, test/CM-021b-service-coverage | merged (service coverage 83.0%, JaCoCo check >=80% enforced) | mvnw verify green; reviewed by master | b5917f9, f22c978 |
 | CM-022 | Controller slice tests | 1 | agy2 | | todo | | |
 | CM-023 | WS/Mongo integration tests | 1 | codex | test/CM-023-ws-integration-tests | merged (ParticipantRepositoryIT moved to CM-028) | mvnw verify green; StompMessagingIT 5, ActuatorSecurityIT 3 | 97131f7 |
 | CM-024 | Global exception handler (ProblemDetail) | 1 | codex | refactor/CM-024-problem-detail | in-progress | | |
@@ -52,4 +52,4 @@ Updated by master. Status: todo | in-progress | review | changes-requested | mer
 - Follow-up for CM-045: `/user/queue/errors` is subscribed once with the first room's handler (subscribe() skips existing destinations), so delivery errors in later rooms dispatch to a stale reducer.
 - Follow-ups from CM-004 (for CM-045/CM-023): a denied SUBSCRIBE closes the whole STOMP connection; existing subscriptions are not revoked when a user leaves a room.
 - Follow-ups from CM-008: frontend shows Join for non-PUBLIC rooms (ChatRoomListItem.tsx:221); duplicate join still returns 500 (CM-024/CM-028); add-participant into a DIRECT_MESSAGE room is still allowed (CM-041/CM-049).
-- CM-021 remainder: reach >=80% service line coverage (CustomOAuth2UserService, RedisPresencePublisher/Subscriber, ChatRoomService error paths) and then add the JaCoCo check rule.
+- CM-021 done. CustomOAuth2UserService still untested (could use DefaultOAuth2UserService.setRestOperations); candidate for CM-022.
