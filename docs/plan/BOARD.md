@@ -27,7 +27,7 @@ Updated by master. Status: todo | in-progress | review | changes-requested | mer
 | CM-028 | Room membership data integrity | 1 | codex | | todo | | |
 | CM-029 | Async message saving and timestamps | 1 | codex | | todo | | |
 | CM-030 | Rate limiting enhancements | 1 | codex | | todo | | |
-| CM-031 | Basic frontend tests | 1 | agy | test/CM-031-frontend-tests | in-progress | | |
+| CM-031 | Basic frontend tests | 1 | agy | test/CM-031-frontend-tests | merged | 22 vitest tests green, lint/tsc/build OK; reviewed by master | c2f69d6 |
 | CM-040 | UserPrincipal and DTO mappers | 2 | codex | | todo | | |
 | CM-041 | RoomTypePolicy strategy pattern | 2 | codex | | todo | | |
 | CM-042 | Resource-based API/WS routes | 2 | agy | | todo | | |
@@ -53,3 +53,4 @@ Updated by master. Status: todo | in-progress | review | changes-requested | mer
 - Follow-ups from CM-004 (for CM-045/CM-023): a denied SUBSCRIBE closes the whole STOMP connection; existing subscriptions are not revoked when a user leaves a room.
 - Follow-ups from CM-008: frontend shows Join for non-PUBLIC rooms (ChatRoomListItem.tsx:221); duplicate join still returns 500 (CM-024/CM-028); add-participant into a DIRECT_MESSAGE room is still allowed (CM-041/CM-049).
 - CM-021 done. CustomOAuth2UserService still untested (could use DefaultOAuth2UserService.setRestOperations); candidate for CM-022.
+- Follow-up from CM-031: frontend DTO naming drift (chatRoomId vs roomId, type vs messageType) between lib/type and lib/types (CM-054).
