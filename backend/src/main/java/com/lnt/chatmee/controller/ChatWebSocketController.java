@@ -9,9 +9,12 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.messaging.handler.annotation.Header;
 import org.springframework.messaging.handler.annotation.MessageMapping;
+import org.springframework.messaging.handler.annotation.MessageExceptionHandler;
+import org.springframework.messaging.handler.annotation.support.MethodArgumentNotValidException;
 import org.springframework.messaging.handler.annotation.Payload;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.stereotype.Controller;
+import org.springframework.validation.annotation.Validated;
 
 import com.lnt.chatmee.dto.request.ChatMessageRequest;
 import com.lnt.chatmee.dto.response.ChatMessageResponse;
@@ -22,9 +25,11 @@ import com.lnt.chatmee.repository.UserRepository;
 import com.lnt.chatmee.service.MessageService;
 import com.lnt.chatmee.service.ParticipantService;
 
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 
 @Controller
+@Validated
 @RequiredArgsConstructor
 public class ChatWebSocketController {
 
@@ -36,7 +41,7 @@ public class ChatWebSocketController {
     private final ParticipantService participantService;
 
     @MessageMapping("/chat.sendMessage")
-    public void sendMessage(@Payload ChatMessageRequest request, @Header("simpSessionAttributes") Map<String, Object> sessionAttributes) {
+    public void sendMessage(@Valid @Payload ChatMessageRequest request, @Header("simpSessionAttributes") Map<String, Object> sessionAttributes) {
         logger.info("🔵 RECEIVED MESSAGE REQUEST: roomId={}, content={}, tempId={}, senderId={}", 
             request.getRoomId(), request.getContent(), request.getTempId(), request.getSenderId());
         try {
@@ -109,7 +114,7 @@ public class ChatWebSocketController {
     }
 
     @MessageMapping("/chat.addUser")
-    public void addUser(@Payload ChatMessageRequest request, @Header("simpSessionAttributes") Map<String, Object> sessionAttributes) {
+    public void addUser(@Valid @Payload ChatMessageRequest request, @Header("simpSessionAttributes") Map<String, Object> sessionAttributes) {
         try {
             // Get user from senderId in request
             String userId = request.getSenderId();
@@ -143,5 +148,18 @@ public class ChatWebSocketController {
         } catch (Exception e) {
             logger.error("Error adding user to chat: ", e);
         }
+    }
+
+    @MessageExceptionHandler(MethodArgumentNotValidException.class)
+    public void handleValidationFailure(MethodArgumentNotValidException exception) {
+        ChatMessageRequest request = (ChatMessageRequest) exception.getBindingResult().getTarget();
+        String detail = exception.getBindingResult().getFieldErrors().stream()
+            .map(error -> error.getField() + " - " + error.getDefaultMessage())
+            .collect(java.util.stream.Collectors.joining("; "));
+        StompError error = StompError.builder()
+            .tempId(request.getTempId())
+            .message("Validation failed: " + detail)
+            .build();
+        messagingTemplate.convertAndSend("/topic/errors/" + request.getRoomId(), error);
     }
 }
