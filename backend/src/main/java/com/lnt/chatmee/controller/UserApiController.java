@@ -1,5 +1,7 @@
 package com.lnt.chatmee.controller;
 
+import com.lnt.chatmee.exception.UserNotFoundException;
+
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -40,7 +42,7 @@ public class UserApiController {
                     UserResponse userResponse = convertToUserResponse(user);
                     return ResponseEntity.ok(ApiResponse.success("User found", userResponse));
                 })
-                .orElse(ResponseEntity.ok(ApiResponse.error("User not found")));
+                .orElseThrow(() -> new UserNotFoundException("User not found"));
     }
 
     @GetMapping("/provider/{provider}/id/{providerId}")
@@ -52,7 +54,7 @@ public class UserApiController {
                     UserResponse userResponse = convertToUserResponse(user);
                     return ResponseEntity.ok(ApiResponse.success("User found", userResponse));
                 })
-                .orElse(ResponseEntity.ok(ApiResponse.error("User not found")));
+                .orElseThrow(() -> new UserNotFoundException("User not found"));
     }
 
     private UserResponse convertToUserResponse(User user) {

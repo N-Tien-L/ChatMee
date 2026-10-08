@@ -7,7 +7,7 @@ import com.lnt.chatmee.exception.ChatRoomNotFoundException;
 import com.lnt.chatmee.exception.ForbiddenActionException;
 import com.lnt.chatmee.exception.UnauthorizedRoomActionException;
 import com.lnt.chatmee.exception.UserNotFoundException;
-import com.lnt.chatmee.exception.IllegalArgumentException;
+import com.lnt.chatmee.exception.InvalidRequestException;
 import com.lnt.chatmee.model.ChatRoom;
 import com.lnt.chatmee.model.Participant;
 import com.lnt.chatmee.model.User;
@@ -51,10 +51,22 @@ class ChatRoomServiceTest {
     private ChatRoomService chatRoomService;
 
     @Test
+    void createRoom_invalidName_throwsInvalidRequest() {
+        when(userRepository.findByProviderAndProviderId("local", "localId"))
+                .thenReturn(Optional.of(User.builder().id("user1").build()));
+        CreateChatRoomRequest request = new CreateChatRoomRequest();
+        request.setRoomType(ChatRoom.RoomType.PUBLIC);
+        request.setRoomName("bad!");
+        assertThatThrownBy(() -> chatRoomService.createRoom(request, "local", "localId"))
+                .isInstanceOf(InvalidRequestException.class);
+        verifyNoInteractions(chatRoomRepository, participantService);
+    }
+
+    @Test
     void createRoom_directRoom_createsSuccessfully() {
         User creator = User.builder().id("user1").build();
         User participant = User.builder().id("user2").build();
-        
+
         when(userRepository.findByProviderAndProviderId("local", "localId"))
                 .thenReturn(Optional.of(creator));
         when(userRepository.findById("user2")).thenReturn(Optional.of(participant));
@@ -80,7 +92,7 @@ class ChatRoomServiceTest {
     @Test
     void createRoom_configurableRoom_createsSuccessfully() {
         User creator = User.builder().id("user1").build();
-        
+
         when(userRepository.findByProviderAndProviderId("local", "localId"))
                 .thenReturn(Optional.of(creator));
 
@@ -235,7 +247,7 @@ class ChatRoomServiceTest {
                 .type(ChatRoom.RoomType.PUBLIC)
                 .participants(participants)
                 .build();
-        
+
         when(chatRoomRepository.findByIdAndParticipantsContaining("room1", "user2"))
                 .thenReturn(Optional.of(room));
 
@@ -260,7 +272,7 @@ class ChatRoomServiceTest {
                 .type(ChatRoom.RoomType.PUBLIC)
                 .participants(participants)
                 .build();
-        
+
         when(chatRoomRepository.findByIdAndParticipantsContaining("room1", "user1"))
                 .thenReturn(Optional.of(room));
 

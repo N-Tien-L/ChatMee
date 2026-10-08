@@ -2,8 +2,6 @@ package com.lnt.chatmee.controller;
 
 import java.util.List;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.core.user.OAuth2User;
@@ -27,7 +25,6 @@ import lombok.RequiredArgsConstructor;
 @RequiredArgsConstructor
 public class MessageController {
 
-    private static final Logger logger = LoggerFactory.getLogger(MessageController.class);
 
     private final MessageService messageService;
     private final OAuthUtil oAuthUtil;
@@ -37,19 +34,14 @@ public class MessageController {
     public ResponseEntity<ApiResponse<List<ChatMessageResponse>>> getRecentMessages(
             @PathVariable String roomId,
             @AuthenticationPrincipal OAuth2User principal) {
-        try {
-            String provider = oAuthUtil.determineProvider(principal);
-            String providerId = oAuthUtil.getProviderId(principal, provider);
+        String provider = oAuthUtil.determineProvider(principal);
+        String providerId = oAuthUtil.getProviderId(principal, provider);
 
-            User user = userRepository.findByProviderAndProviderId(provider, providerId)
-                    .orElseThrow(() -> new UserNotFoundException("Authenticated user not found"));
+        User user = userRepository.findByProviderAndProviderId(provider, providerId)
+                .orElseThrow(() -> new UserNotFoundException("Authenticated user not found"));
 
-            List<ChatMessageResponse> messages = messageService.getRecentMessages(roomId, user.getId());
+        List<ChatMessageResponse> messages = messageService.getRecentMessages(roomId, user.getId());
 
-            return ResponseEntity.ok(ApiResponse.success(messages));
-        } catch (Exception e) {
-            logger.error("Error fetching recent messages for room: {}", roomId, e);
-            throw e;
-        }
+        return ResponseEntity.ok(ApiResponse.success(messages));
     }
 }

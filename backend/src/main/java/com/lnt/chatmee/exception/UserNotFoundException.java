@@ -1,7 +1,7 @@
 package com.lnt.chatmee.exception;
 
-public class UserNotFoundException extends RuntimeException {
+public class UserNotFoundException extends ChatMeeException {
     public UserNotFoundException(String message) {
-        super(message);
+        super(ErrorCode.USER_NOT_FOUND, message);
     }
 }

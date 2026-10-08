@@ -11,7 +11,6 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import com.lnt.chatmee.exception.DatabaseOperationException;
 import com.lnt.chatmee.exception.ForbiddenActionException;
 import com.lnt.chatmee.exception.UserAlreadyInRoomException;
 import com.lnt.chatmee.model.ChatRoom;
@@ -54,13 +53,13 @@ class ParticipantServiceTest {
     void joinRoom_directMessageRoom_throwsForbidden() { rejectJoin(RoomType.DIRECT_MESSAGE); }
 
     @Test
-    void joinRoom_existingPublicMember_preservesDatabaseOperationException() {
+    void joinRoom_existingPublicMember_throwsAlreadyParticipant() {
         joinUser();
         targetAndRoom("actor");
         when(participants.existsByChatRoomIdAndUserId("room", "actor")).thenReturn(true);
-        DatabaseOperationException failure = assertThrows(DatabaseOperationException.class,
+        UserAlreadyInRoomException failure = assertThrows(UserAlreadyInRoomException.class,
                 () -> service.joinRoom("room", "google", "subject"));
-        assertInstanceOf(UserAlreadyInRoomException.class, failure.getCause());
+        assertEquals("User is already in the room", failure.getMessage());
         verify(participants, never()).save(any());
         verify(rooms, never()).save(any());
     }
@@ -101,7 +100,7 @@ class ParticipantServiceTest {
     @Test
     void addParticipant_invalidRole_throwsBadRequestException() {
         actor(Role.OWNER);
-        assertThrows(com.lnt.chatmee.exception.IllegalArgumentException.class,
+        assertThrows(com.lnt.chatmee.exception.InvalidRequestException.class,
                 () -> service.addParticipant("room", "google", "subject", "target", "INVALID"));
         verifyNoInteractions(rooms);
         verify(participants, never()).save(any());
@@ -115,6 +114,13 @@ class ParticipantServiceTest {
 
     @Test
     void addParticipant_lowercaseRole_addsMember() { allowAssignment(Role.ADMIN, "member", Role.MEMBER); }
+
+    @Test
+    void createParticipant_uniqueIndexRace_throwsAlreadyParticipant() {
+        when(participants.save(any())).thenThrow(new org.springframework.dao.DuplicateKeyException("duplicate"));
+        assertThrows(UserAlreadyInRoomException.class,
+                () -> service.createParticipant("room", "actor", Role.MEMBER));
+    }
 
     private void actor(Role role) {
         joinUser();
