@@ -16,7 +16,7 @@ public class UpdateChatRoomRequest {
     @Size(max = 500, message = "Description must not exceed 500 characters")
     private String description;
 
-    @Min(value = 1, message = "Maximum users must be at least 1")
+    @Min(value = 2, message = "Maximum users must be at least 2")
     @Max(value = 1000, message = "Maximum users cannot exceed 1000")
     private Integer maxUsers;
     

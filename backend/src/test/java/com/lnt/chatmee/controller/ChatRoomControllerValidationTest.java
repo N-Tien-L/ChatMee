@@ -36,6 +36,11 @@ class ChatRoomControllerValidationTest {
     }
 
     @Test
+    void createRoom_oneMaxUser_returnsBadRequest() throws Exception {
+        reject("PUBLIC", "Room", 1);
+    }
+
+    @Test
     void createRoom_nullRoomType_returnsBadRequest() throws Exception {
         reject(null, "Room", 2);
     }
@@ -48,7 +53,7 @@ class ChatRoomControllerValidationTest {
     @Test
     void createRoom_validBoundaryRequest_returnsCreated() throws Exception {
         mvc.perform(post("/api/v1/chatrooms/create").with(oauth2Login()).with(csrf())
-                .contentType(MediaType.APPLICATION_JSON).content(body("PUBLIC", "x".repeat(100), 1)))
+                .contentType(MediaType.APPLICATION_JSON).content(body("PUBLIC", "x".repeat(100), 2)))
                 .andExpect(status().isCreated());
         verify(rooms).createRoom(any(), any(), any());
     }
