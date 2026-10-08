@@ -53,6 +53,7 @@ public class ChatWebSocketController {
             if (!participantService.isUserParticipant(request.getRoomId(), userId)) {
                 logger.warn("User {} attempted to send message to room {} without being a participant", 
                     userId, request.getRoomId());
+                sendError(request, principal, "Room membership required");
                 return;
             }
 
@@ -89,13 +90,7 @@ public class ChatWebSocketController {
         } catch (Exception e) {
             logger.error("Error sending message", e);
 
-            StompError errorPayload = StompError.builder()
-                .tempId(request.getTempId())
-                .message("Failed to send message: " + e.getMessage())
-                .build();
-            
-            // Broadcast error to the room
-            messagingTemplate.convertAndSend("/topic/errors/" + request.getRoomId(), errorPayload);
+            sendError(request, principal, "Failed to send message");
         }
     }
 
@@ -111,6 +106,7 @@ public class ChatWebSocketController {
 
             if (!participantService.isUserParticipant(request.getRoomId(), userId)) {
                 logger.warn("User {} attempted to join chat in room {} without being a participant", userId, request.getRoomId());
+                sendError(request, principal, "Room membership required");
                 return;
             }
 
@@ -135,19 +131,27 @@ public class ChatWebSocketController {
 
         } catch (Exception e) {
             logger.error("Error adding user to chat: ", e);
+            sendError(request, principal, "Failed to add user to chat");
         }
     }
 
     @MessageExceptionHandler(MethodArgumentNotValidException.class)
-    public void handleValidationFailure(MethodArgumentNotValidException exception) {
+    public void handleValidationFailure(MethodArgumentNotValidException exception, Principal principal) {
         ChatMessageRequest request = (ChatMessageRequest) exception.getBindingResult().getTarget();
         String detail = exception.getBindingResult().getFieldErrors().stream()
             .map(error -> error.getField() + " - " + error.getDefaultMessage())
             .collect(java.util.stream.Collectors.joining("; "));
+        sendError(request, principal, "Validation failed: " + detail);
+    }
+
+    private void sendError(ChatMessageRequest request, Principal principal, String message) {
+        if (principal == null) {
+            return;
+        }
         StompError error = StompError.builder()
             .tempId(request.getTempId())
-            .message("Validation failed: " + detail)
+            .message(message)
             .build();
-        messagingTemplate.convertAndSend("/topic/errors/" + request.getRoomId(), error);
+        messagingTemplate.convertAndSendToUser(principal.getName(), "/queue/errors", error);
     }
 }

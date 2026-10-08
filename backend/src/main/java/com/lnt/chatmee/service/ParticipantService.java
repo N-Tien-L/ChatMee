@@ -123,6 +123,6 @@ public class ParticipantService {
     }
 
     public boolean isUserParticipant(String roomId, String userId) {
-        return participantRepository.findByChatRoomIdAndUserId(roomId, userId).isPresent();
+        return participantRepository.existsByChatRoomIdAndUserId(roomId, userId);
     }
 }

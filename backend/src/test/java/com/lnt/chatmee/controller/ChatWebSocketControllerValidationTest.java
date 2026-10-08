@@ -64,7 +64,7 @@ class ChatWebSocketControllerValidationTest {
         dispatch("/app/chat.sendMessage", 5001);
         verifyNoInteractions(messages, users, participants);
         ArgumentCaptor<StompError> error = ArgumentCaptor.forClass(StompError.class);
-        verify(messaging).convertAndSend(eq("/topic/errors/test-room"), error.capture());
+        verify(messaging).convertAndSendToUser(eq("test-user"), eq("/queue/errors"), error.capture());
         assertEquals("test-temp", error.getValue().getTempId());
         assertTrue(error.getValue().getMessage().contains("5000"));
         verifyNoMoreInteractions(messaging);
@@ -85,7 +85,7 @@ class ChatWebSocketControllerValidationTest {
     void addUser_oversizedPayload_reportsErrorWithoutBroadcasting() {
         dispatch("/app/chat.addUser", 5001);
         verifyNoInteractions(messages, users, participants);
-        verify(messaging).convertAndSend(eq("/topic/errors/test-room"), any(StompError.class));
+        verify(messaging).convertAndSendToUser(eq("test-user"), eq("/queue/errors"), any(StompError.class));
         verifyNoMoreInteractions(messaging);
     }
 

@@ -26,6 +26,7 @@ import org.springframework.util.MimeTypeUtils;
 import org.springframework.validation.beanvalidation.OptionalValidatorFactoryBean;
 
 import com.lnt.chatmee.dto.response.ChatMessageResponse;
+import com.lnt.chatmee.dto.StompError;
 import com.lnt.chatmee.model.Message;
 import com.lnt.chatmee.model.User;
 import com.lnt.chatmee.repository.UserRepository;
@@ -94,7 +95,8 @@ class ChatWebSocketControllerAuthTest {
                 User.builder().id("internal-user").name("Real Name").build()));
         dispatch("/app/chat.sendMessage", () -> "internal-user");
         verify(participants).isUserParticipant("room", "internal-user");
-        verifyNoInteractions(messages, messaging);
+        verifyNoInteractions(messages);
+        assertPrivateError();
     }
 
     @Test
@@ -103,13 +105,36 @@ class ChatWebSocketControllerAuthTest {
                 User.builder().id("internal-user").name("Real Name").build()));
         dispatch("/app/chat.addUser", () -> "internal-user");
         verify(participants).isUserParticipant("room", "internal-user");
-        verifyNoInteractions(messages, messaging);
+        verifyNoInteractions(messages);
+        assertPrivateError();
     }
 
     @Test
     void sendMessage_missingPrincipal_doesNotUsePayloadIdentity() {
         dispatch("/app/chat.sendMessage", null);
         verifyNoInteractions(users, participants, messages, messaging);
+    }
+
+    @Test
+    void sendMessage_processingFailure_sendsErrorOnlyToPrincipal() {
+        when(users.findById("internal-user")).thenThrow(new IllegalStateException("lookup failed"));
+        dispatch("/app/chat.sendMessage", () -> "internal-user");
+        verifyNoInteractions(messages);
+        assertPrivateError();
+    }
+
+    @Test
+    void addUser_processingFailure_sendsErrorOnlyToPrincipal() {
+        when(users.findById("internal-user")).thenThrow(new IllegalStateException("lookup failed"));
+        dispatch("/app/chat.addUser", () -> "internal-user");
+        verifyNoInteractions(messages);
+        assertPrivateError();
+    }
+
+    private void assertPrivateError() {
+        verify(messaging).convertAndSendToUser(eq("internal-user"), eq("/queue/errors"),
+                argThat((StompError error) -> "temp".equals(error.getTempId()) && !error.getMessage().isBlank()));
+        verifyNoMoreInteractions(messaging);
     }
 
     private void authenticatedMember() {

@@ -1,6 +1,7 @@
 package com.lnt.chatmee.security;
 
 import java.security.Principal;
+import java.util.Set;
 
 import org.springframework.messaging.Message;
 import org.springframework.messaging.MessageChannel;
@@ -8,15 +9,21 @@ import org.springframework.messaging.simp.stomp.StompCommand;
 import org.springframework.messaging.simp.stomp.StompHeaderAccessor;
 import org.springframework.messaging.support.ChannelInterceptor;
 import org.springframework.messaging.support.MessageHeaderAccessor;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.stereotype.Component;
+
+import com.lnt.chatmee.service.ParticipantService;
 
 import lombok.RequiredArgsConstructor;
 
 @Component
 @RequiredArgsConstructor
 public class AuthChannelInterceptor implements ChannelInterceptor {
+    private static final Set<String> SEND_DESTINATIONS = Set.of(
+            "/app/chat.sendMessage", "/app/chat.addUser", "/app/typing", "/app/presence");
     private final WsTokenService wsTokenService;
+    private final ParticipantService participantService;
 
     @Override
     public Message<?> preSend(Message<?> message, MessageChannel channel) {
@@ -36,6 +43,38 @@ public class AuthChannelInterceptor implements ChannelInterceptor {
             Principal principal = () -> userId;
             accessor.setUser(principal);
         }
+        if (accessor != null && (StompCommand.SUBSCRIBE.equals(accessor.getCommand())
+                || StompCommand.SEND.equals(accessor.getCommand()))) {
+            Principal principal = accessor.getUser();
+            if (principal == null || principal.getName() == null || principal.getName().isBlank()) {
+                throw new BadCredentialsException("WebSocket authentication required");
+            }
+            if (StompCommand.SUBSCRIBE.equals(accessor.getCommand())) {
+                authorizeSubscription(accessor.getDestination(), principal.getName());
+            } else if (accessor.getDestination() == null || !SEND_DESTINATIONS.contains(accessor.getDestination())) {
+                // Clients must use application handlers; direct broker sends bypass their checks.
+                throw new AccessDeniedException("WebSocket destination not allowed");
+            }
+        }
         return message;
+    }
+
+    private void authorizeSubscription(String destination, String userId) {
+        if ("/topic/presence".equals(destination) || "/user/queue/errors".equals(destination)) {
+            return;
+        }
+        if (destination != null) {
+            for (String prefix : new String[]{"/topic/public/", "/topic/typing/"}) {
+                if (destination.startsWith(prefix)) {
+                    String roomId = destination.substring(prefix.length());
+                    if (!roomId.isBlank() && !roomId.contains("/")
+                            && participantService.isUserParticipant(roomId, userId)) {
+                        return;
+                    }
+                    break;
+                }
+            }
+        }
+        throw new AccessDeniedException("WebSocket subscription not allowed");
     }
 }

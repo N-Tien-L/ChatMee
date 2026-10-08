@@ -1,13 +1,16 @@
 package com.lnt.chatmee.controller;
 
-import com.lnt.chatmee.dto.PresenceMessage;
-import com.lnt.chatmee.service.PresenceService;
+import java.security.Principal;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.messaging.handler.annotation.MessageMapping;
 import org.springframework.messaging.handler.annotation.Payload;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.stereotype.Controller;
+
+import com.lnt.chatmee.dto.PresenceMessage;
+import com.lnt.chatmee.service.PresenceService;
 
 @Controller
 public class PresenceWebSocketController {
@@ -23,7 +26,11 @@ public class PresenceWebSocketController {
     }
 
     @MessageMapping("/presence")
-    public void handlePresenceEvent(@Payload PresenceMessage message) {
+    public void handlePresenceEvent(@Payload PresenceMessage message, Principal principal) {
+        if (principal == null) {
+            return;
+        }
+        message.setUserId(principal.getName());
         logger.info("Received presence event: userId={}, online={}", message.getUserId(), message.isOnline());
         
         // Update presence service
