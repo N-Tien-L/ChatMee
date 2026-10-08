@@ -42,6 +42,7 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
   const {
     sendTyping,
     subscribeTyping,
+    unsubscribe,
     connected: wsConnected,
   } = useWebSocket();
 
@@ -57,8 +58,9 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
   useEffect(() => {
     if (wsConnected && roomId) {
       subscribeTyping(roomId);
+      return () => unsubscribe(`/topic/typing/${roomId}`);
     }
-  }, [wsConnected, roomId, subscribeTyping]);
+  }, [wsConnected, roomId, subscribeTyping, unsubscribe]);
 
   const currentRoom = rooms.find((room) => room.id === roomId);
 
