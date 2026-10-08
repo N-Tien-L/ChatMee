@@ -14,7 +14,7 @@ Authoritative documents: `docs/specs/` (requirements), `docs/design/` (technical
 ## 2. Common Commands
 ```bash
 # Local infrastructure
-docker compose up -d mongo redis               # (added in CM-009)
+docker compose up -d                           # start mongo and redis
 cp backend/.env.example backend/.env           # Fill in your OAuth client
 cp frontend/.env.example frontend/.env.local
 
