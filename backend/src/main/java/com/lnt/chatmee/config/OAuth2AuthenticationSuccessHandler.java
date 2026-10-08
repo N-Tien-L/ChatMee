@@ -31,10 +31,8 @@ public class OAuth2AuthenticationSuccessHandler extends SimpleUrlAuthenticationS
         String sessionId = session.getId();
         
         // Log for debugging
-        log.info("=== OAuth2 Success Handler ===");
-        log.info("Session ID: {}", sessionId);
-        log.info("Authenticated User: {}", authentication.getName());
-        log.info("Redirecting to: {}/dashboard", clientUrl);
+        log.debug("=== OAuth2 Success Handler ===");
+        log.debug("Redirecting to: {}/dashboard", clientUrl);
         
         // Simple redirect to dashboard
         // Since we're using Vercel proxy, this will be same-origin
