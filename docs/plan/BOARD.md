@@ -14,7 +14,7 @@ Updated by master. Status: todo | in-progress | review | changes-requested | mer
 | CM-009 | Local environment setup (compose, .env) | 0 | agy2 | chore/CM-009-local-compose | in-progress | | |
 | CM-010 | Remove sensitive logs and fix CSRF | 0 | agy2 | | todo | | |
 | CM-011 | Fix presence Redis channel (minimal) | 0 | codex | | todo | | |
-| CM-012 | Fix frontend linting | 0 | agy | | todo | | |
+| CM-012 | Fix frontend linting | 0 | agy | fix/CM-012-frontend-lint | merged | lint 0 errors/11 warnings, tsc OK, build OK; reviewed by master | 570636d |
 | CM-013 | Fix frontend room switch leakage | 0 | agy | | todo | | |
 | CM-020 | Setup testing infrastructure | 1 | agy | | todo | | |
 | CM-021 | Service layer unit tests | 1 | agy | | todo | | |
