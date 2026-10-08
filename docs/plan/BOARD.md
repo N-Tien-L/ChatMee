@@ -25,7 +25,7 @@ Updated by master. Status: todo | in-progress | review | changes-requested | mer
 | CM-026 | OpenAPI/Swagger setup | 1 | agy2 | | todo | | |
 | CM-027 | CI setup (GitHub Actions) | 1 | agy2 | ci/CM-027-github-actions | approved, merge blocked (owner must delete untracked empty .github/workflows/*.yml in main checkout) | YAML parsed; reviewed by master | |
 | CM-028 | Room membership data integrity | 1 | codex | | todo | | |
-| CM-029 | Async message saving and timestamps | 1 | codex | | todo | | |
+| CM-029 | Async message saving and timestamps | 1 | codex | fix/CM-029-persist-then-broadcast | in-progress | | |
 | CM-030 | Rate limiting enhancements | 1 | codex | | todo | | |
 | CM-031 | Basic frontend tests | 1 | agy | test/CM-031-frontend-tests | merged | 22 vitest tests green, lint/tsc/build OK; reviewed by master | c2f69d6 |
 | CM-040 | UserPrincipal and DTO mappers | 2 | codex | | todo | | |
