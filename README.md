@@ -122,7 +122,7 @@ npm run dev
 - **Local dev**: run backend (`./mvnw spring-boot:run`) and frontend (`npm run dev`) concurrently; WebSocket + REST traffic is proxied automatically through Next rewrites.
 - **Branching**: adopt feature branches off `main` (e.g., `feature/presence-batching`), then open PRs for review—GitHub Actions workflows (`.github/workflows`) are placeholders ready for CI scripts.
 - **Environments**: Use `dev` profile locally; Docker image defaults to `prod` profile and exposes port `10000`.
-- **Monitoring & Ops**: Actuator endpoints (`/actuator/env`, `/actuator/health`) are exposed for health checks, and the Dockerfile defines an HTTP health probe.
+- **Monitoring & Ops**: Only Actuator endpoints `/actuator/health` and `/actuator/info` are exposed, and the Dockerfile defines an HTTP health probe.
 
 ## Coding Standards
 - **Backend**
