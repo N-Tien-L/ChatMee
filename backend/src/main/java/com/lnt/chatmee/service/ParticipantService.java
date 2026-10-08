@@ -1,6 +1,7 @@
 package com.lnt.chatmee.service;
 
 import java.time.LocalDateTime;
+import java.util.Locale;
 import java.util.UUID;
 
 import org.slf4j.Logger;
@@ -8,7 +9,9 @@ import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.lnt.chatmee.exception.ChatRoomNotFoundException;
 import com.lnt.chatmee.exception.DatabaseOperationException;
+import com.lnt.chatmee.exception.ForbiddenActionException;
 import com.lnt.chatmee.exception.RoomCapacityExceededException;
 import com.lnt.chatmee.exception.UserAlreadyInRoomException;
 import com.lnt.chatmee.exception.UserNotFoundException;
@@ -67,20 +70,46 @@ public class ParticipantService {
     
     @Transactional
     public void joinRoom(String roomId, String provider, String providerId) {
+        User user = userRepository.findByProviderAndProviderId(provider, providerId)
+            .orElseThrow(() -> new UserNotFoundException("Authenticated user not found"));
+        ValidationUtil.validateId(roomId, "Room ID");
+        ChatRoom room = chatRoomRepository.findById(roomId)
+            .orElseThrow(() -> new ChatRoomNotFoundException("Can't find chat room with id: " + roomId));
+        if (room.getType() != ChatRoom.RoomType.PUBLIC) {
+            throw new ForbiddenActionException("Only PUBLIC rooms can be joined");
+        }
         try {
-            // Get the authenticated user
-            User user = userRepository.findByProviderAndProviderId(provider, providerId)
-                .orElseThrow(() -> new UserNotFoundException("Authenticated user not found"));
-            
-            // Add user as MEMBER to the room
             addParticipant(roomId, user.getId(), Role.MEMBER);
-            
-        } catch (Exception e) {
-            logger.error("Failed to join room {} for user {}/{}", roomId, provider, providerId, e);
+        } catch (UserAlreadyInRoomException | RoomCapacityExceededException e) {
+            // Preserve the existing join endpoint's duplicate/capacity failure behavior.
             throw new DatabaseOperationException("Failed to join room", e);
         }
     }
-    
+
+    @Transactional
+    public void addParticipant(String roomId, String provider, String providerId, String targetUserId, String requestedRole) {
+        User actor = userRepository.findByProviderAndProviderId(provider, providerId)
+            .orElseThrow(() -> new UserNotFoundException("Authenticated user not found"));
+        Participant participant = participantRepository.findByChatRoomIdAndUserId(roomId, actor.getId())
+            .orElseThrow(() -> new ForbiddenActionException("User is not a participant of the chat room"));
+        Role actorRole = participant.getRole();
+        if (actorRole != Role.ADMIN && actorRole != Role.OWNER) {
+            throw new ForbiddenActionException("Only ADMIN or OWNER can add participants to the chat room");
+        }
+        Role role = Role.MEMBER;
+        if (requestedRole != null && !requestedRole.trim().isEmpty()) {
+            try {
+                role = Role.valueOf(requestedRole.toUpperCase(Locale.ROOT));
+            } catch (IllegalArgumentException e) {
+                throw new com.lnt.chatmee.exception.IllegalArgumentException("Invalid role specified: " + requestedRole);
+            }
+        }
+        if (role == Role.OWNER || (actorRole == Role.ADMIN && role != Role.MEMBER)) {
+            throw new ForbiddenActionException("The requested role cannot be assigned by this participant");
+        }
+        addParticipant(roomId, targetUserId, role);
+    }
+
     @Transactional
     public void addParticipant(String roomId, String userId, Role role) {
         try {
