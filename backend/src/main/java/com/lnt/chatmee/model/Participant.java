@@ -11,8 +11,7 @@ import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
-import jakarta.persistence.PrePersist;
-import jakarta.persistence.PreUpdate;
+
 
 @Getter
 @Setter
@@ -44,13 +43,11 @@ public class Participant {
 
     private LocalDateTime updatedAt;
     
-    @PrePersist
     public void prePersist() {
         this.joinedAt = LocalDateTime.now();
         this.updatedAt = LocalDateTime.now();
     }   
 
-    @PreUpdate
     public void preUpdate() {
         this.updatedAt = LocalDateTime.now();
     }
