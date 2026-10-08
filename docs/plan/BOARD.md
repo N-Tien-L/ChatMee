@@ -3,11 +3,11 @@ Updated by master. Status: todo | in-progress | review | changes-requested | mer
 
 | Ticket | Title | Phase | Owner | Branch | Status | Verification | Merge commit |
 |---|---|---|---|---|---|---|---|
-| CM-001 | Close actuator/env and rotate secrets | 0 | agy | | todo | | |
+| CM-001 | Close actuator/env and rotate secrets | 0 | codex | fix/CM-001-close-actuator-env | in-progress | | |
 | CM-002 | Patch CVE dependencies | 0 | agy2 | | todo | | |
 | CM-003 | WS token authentication | 0 | codex | | todo | | |
 | CM-004 | WS subscribe/send authorization | 0 | codex | | todo | | |
-| CM-005 | Add agent rules, templates, ADRs | 0 | agy | docs/CM-005-agent-rules | in-progress | | |
+| CM-005 | Agent rules, templates, ADRs (part a) + junk cleanup (part b) | 0 | agy / agy2 | docs/CM-005-agent-rules | in-progress (a merged) | a: docs reviewed by master | 765979b (a) |
 | CM-006 | Fix typos and names | 0 | agy | | todo | | |
 | CM-007 | Enable Bean Validation | 0 | codex | | todo | | |
 | CM-008 | Restrict join/role rules | 0 | codex | | todo | | |
@@ -46,4 +46,5 @@ Updated by master. Status: todo | in-progress | review | changes-requested | mer
 
 ## Notes
 - CM-011 is folded into CM-003.
-- Step 0: develop created from main at f8a2855.
+- Step 0: develop created from main at f8a2855. Worktrees: ChatMee-codex, ChatMee-agy, ChatMee-agy2.
+- Untracked `.github/prompts/` and the two empty workflow files are still in the main checkout: deleting them needs the owner (D8). CM-027 must not start until they are gone.

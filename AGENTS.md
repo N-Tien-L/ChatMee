@@ -35,6 +35,10 @@ npm run build
 A change is only considered "done" when `./mvnw verify` AND `npm run lint && npx tsc --noEmit && npm test && npm run build` both pass.
 
 ## 3. Module Boundaries (backend: `com.lnt.chatmee`)
+> **This is the TARGET layout, reached gradually in phase 2.** The current code uses `config/ controller/ dto/ exception/ model/ repository/ security/ service/ util/`.
+> Packages and types listed below (`web/`, `domain/`, `websocket/`, `UserPrincipal`, `@CurrentUser`, `RoomAuthorizationService`, `ChatMeeException`, `StompProvider`, ...) may NOT exist yet.
+> Never reference or create them unless your ticket names them explicitly.
+
 ```text
 config/        Spring configuration (Security, WebSocket, Redis, Mongo, OpenAPI). No business logic.
 web/           REST controllers + request/response DTOs + mappers. Only calls services.
