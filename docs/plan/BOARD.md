@@ -4,7 +4,7 @@ Updated by master. Status: todo | in-progress | review | changes-requested | mer
 | Ticket | Title | Phase | Owner | Branch | Status | Verification | Merge commit |
 |---|---|---|---|---|---|---|---|
 | CM-001 | Close actuator/env and rotate secrets | 0 | codex | fix/CM-001-close-actuator-env | merged (secret rotation pending: owner) | ActuatorSecurityTest 5/5, package OK | 5594152 |
-| CM-002 | Patch CVE dependencies | 0 | agy2 | build/CM-002-dependency-patches | in-progress | | |
+| CM-002 | Patch CVE dependencies | 0 | agy2 | build/CM-002-dependency-patches | merged (2 rounds) | Boot 3.5.16, next 15.5.27, axios 1.20.0; audit prod 0 critical (1 high postcss via next, needs Next 16 / CM-052); BE tests + FE gates OK | 7cacd0e |
 | CM-003 | WS token authentication (+ CM-011) | 0 | codex | feat/CM-003-ws-token-auth | merged (claude-w review pending after quota reset) | 32 WS/auth/presence tests green, package OK, FE lint/tsc/build OK | 7204e72 |
 | CM-004 | WS subscribe/send authorization | 0 | codex | feat/CM-004-ws-authorization | in-progress | | |
 | CM-005 | Agent rules, templates, ADRs (a) + junk cleanup (b) | 0 | agy | docs/CM-005-agent-rules, chore/CM-005-junk-cleanup | merged | a: reviewed; b: test-compile + build OK | 765979b, 79ef0c2 |
@@ -16,7 +16,7 @@ Updated by master. Status: todo | in-progress | review | changes-requested | mer
 | CM-011 | Fix presence Redis channel (minimal) | 0 | codex | feat/CM-003-ws-token-auth | merged (folded into CM-003) | PresenceEventListenerTest | 7204e72 |
 | CM-012 | Fix frontend linting | 0 | agy | fix/CM-012-frontend-lint | merged | lint 0 errors/11 warnings, tsc OK, build OK; reviewed by master | 570636d |
 | CM-013 | Fix frontend room switch leakage | 0 | agy | fix/CM-013-room-switch | merged (manual GIF test pending: owner) | lint/tsc/build OK; reviewed by master | 56b1be3 |
-| CM-020 | Setup testing infrastructure | 1 | agy | | todo | | |
+| CM-020 | Setup testing infrastructure | 1 | agy | test/CM-020-test-infra | in-progress | | |
 | CM-021 | Service layer unit tests | 1 | agy | | todo | | |
 | CM-022 | Controller slice tests | 1 | agy2 | | todo | | |
 | CM-023 | WS/Mongo integration tests | 1 | codex | | todo | | |
