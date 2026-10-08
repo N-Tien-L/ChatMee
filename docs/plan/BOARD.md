@@ -8,8 +8,8 @@ Updated by master. Status: todo | in-progress | review | changes-requested | mer
 | CM-003 | WS token authentication | 0 | codex | | todo | | |
 | CM-004 | WS subscribe/send authorization | 0 | codex | | todo | | |
 | CM-005 | Agent rules, templates, ADRs (part a) + junk cleanup (part b) | 0 | agy / agy2 | docs/CM-005-agent-rules | in-progress (a merged) | a: docs reviewed by master | 765979b (a) |
-| CM-006 | Fix typos and names | 0 | agy | refactor/CM-006-fix-typos | in-progress | | |
-| CM-007 | Enable Bean Validation | 0 | codex | | todo | | |
+| CM-006 | Fix typos and names | 0 | agy | refactor/CM-006-fix-typos | merged | grep 0 hits, test-compile OK, tsc OK; reviewed by master (rename-only, codex review skipped) | f010b8d |
+| CM-007 | Enable Bean Validation | 0 | codex | fix/CM-007-bean-validation | in-progress | | |
 | CM-008 | Restrict join/role rules | 0 | codex | | todo | | |
 | CM-009 | Local environment setup (compose, .env) | 0 | agy2 | chore/CM-009-local-compose | in-progress | | |
 | CM-010 | Remove sensitive logs and fix CSRF | 0 | agy2 | | todo | | |
@@ -45,6 +45,6 @@ Updated by master. Status: todo | in-progress | review | changes-requested | mer
 | CM-054 | TypeScript types cleanup | 2 | agy | | todo | | |
 
 ## Notes
-- CM-011 is folded into CM-003.
+- CM-011 is folded into CM-003. CM-006 already aligned the subscriber channel with the publisher ("presence-channel").
 - Step 0: develop created from main at f8a2855. Worktrees: ChatMee-codex, ChatMee-agy, ChatMee-agy2.
 - Untracked `.github/prompts/` and the two empty workflow files are still in the main checkout: deleting them needs the owner (D8). CM-027 must not start until they are gone.
