@@ -10,7 +10,7 @@ Updated by master. Status: todo | in-progress | review | changes-requested | mer
 | CM-005 | Agent rules, templates, ADRs (a) + junk cleanup (b) | 0 | agy | docs/CM-005-agent-rules, chore/CM-005-junk-cleanup | merged | a: reviewed; b: test-compile + build OK | 765979b, 79ef0c2 |
 | CM-006 | Fix typos and names | 0 | agy | refactor/CM-006-fix-typos | merged | grep 0 hits, test-compile OK, tsc OK; reviewed by master (rename-only, codex review skipped) | f010b8d |
 | CM-007 | Enable Bean Validation | 0 | codex | fix/CM-007-bean-validation | merged (2 rounds) | validation tests + actuator test green, package OK | 6e820d5 |
-| CM-008 | Restrict join/role rules | 0 | codex | fix/CM-008-join-role-rules | in-progress | | |
+| CM-008 | Restrict join/role rules | 0 | codex | fix/CM-008-join-role-rules | merged | mvnw verify green (ParticipantServiceTest 17, ChatRoomControllerAuthorizationTest 7) | 66d63b5 |
 | CM-009 | Local environment setup (compose, .env) | 0 | agy2 | chore/CM-009-local-compose | merged (2 rounds) | compose healthy, local profile + full profile start; reviewed by master | 57bd232 |
 | CM-010 | Remove sensitive logs and fix CSRF | 0 | agy2 | | todo (unblocked: CM-004 merged) | | |
 | CM-011 | Fix presence Redis channel (minimal) | 0 | codex | feat/CM-003-ws-token-auth | merged (folded into CM-003) | PresenceEventListenerTest | 7204e72 |
@@ -51,3 +51,4 @@ Updated by master. Status: todo | in-progress | review | changes-requested | mer
 - CM-005c: removed the empty UserProfile.tsx and UsersList.tsx (tsc + build OK).
 - Follow-up for CM-045: `/user/queue/errors` is subscribed once with the first room's handler (subscribe() skips existing destinations), so delivery errors in later rooms dispatch to a stale reducer.
 - Follow-ups from CM-004 (for CM-045/CM-023): a denied SUBSCRIBE closes the whole STOMP connection; existing subscriptions are not revoked when a user leaves a room.
+- Follow-ups from CM-008: frontend shows Join for non-PUBLIC rooms (ChatRoomListItem.tsx:221); duplicate join still returns 500 (CM-024/CM-028); add-participant into a DIRECT_MESSAGE room is still allowed (CM-041/CM-049).
