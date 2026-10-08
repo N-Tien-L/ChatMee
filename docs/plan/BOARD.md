@@ -6,13 +6,13 @@ Updated by master. Status: todo | in-progress | review | changes-requested | mer
 | CM-001 | Close actuator/env and rotate secrets | 0 | codex | fix/CM-001-close-actuator-env | merged (secret rotation pending: owner) | ActuatorSecurityTest 5/5, package OK | 5594152 |
 | CM-002 | Patch CVE dependencies | 0 | agy2 | build/CM-002-dependency-patches | merged (2 rounds) | Boot 3.5.16, next 15.5.27, axios 1.20.0; audit prod 0 critical (1 high postcss via next, needs Next 16 / CM-052); BE tests + FE gates OK | 7cacd0e |
 | CM-003 | WS token authentication (+ CM-011) | 0 | codex | feat/CM-003-ws-token-auth | merged (claude-w review pending after quota reset) | 32 WS/auth/presence tests green, package OK, FE lint/tsc/build OK | 7204e72 |
-| CM-004 | WS subscribe/send authorization | 0 | codex | feat/CM-004-ws-authorization | in-progress | | |
+| CM-004 | WS subscribe/send authorization | 0 | codex | feat/CM-004-ws-authorization | merged (claude-w review pending after quota reset) | WS/auth/presence/typing tests green, package OK, FE lint/tsc/build OK | 39fe07f |
 | CM-005 | Agent rules, templates, ADRs (a) + junk cleanup (b) | 0 | agy | docs/CM-005-agent-rules, chore/CM-005-junk-cleanup | merged | a: reviewed; b: test-compile + build OK | 765979b, 79ef0c2 |
 | CM-006 | Fix typos and names | 0 | agy | refactor/CM-006-fix-typos | merged | grep 0 hits, test-compile OK, tsc OK; reviewed by master (rename-only, codex review skipped) | f010b8d |
 | CM-007 | Enable Bean Validation | 0 | codex | fix/CM-007-bean-validation | merged (2 rounds) | validation tests + actuator test green, package OK | 6e820d5 |
-| CM-008 | Restrict join/role rules | 0 | codex | | todo | | |
+| CM-008 | Restrict join/role rules | 0 | codex | fix/CM-008-join-role-rules | in-progress | | |
 | CM-009 | Local environment setup (compose, .env) | 0 | agy2 | chore/CM-009-local-compose | merged (2 rounds) | compose healthy, local profile + full profile start; reviewed by master | 57bd232 |
-| CM-010 | Remove sensitive logs and fix CSRF | 0 | agy2 | | todo | | |
+| CM-010 | Remove sensitive logs and fix CSRF | 0 | agy2 | | todo (unblocked: CM-004 merged) | | |
 | CM-011 | Fix presence Redis channel (minimal) | 0 | codex | feat/CM-003-ws-token-auth | merged (folded into CM-003) | PresenceEventListenerTest | 7204e72 |
 | CM-012 | Fix frontend linting | 0 | agy | fix/CM-012-frontend-lint | merged | lint 0 errors/11 warnings, tsc OK, build OK; reviewed by master | 570636d |
 | CM-013 | Fix frontend room switch leakage | 0 | agy | fix/CM-013-room-switch | merged (manual GIF test pending: owner) | lint/tsc/build OK; reviewed by master | 56b1be3 |
@@ -50,3 +50,4 @@ Updated by master. Status: todo | in-progress | review | changes-requested | mer
 - `.github/prompts/` is gone. The two empty untracked `.github/workflows/*.yml` files remain in the main checkout and block merging CM-027 (owner must delete them).
 - CM-005c: removed the empty UserProfile.tsx and UsersList.tsx (tsc + build OK).
 - Follow-up for CM-045: `/user/queue/errors` is subscribed once with the first room's handler (subscribe() skips existing destinations), so delivery errors in later rooms dispatch to a stale reducer.
+- Follow-ups from CM-004 (for CM-045/CM-023): a denied SUBSCRIBE closes the whole STOMP connection; existing subscriptions are not revoked when a user leaves a room.
