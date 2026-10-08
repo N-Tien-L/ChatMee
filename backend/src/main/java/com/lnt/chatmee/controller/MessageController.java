@@ -36,10 +36,10 @@ public class MessageController {
     @GetMapping("/room/{roomId}")
     public ResponseEntity<ApiResponse<List<ChatMessageResponse>>> getRecentMessages(
             @PathVariable String roomId,
-            @AuthenticationPrincipal OAuth2User principle) {
+            @AuthenticationPrincipal OAuth2User principal) {
         try {
-            String provider = oAuthUtil.determineProvider(principle);
-            String providerId = oAuthUtil.getProviderId(principle, provider);
+            String provider = oAuthUtil.determineProvider(principal);
+            String providerId = oAuthUtil.getProviderId(principal, provider);
 
             User user = userRepository.findByProviderAndProviderId(provider, providerId)
                     .orElseThrow(() -> new UserNotFoundException("Authenticated user not found"));

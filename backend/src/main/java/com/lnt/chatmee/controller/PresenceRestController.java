@@ -11,25 +11,25 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import com.lnt.chatmee.dto.PresenceMessage;
-import com.lnt.chatmee.service.PresenseService;
+import com.lnt.chatmee.service.PresenceService;
 
 @RestController
 @RequestMapping("/api/v1")
-public class PresenseController {
+public class PresenceRestController {
     
-    private static final Logger logger = LoggerFactory.getLogger(PresenseController.class);
+    private static final Logger logger = LoggerFactory.getLogger(PresenceRestController.class);
     
-    private final PresenseService PresenseService;
+    private final PresenceService PresenceService;
     private final SimpMessagingTemplate messagingTemplate;
 
-    public PresenseController(PresenseService PresenseService, SimpMessagingTemplate messagingTemplate) {
-        this.PresenseService = PresenseService;
+    public PresenceRestController(PresenceService PresenceService, SimpMessagingTemplate messagingTemplate) {
+        this.PresenceService = PresenceService;
         this.messagingTemplate = messagingTemplate;
     }
 
     @GetMapping("/online-users")
     public Set<String> getOnlineUsers() {
-        return PresenseService.getOnlineUsers();
+        return PresenceService.getOnlineUsers();
     }
 
     @PostMapping("/presence/offline")
@@ -37,7 +37,7 @@ public class PresenseController {
         logger.info("REST API: Setting user offline - userId: {}", presenceMessage.getUserId());
         
         // Update presence service
-        PresenseService.userDisconnected(presenceMessage.getUserId());
+        PresenceService.userDisconnected(presenceMessage.getUserId());
         
         // Broadcast offline status
         PresenceMessage offlineMessage = new PresenceMessage(presenceMessage.getUserId(), false);

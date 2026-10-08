@@ -28,14 +28,14 @@ const UserSearchList = ({
         setSearchQuery: state.setSearchQuery,
       }))
     );
-  const fetchUSers = useUsersStore((state) => state.fetchUsers);
+  const fetchUsers = useUsersStore((state) => state.fetchUsers);
   const [addedUserIds, setAddedUserIds] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     if (users.length === 0) {
-      fetchUSers();
+      fetchUsers();
     }
-  }, [users.length, fetchUSers]);
+  }, [users.length, fetchUsers]);
 
   // Reset addedUserIds when excludeUserIds changes (user removed from selection)
   useEffect(() => {

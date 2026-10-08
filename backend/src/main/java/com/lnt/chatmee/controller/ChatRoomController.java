@@ -52,10 +52,10 @@ public class ChatRoomController {
     private final OAuthUtil oAuthUtil;
     
     @PostMapping("/create")
-    public ResponseEntity<ApiResponse<ChatRoomResponse>> createChatRoom(@Validated @RequestBody CreateChatRoomRequest request, @AuthenticationPrincipal OAuth2User principle) {
+    public ResponseEntity<ApiResponse<ChatRoomResponse>> createChatRoom(@Validated @RequestBody CreateChatRoomRequest request, @AuthenticationPrincipal OAuth2User principal) {
         try {
-            String provider = oAuthUtil.determineProvider(principle);
-            String providerId = oAuthUtil.getProviderId(principle, provider);
+            String provider = oAuthUtil.determineProvider(principal);
+            String providerId = oAuthUtil.getProviderId(principal, provider);
             ChatRoomResponse responseBody = chatRoomService.createRoom(request, provider, providerId);
             return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.success("Chat room created successfully", responseBody));
         } catch (Exception e) {
@@ -65,10 +65,10 @@ public class ChatRoomController {
     }
 
     @GetMapping
-    public ResponseEntity<ApiResponse<List<ChatRoomResponse>>> getChatRoomList(@AuthenticationPrincipal OAuth2User principle) {
+    public ResponseEntity<ApiResponse<List<ChatRoomResponse>>> getChatRoomList(@AuthenticationPrincipal OAuth2User principal) {
         try {
-            String provider = oAuthUtil.determineProvider(principle);
-            String providerId = oAuthUtil.getProviderId(principle, provider);
+            String provider = oAuthUtil.determineProvider(principal);
+            String providerId = oAuthUtil.getProviderId(principal, provider);
             List<ChatRoom> chatRoomList = chatRoomService.getList(provider, providerId);
             List<ChatRoomResponse> responseBody = chatRoomList.stream()
                 .map(this::convertToChatRoomResponse)
@@ -81,10 +81,10 @@ public class ChatRoomController {
     }
 
     @GetMapping("/{roomId}")
-    public ResponseEntity<ApiResponse<ChatRoomResponse>> getChatRoomById(@AuthenticationPrincipal OAuth2User principle, @PathVariable String roomId) {
+    public ResponseEntity<ApiResponse<ChatRoomResponse>> getChatRoomById(@AuthenticationPrincipal OAuth2User principal, @PathVariable String roomId) {
         try {
-            String provider = oAuthUtil.determineProvider(principle);
-            String providerId = oAuthUtil.getProviderId(principle, provider);
+            String provider = oAuthUtil.determineProvider(principal);
+            String providerId = oAuthUtil.getProviderId(principal, provider);
             ChatRoom room = chatRoomService.getChatRoomById(provider, providerId, roomId);
             ChatRoomResponse responseBody = convertToChatRoomResponse(room);
             return ResponseEntity.ok(ApiResponse.success(responseBody));
@@ -95,10 +95,10 @@ public class ChatRoomController {
     }
 
     @PutMapping("/{roomId}")
-    public ResponseEntity<ApiResponse<ChatRoomResponse>> updateChatRoom(@AuthenticationPrincipal OAuth2User principle, @PathVariable String roomId, @Validated @RequestBody UpdateChatRoomRequest request) {
+    public ResponseEntity<ApiResponse<ChatRoomResponse>> updateChatRoom(@AuthenticationPrincipal OAuth2User principal, @PathVariable String roomId, @Validated @RequestBody UpdateChatRoomRequest request) {
         try {
-            String provider = oAuthUtil.determineProvider(principle);
-            String providerId = oAuthUtil.getProviderId(principle, provider);
+            String provider = oAuthUtil.determineProvider(principal);
+            String providerId = oAuthUtil.getProviderId(principal, provider);
             ChatRoom room = chatRoomService.updateChatRoomById(provider, providerId, roomId, request);
             ChatRoomResponse responseBody = convertToChatRoomResponse(room);
             return ResponseEntity.ok(ApiResponse.success("Chat room updated successfully", responseBody));
@@ -109,10 +109,10 @@ public class ChatRoomController {
     }
 
     @DeleteMapping("/{roomId}")
-    public ResponseEntity<ApiResponse<String>> deleteChatRoom(@AuthenticationPrincipal OAuth2User principle, @PathVariable String roomId) {
+    public ResponseEntity<ApiResponse<String>> deleteChatRoom(@AuthenticationPrincipal OAuth2User principal, @PathVariable String roomId) {
         try {
-            String provider = oAuthUtil.determineProvider(principle);
-            String providerId = oAuthUtil.getProviderId(principle, provider);
+            String provider = oAuthUtil.determineProvider(principal);
+            String providerId = oAuthUtil.getProviderId(principal, provider);
             chatRoomService.deleteChatRoomById(provider, providerId, roomId);
             return ResponseEntity.ok(ApiResponse.success("Chat room deleted successfully"));
         } catch (Exception e) {
