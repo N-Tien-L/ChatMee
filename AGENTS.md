@@ -28,7 +28,7 @@ cp frontend/.env.example frontend/.env.local
 # Frontend (frontend/ directory)
 npm ci
 npm run lint && npx tsc --noEmit
-npm test                                       # vitest (added in CM-020)
+npm test                                       # vitest
 npm run dev                                    # http://localhost:3000, proxies to :8080
 npm run build
 ```
