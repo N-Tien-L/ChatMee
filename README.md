@@ -47,44 +47,42 @@ flowchart LR
 ### Prerequisites
 - Java 17+ and Maven 3.9 (or use `backend/mvnw`)
 - Node.js 20+ with npm (or pnpm/bun)
-- MongoDB instance (local or Atlas) and Redis (local or Upstash)
+- Docker (for MongoDB and Redis)
 - OAuth2 credentials for Google (GitHub optional)
 
-### Backend (Spring Boot)
+### Running Locally (Infrastructure)
+
+1. Start the databases using Docker Compose:
 ```bash
-cd backend
-cp src/main/resources/application-dev.properties.example .env # (create your secrets file)
-# Required environment variables
-setx MONGO_URI_DEV "mongodb://localhost:27017/chatmee"
-setx GOOGLE_CLIENT_ID "<client-id>"
-setx GOOGLE_CLIENT_SECRET "<client-secret>"
-setx GITHUB_CLIENT_ID "<optional>"
-setx GITHUB_CLIENT_SECRET "<optional>"
-setx REDIS_URL "redis://localhost:6379"
-./mvnw spring-boot:run
+docker compose up -d
 ```
-Useful properties live in `application-dev.properties` and `application-prod.properties`:
-- `app.client.url` to point at the running frontend (`http://localhost:3000` by default)
-- OAuth redirect URIs (match Google/GitHub console settings)
-- `spring.data.mongodb.uri` and `spring.data.redis.*`
+
+2. Configure and run the Backend:
+```bash
+cp backend/.env.example backend/.env
+# Edit backend/.env and fill in your OAuth credentials (dummy values work for starting up)
+cd backend
+./mvnw spring-boot:run -Dspring-boot.run.profiles=local
+```
+(The `local` profile automatically connects to the Docker Compose services.)
 
 To build a production jar or docker image:
 ```bash
-./mvnw clean package -DskipTests
 cd backend
+./mvnw clean package -DskipTests
 docker build -t chatmee-api:latest .
 ```
+Alternatively, run the backend in Docker using the `full` profile: `docker compose --profile full up -d --build`.
 
-### Frontend (Next.js)
+3. Configure and run the Frontend:
 ```bash
+# In a new terminal
 cd frontend
-cp .env.example .env.local  # create if it does not exist
-npm install
-# Minimal env values
-echo "NEXT_PUBLIC_WS_URL=http://localhost:8080/ws" >> .env.local
-echo "NEXT_PUBLIC_API_URL=http://localhost:8080" >> .env.local
+cp .env.example .env.local
+npm ci
 npm run dev
 ```
+
 `next.config.ts` rewrites `/api`, `/oauth2`, `/login`, `/logout`, and `/ws` to the backend while developing; `vercel.json` performs the same rewrites in production.
 
 ## Project Structure
