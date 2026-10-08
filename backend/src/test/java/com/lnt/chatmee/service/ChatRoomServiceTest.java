@@ -8,6 +8,8 @@ import com.lnt.chatmee.exception.ForbiddenActionException;
 import com.lnt.chatmee.exception.UnauthorizedRoomActionException;
 import com.lnt.chatmee.exception.UserNotFoundException;
 import com.lnt.chatmee.exception.InvalidRequestException;
+import com.lnt.chatmee.exception.ErrorCode;
+import org.springframework.dao.DataIntegrityViolationException;
 import com.lnt.chatmee.model.ChatRoom;
 import com.lnt.chatmee.model.Participant;
 import com.lnt.chatmee.model.User;
@@ -336,7 +338,8 @@ class ChatRoomServiceTest {
         request.setParticipantId("user1"); // same as creator
 
         assertThatThrownBy(() -> chatRoomService.createRoom(request, "local", "localId"))
-                .isInstanceOf(IllegalArgumentException.class);
+                .isInstanceOf(InvalidRequestException.class)
+                .extracting("errorCode").isEqualTo(ErrorCode.INVALID_ARGUMENT);
     }
 
     @Test
@@ -351,11 +354,12 @@ class ChatRoomServiceTest {
         request.setParticipantId("user2");
 
         assertThatThrownBy(() -> chatRoomService.createRoom(request, "local", "localId"))
-                .isInstanceOf(com.lnt.chatmee.exception.DatabaseOperationException.class);
+                .isInstanceOf(UserNotFoundException.class)
+                .extracting("errorCode").isEqualTo(ErrorCode.USER_NOT_FOUND);
     }
 
     @Test
-    void createRoom_databaseError_throwsDatabaseOperationException() {
+    void createRoom_databaseError_propagatesDataAccessException() {
         User user = User.builder().id("user1").build();
         when(userRepository.findByProviderAndProviderId("local", "localId"))
                 .thenReturn(Optional.of(user));
@@ -364,14 +368,15 @@ class ChatRoomServiceTest {
         request.setRoomType(ChatRoom.RoomType.PUBLIC);
         request.setRoomName("General");
 
-        when(chatRoomRepository.save(any(ChatRoom.class))).thenThrow(new org.springframework.dao.DataIntegrityViolationException("db error"));
+        when(chatRoomRepository.save(any(ChatRoom.class))).thenThrow(new DataIntegrityViolationException("db error"));
 
         assertThatThrownBy(() -> chatRoomService.createRoom(request, "local", "localId"))
-                .isInstanceOf(com.lnt.chatmee.exception.DatabaseOperationException.class);
+                .isInstanceOf(DataIntegrityViolationException.class)
+                .hasMessage("db error");
     }
     
     @Test
-    void createRoom_directRoomDatabaseError_throwsDatabaseOperationException() {
+    void createRoom_directRoomDatabaseError_propagatesDataAccessException() {
         User user1 = User.builder().id("user1").build();
         User user2 = User.builder().id("user2").build();
         when(userRepository.findByProviderAndProviderId("local", "localId")).thenReturn(Optional.of(user1));
@@ -381,10 +386,11 @@ class ChatRoomServiceTest {
         request.setRoomType(ChatRoom.RoomType.DIRECT_MESSAGE);
         request.setParticipantId("user2");
 
-        when(chatRoomRepository.save(any(ChatRoom.class))).thenThrow(new org.springframework.dao.DataIntegrityViolationException("db error"));
+        when(chatRoomRepository.save(any(ChatRoom.class))).thenThrow(new DataIntegrityViolationException("db error"));
 
         assertThatThrownBy(() -> chatRoomService.createRoom(request, "local", "localId"))
-                .isInstanceOf(com.lnt.chatmee.exception.DatabaseOperationException.class);
+                .isInstanceOf(DataIntegrityViolationException.class)
+                .hasMessage("db error");
     }
 
     @Test
@@ -405,7 +411,7 @@ class ChatRoomServiceTest {
     }
 
     @Test
-    void deleteChatRoomById_databaseError_throwsDatabaseOperationException() {
+    void deleteChatRoomById_databaseError_propagatesDataAccessException() {
         User user = User.builder().id("user1").build();
         when(userRepository.findByProviderAndProviderId("local", "localId"))
                 .thenReturn(Optional.of(user));
@@ -413,11 +419,12 @@ class ChatRoomServiceTest {
         ChatRoom room = ChatRoom.builder().id("room1").createdBy("user1").build();
         when(chatRoomRepository.findById("room1")).thenReturn(Optional.of(room));
         
-        doThrow(new org.springframework.dao.DataIntegrityViolationException("db error"))
+        doThrow(new DataIntegrityViolationException("db error"))
             .when(chatRoomRepository).delete(room);
 
         assertThatThrownBy(() -> chatRoomService.deleteChatRoomById("local", "localId", "room1"))
-                .isInstanceOf(com.lnt.chatmee.exception.DatabaseOperationException.class);
+                .isInstanceOf(DataIntegrityViolationException.class)
+                .hasMessage("db error");
     }
 
     @Test
@@ -438,7 +445,8 @@ class ChatRoomServiceTest {
         request.setMaxUsers(5); // invalid for direct message
 
         assertThatThrownBy(() -> chatRoomService.updateChatRoomById("local", "localId", "room1", request))
-                .isInstanceOf(IllegalArgumentException.class);
+                .isInstanceOf(InvalidRequestException.class)
+                .extracting("errorCode").isEqualTo(ErrorCode.INVALID_ARGUMENT);
     }
 
     @Test
@@ -463,7 +471,8 @@ class ChatRoomServiceTest {
         request.setMaxUsers(1); // 1 is less than current 2 participants
 
         assertThatThrownBy(() -> chatRoomService.updateChatRoomById("local", "localId", "room1", request))
-                .isInstanceOf(IllegalArgumentException.class);
+                .isInstanceOf(InvalidRequestException.class)
+                .extracting("errorCode").isEqualTo(ErrorCode.INVALID_ARGUMENT);
     }
 
     @Test
@@ -504,7 +513,7 @@ class ChatRoomServiceTest {
     }
 
     @Test
-    void leaveChatRoomById_databaseError_throwsDatabaseOperationException() {
+    void leaveChatRoomById_databaseError_propagatesDataAccessException() {
         User user = User.builder().id("user2").build();
         when(userRepository.findByProviderAndProviderId("local", "localId"))
                 .thenReturn(Optional.of(user));
@@ -521,10 +530,11 @@ class ChatRoomServiceTest {
         when(chatRoomRepository.findByIdAndParticipantsContaining("room1", "user2"))
                 .thenReturn(Optional.of(room));
 
-        doThrow(new org.springframework.dao.DataIntegrityViolationException("db error"))
+        doThrow(new DataIntegrityViolationException("db error"))
             .when(participantRepository).deleteByChatRoomIdAndUserId("room1", "user2");
 
         assertThatThrownBy(() -> chatRoomService.leaveChatRoomById("local", "localId", "room1"))
-                .isInstanceOf(com.lnt.chatmee.exception.DatabaseOperationException.class);
+                .isInstanceOf(DataIntegrityViolationException.class)
+                .hasMessage("db error");
     }
 }
