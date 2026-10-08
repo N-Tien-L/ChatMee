@@ -15,7 +15,7 @@ Updated by master. Status: todo | in-progress | review | changes-requested | mer
 | CM-010 | Remove sensitive logs and fix CSRF | 0 | agy2 | | todo | | |
 | CM-011 | Fix presence Redis channel (minimal) | 0 | codex | feat/CM-003-ws-token-auth | merged (folded into CM-003) | PresenceEventListenerTest | 7204e72 |
 | CM-012 | Fix frontend linting | 0 | agy | fix/CM-012-frontend-lint | merged | lint 0 errors/11 warnings, tsc OK, build OK; reviewed by master | 570636d |
-| CM-013 | Fix frontend room switch leakage | 0 | agy | fix/CM-013-room-switch | in-progress | | |
+| CM-013 | Fix frontend room switch leakage | 0 | agy | fix/CM-013-room-switch | merged (manual GIF test pending: owner) | lint/tsc/build OK; reviewed by master | 56b1be3 |
 | CM-020 | Setup testing infrastructure | 1 | agy | | todo | | |
 | CM-021 | Service layer unit tests | 1 | agy | | todo | | |
 | CM-022 | Controller slice tests | 1 | agy2 | | todo | | |
@@ -49,3 +49,4 @@ Updated by master. Status: todo | in-progress | review | changes-requested | mer
 - Step 0: develop created from main at f8a2855. Worktrees: ChatMee-codex, ChatMee-agy, ChatMee-agy2.
 - Untracked `.github/prompts/` and the two empty workflow files are still in the main checkout: deleting them needs the owner (D8). CM-027 must not start until they are gone.
 - CM-005c: removed the empty UserProfile.tsx and UsersList.tsx (tsc + build OK).
+- Follow-up for CM-045: `/user/queue/errors` is subscribed once with the first room's handler (subscribe() skips existing destinations), so delivery errors in later rooms dispatch to a stale reducer.
