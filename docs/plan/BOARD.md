@@ -27,7 +27,7 @@ Updated by master. Status: todo | in-progress | review | changes-requested | mer
 | CM-028 | Room membership data integrity | 1 | codex | | todo | | |
 | CM-029 | Async message saving and timestamps | 1 | codex | | todo | | |
 | CM-030 | Rate limiting enhancements | 1 | codex | | todo | | |
-| CM-031 | Basic frontend tests | 1 | agy | | todo | | |
+| CM-031 | Basic frontend tests | 1 | agy | test/CM-031-frontend-tests | in-progress | | |
 | CM-040 | UserPrincipal and DTO mappers | 2 | codex | | todo | | |
 | CM-041 | RoomTypePolicy strategy pattern | 2 | codex | | todo | | |
 | CM-042 | Resource-based API/WS routes | 2 | agy | | todo | | |
