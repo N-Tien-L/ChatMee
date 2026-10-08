@@ -1,13 +1,12 @@
 // File: backend/src/main/java/com/lnt/chatmee/controller/ChatWebSocketController.java
 package com.lnt.chatmee.controller;
 
+import java.security.Principal;
 import java.time.LocalDateTime;
-import java.util.Map;
 import java.util.UUID;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.messaging.handler.annotation.Header;
 import org.springframework.messaging.handler.annotation.MessageMapping;
 import org.springframework.messaging.handler.annotation.MessageExceptionHandler;
 import org.springframework.messaging.handler.annotation.support.MethodArgumentNotValidException;
@@ -41,24 +40,19 @@ public class ChatWebSocketController {
     private final ParticipantService participantService;
 
     @MessageMapping("/chat.sendMessage")
-    public void sendMessage(@Valid @Payload ChatMessageRequest request, @Header("simpSessionAttributes") Map<String, Object> sessionAttributes) {
-        logger.info("🔵 RECEIVED MESSAGE REQUEST: roomId={}, content={}, tempId={}, senderId={}", 
-            request.getRoomId(), request.getContent(), request.getTempId(), request.getSenderId());
+    public void sendMessage(@Valid @Payload ChatMessageRequest request, Principal principal) {
+        if (principal == null) {
+            return;
+        }
         try {
-            // Get user from senderId in request (sent from frontend)
-            String userId = request.getSenderId();
-            if (userId == null || userId.isEmpty()) {
-                logger.error("❌ SenderId is missing in request");
-                return;
-            }
-            
+            String userId = principal.getName();
             User user = userRepository.findById(userId)
                 .orElseThrow(() -> new RuntimeException("User not found: " + userId));
 
             // Verify user is participant of the room
-            if (!participantService.isUserParticipant(request.getRoomId(), user.getId())) {
+            if (!participantService.isUserParticipant(request.getRoomId(), userId)) {
                 logger.warn("User {} attempted to send message to room {} without being a participant", 
-                    user.getId(), request.getRoomId());
+                    userId, request.getRoomId());
                 return;
             }
 
@@ -66,7 +60,7 @@ public class ChatWebSocketController {
             Message message = Message.builder()
                 .id(UUID.randomUUID().toString())
                 .chatRoomId(request.getRoomId())
-                .senderId(user.getId())
+                .senderId(userId)
                 .type(request.getMessageType())
                 .content(request.getContent())
                 .createdAt(LocalDateTime.now())
@@ -90,19 +84,11 @@ public class ChatWebSocketController {
                 .isDeleted(message.isDeleted())
                 .build();
 
-            // STEP 1: Broadcast immediately (fast path - no I/O)
-            logger.info("📤 BROADCASTING message: messageId={}, roomId={}", message.getId(), request.getRoomId());
             messagingTemplate.convertAndSend("/topic/public/" + request.getRoomId(), response);
-            
-            // STEP 2: Persist asynchronously (slow path - off the hot path)
-            logger.info("🚀 CALLING persistMessageAsync: messageId={}", message.getId());
             messageService.persistMessageAsync(message);
-            logger.info("✔️ RETURNED from persistMessageAsync (async in progress)");
-            
         } catch (Exception e) {
-            logger.error("❌ Error sending message: ", e);
+            logger.error("Error sending message", e);
 
-            // Send error to room (can't use principal.getName() since it's null)
             StompError errorPayload = StompError.builder()
                 .tempId(request.getTempId())
                 .message("Failed to send message: " + e.getMessage())
@@ -114,23 +100,25 @@ public class ChatWebSocketController {
     }
 
     @MessageMapping("/chat.addUser")
-    public void addUser(@Valid @Payload ChatMessageRequest request, @Header("simpSessionAttributes") Map<String, Object> sessionAttributes) {
+    public void addUser(@Valid @Payload ChatMessageRequest request, Principal principal) {
+        if (principal == null) {
+            return;
+        }
         try {
-            // Get user from senderId in request
-            String userId = request.getSenderId();
-            if (userId == null || userId.isEmpty()) {
-                logger.error("❌ SenderId is missing in addUser request");
-                return;
-            }
-            
+            String userId = principal.getName();
             User user = userRepository.findById(userId)
                 .orElseThrow(() -> new RuntimeException("User not found: " + userId));
+
+            if (!participantService.isUserParticipant(request.getRoomId(), userId)) {
+                logger.warn("User {} attempted to join chat in room {} without being a participant", userId, request.getRoomId());
+                return;
+            }
 
             // Create join message
             ChatMessageResponse response = ChatMessageResponse.builder()
                 .id(UUID.randomUUID().toString())
                 .chatRoomId(request.getRoomId())
-                .senderId(user.getId())
+                .senderId(userId)
                 .senderName(user.getName())
                 .content(user.getName() + " joined the chat")
                 .type(Message.MessageType.SYSTEM)
@@ -143,7 +131,7 @@ public class ChatWebSocketController {
             // Broadcast join message
             messagingTemplate.convertAndSend("/topic/public/" + request.getRoomId(), response);
             
-            logger.info("User {} joined room {}", user.getName(), request.getRoomId());
+            logger.debug("User {} joined room {}", userId, request.getRoomId());
 
         } catch (Exception e) {
             logger.error("Error adding user to chat: ", e);

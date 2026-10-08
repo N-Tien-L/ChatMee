@@ -1,5 +1,7 @@
 package com.lnt.chatmee.config;
 
+import static com.lnt.chatmee.service.RedisPresencePublisher.PRESENCE_CHANNEL;
+
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.data.redis.connection.RedisConnectionFactory;
@@ -11,8 +13,6 @@ import com.lnt.chatmee.service.RedisPresenceSubscriber;
 
 @Configuration
 public class RedisConfig {
-
-    private static final String PRESENCE_CHANNEL = "presence-channel";
 
     @Bean
     public RedisMessageListenerContainer container(RedisConnectionFactory connectionFactory, MessageListenerAdapter listenerAdapter) {

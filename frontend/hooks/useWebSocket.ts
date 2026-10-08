@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react"
 import { Client, IMessage, StompSubscription } from '@stomp/stompjs'
 import { useAuthStore, useUsersStore } from "@/lib/stores"
 import SockJS from "sockjs-client"
+import { authApi } from "@/lib/api/authApi"
 
 import { PresenceMessage, TypingMessage, useChatStore } from "@/lib/stores/chatStore"
 import { Message } from "@/lib/types"
@@ -27,6 +28,7 @@ export const useWebSocket = () => {
 
     // Refs for STOMP client and subscriptions
     const clientRef = useRef<Client | null>(null)
+    const retryTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
     const subsRef = useRef<Map<string, StompSubscription>>(new Map());
 
     // Get auth state
@@ -34,97 +36,6 @@ export const useWebSocket = () => {
 
     // Get chat state and actions
     const { updatePresence, updateTyping } = useChatStore();
-
-    /** ==============================
-    *        CONNECTION HANDLING
-    *  ============================== */
-
-    const connect = useCallback(() => {
-        if (!isAuthenticated || clientRef.current?.connected) return
-
-        setState(prev => ({ ...prev, connecting: true, error: null }))
-
-        const client = new Client({
-            webSocketFactory: () => new SockJS(
-                process.env.NEXT_PUBLIC_WS_URL || 'http://localhost:8080/ws'
-            ),
-            connectHeaders: {
-                userId: user?.id ?? ""
-            },
-            debug: (str) => console.log('[STOMP]', str),
-            onConnect: () => {
-                setState(prev => ({ ...prev, connected: true, connecting: false }))
-                console.log("✅ WebSocket connected for user:", user?.id);
-                console.log("Subscribing to presence after connection...")
-                subscribePresence();
-
-                if (user?.id) {
-                    sendPresence(true); // announce online
-                }
-            },
-            onStompError: (frame) => {
-                console.log("STOMP error:", frame)
-                setState(prev => ({
-                    ...prev,
-                    connected: false,
-                    connecting: false,
-                    error: frame.headers['message']
-                }))
-            },
-            onWebSocketClose: () => {
-                console.warn("⚠️ WebSocket closed");
-                setState({ connected: false, connecting: false, error: null });
-                sendPresence(false); // fallback offline notice
-            }
-        })
-
-        clientRef.current = client
-        client.activate()
-    }, [isAuthenticated, user])
-
-    const disconnect = useCallback(() => {
-        const client = clientRef.current;
-        if (!client) return;
-
-        sendPresence(false);
-        subsRef.current.forEach((s) => s.unsubscribe());
-        subsRef.current.clear();
-
-        client.deactivate();
-        clientRef.current = null;
-        setState({ connected: false, connecting: false, error: null });
-    }, [user])
-
-    /** ==============================
-    *       AUTO CONNECT / CLEANUP
-    *  ============================== */
-
-    useEffect(() => {
-        if (isAuthenticated) {
-            connect()
-        } else {
-            disconnect()
-        }
-    }, [isAuthenticated, connect, disconnect])
-
-    useEffect(() => {
-        window.addEventListener("beforeunload", () => sendPresence(false));
-        return () => disconnect();
-    }, [disconnect]);
-
-    /** ==============================
-    *       HEARTBEAT (PRESENCE)
-    *  ============================== */
-
-    useEffect(() => {
-        if (!state.connected || !user?.id) return;
-        const id = setInterval(() => sendPresence(true), 30000);
-        return () => clearInterval(id);
-    }, [state.connected, user?.id]);
-
-    /** ==============================
-    *          SUBSCRIPTIONS
-    *  ============================== */
 
     const subscribe = useCallback(
         (dest: string, handler: (msg: IMessage) => void) => {
@@ -221,6 +132,88 @@ export const useWebSocket = () => {
         [user?.id]
     );
 
+    const connect = useCallback(() => {
+        if (!isAuthenticated || clientRef.current) return;
+
+        setState(prev => ({ ...prev, connecting: true, error: null }));
+        const client = new Client({
+            webSocketFactory: () => new SockJS(
+                process.env.NEXT_PUBLIC_WS_URL || 'http://localhost:8080/ws'
+            ),
+            reconnectDelay: 5000,
+            beforeConnect: async () => {
+                // A fresh single-use token is required for every connection attempt.
+                client.connectHeaders = {};
+                setState(prev => ({ ...prev, connecting: true, error: null }));
+                try {
+                    const token = await authApi.getWsToken();
+                    if (clientRef.current !== client || !client.active) return;
+                    client.connectHeaders = { 'X-WS-Token': token };
+                } catch {
+                    if (clientRef.current !== client) return;
+                    setState({ connected: false, connecting: false, error: 'Unable to authenticate WebSocket connection' });
+                    // beforeConnect failures do not trigger stompjs reconnect automatically.
+                    void client.deactivate().then(() => {
+                        if (clientRef.current !== client) return;
+                        retryTimerRef.current = setTimeout(() => {
+                            retryTimerRef.current = null;
+                            if (clientRef.current === client) client.activate();
+                        }, client.reconnectDelay);
+                    });
+                }
+            },
+            onConnect: () => {
+                setState({ connected: true, connecting: false, error: null });
+                subsRef.current.clear();
+                subscribePresence();
+                if (user?.id) sendPresence(true);
+            },
+            onStompError: () => {
+                setState({ connected: false, connecting: false, error: 'WebSocket connection rejected' });
+            },
+            onWebSocketClose: () => {
+                setState(prev => ({ ...prev, connected: false, connecting: false }));
+            }
+        });
+        clientRef.current = client;
+        client.activate();
+    }, [isAuthenticated, user?.id, sendPresence, subscribePresence]);
+
+    const disconnect = useCallback(() => {
+        if (retryTimerRef.current !== null) {
+            clearTimeout(retryTimerRef.current);
+            retryTimerRef.current = null;
+        }
+        const client = clientRef.current;
+        if (!client) return;
+        sendPresence(false);
+        if (client.connected) subsRef.current.forEach(sub => sub.unsubscribe());
+        subsRef.current.clear();
+        clientRef.current = null;
+        void client.deactivate();
+        setState({ connected: false, connecting: false, error: null });
+    }, [sendPresence]);
+
+    useEffect(() => {
+        if (isAuthenticated) connect();
+        else disconnect();
+        return () => disconnect();
+    }, [isAuthenticated, connect, disconnect]);
+
+    useEffect(() => {
+        const handleBeforeUnload = () => sendPresence(false);
+        window.addEventListener("beforeunload", handleBeforeUnload);
+        return () => {
+            window.removeEventListener("beforeunload", handleBeforeUnload);
+        };
+    }, [sendPresence]);
+
+    useEffect(() => {
+        if (!state.connected || !user?.id) return;
+        const id = setInterval(() => sendPresence(true), 30000);
+        return () => clearInterval(id);
+    }, [state.connected, user?.id, sendPresence]);
+
     const sendTyping = useCallback(
         (roomId: string, typing: boolean) => {
             if (!clientRef.current?.connected || !user?.id) return;
@@ -239,8 +232,6 @@ export const useWebSocket = () => {
                 roomId,
                 content,
                 messageType: "TEXT",
-                senderId: user.id,  // Add userId
-                senderName: user.name,
                 tempId,
             };
             clientRef.current.publish({
@@ -257,9 +248,7 @@ export const useWebSocket = () => {
             const message = {
                 roomId,
                 messageType: "SYSTEM",
-                senderId: user.id,  // Add userId
-                senderName: user.name,
-                content: "",
+                content: "joined the chat",
                 tempId: `join-${Date.now()}`,
             };
             clientRef.current.publish({

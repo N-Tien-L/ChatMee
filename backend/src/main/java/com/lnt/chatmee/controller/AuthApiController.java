@@ -1,17 +1,21 @@
 package com.lnt.chatmee.controller;
 
+import org.springframework.http.CacheControl;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.core.user.OAuth2User;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.lnt.chatmee.dto.response.ApiResponse;
 import com.lnt.chatmee.dto.response.AuthResponse;
 import com.lnt.chatmee.dto.response.UserResponse;
+import com.lnt.chatmee.dto.response.WsTokenResponse;
 import com.lnt.chatmee.model.User;
 import com.lnt.chatmee.repository.UserRepository;
+import com.lnt.chatmee.security.WsTokenService;
 import com.lnt.chatmee.util.OAuthUtil;
 
 import lombok.RequiredArgsConstructor;
@@ -23,6 +27,13 @@ public class AuthApiController {
 
     private final UserRepository userRepository;
     private final OAuthUtil oAuthUtil;
+    private final WsTokenService wsTokenService;
+
+    @PostMapping("/ws-token")
+    public ResponseEntity<WsTokenResponse> getWsToken(@AuthenticationPrincipal OAuth2User principal) {
+        return ResponseEntity.ok().cacheControl(CacheControl.noStore())
+                .body(new WsTokenResponse(wsTokenService.issueToken(principal)));
+    }
     
     @GetMapping("/me")
     public ResponseEntity<ApiResponse<AuthResponse>> getCurrentUser(@AuthenticationPrincipal OAuth2User principal) {

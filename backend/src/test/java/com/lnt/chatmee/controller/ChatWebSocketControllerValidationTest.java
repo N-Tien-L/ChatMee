@@ -93,14 +93,16 @@ class ChatWebSocketControllerValidationTest {
         ChatMessageRequest request = new ChatMessageRequest();
         request.setRoomId("test-room");
         request.setContent("x".repeat(length));
-        request.setSenderId("test-user");
         request.setTempId("test-temp");
         SimpMessageHeaderAccessor headers = SimpMessageHeaderAccessor.create(SimpMessageType.MESSAGE);
         headers.setDestination(destination);
         headers.setSessionId("test-session");
         headers.setSessionAttributes(Map.of());
+        headers.setUser(() -> "test-user");
         headers.setContentType(MimeTypeUtils.APPLICATION_JSON);
-        byte[] payload = new com.fasterxml.jackson.databind.ObjectMapper().valueToTree(request)
+        com.fasterxml.jackson.databind.node.ObjectNode json = new com.fasterxml.jackson.databind.ObjectMapper().valueToTree(request);
+        json.put("senderId", "test-user");
+        byte[] payload = json
                 .toString().getBytes(StandardCharsets.UTF_8);
         handler.handleMessage(MessageBuilder.createMessage(payload, headers.getMessageHeaders()));
     }
