@@ -16,8 +16,8 @@ Updated by master. Status: todo | in-progress | review | changes-requested | mer
 | CM-011 | Fix presence Redis channel (minimal) | 0 | codex | feat/CM-003-ws-token-auth | merged (folded into CM-003) | PresenceEventListenerTest | 7204e72 |
 | CM-012 | Fix frontend linting | 0 | agy | fix/CM-012-frontend-lint | merged | lint 0 errors/11 warnings, tsc OK, build OK; reviewed by master | 570636d |
 | CM-013 | Fix frontend room switch leakage | 0 | agy | fix/CM-013-room-switch | merged (manual GIF test pending: owner) | lint/tsc/build OK; reviewed by master | 56b1be3 |
-| CM-020 | Setup testing infrastructure | 1 | agy | test/CM-020-test-infra | in-progress | | |
-| CM-021 | Service layer unit tests | 1 | agy | | todo | | |
+| CM-020 | Setup testing infrastructure | 1 | agy | test/CM-020-test-infra | merged | mvnw verify green (40 unit + 1 IT, contextLoads green), JaCoCo 28% lines; npm test/lint/tsc/build OK | b6fb35d |
+| CM-021 | Service layer unit tests | 1 | agy | test/CM-021-service-tests | in-progress | | |
 | CM-022 | Controller slice tests | 1 | agy2 | | todo | | |
 | CM-023 | WS/Mongo integration tests | 1 | codex | | todo | | |
 | CM-024 | Global exception handler (ProblemDetail) | 1 | codex | | todo | | |
