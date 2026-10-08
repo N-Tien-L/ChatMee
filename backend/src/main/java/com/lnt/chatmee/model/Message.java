@@ -1,6 +1,6 @@
 package com.lnt.chatmee.model;
 
-import java.time.LocalDateTime;
+import java.time.Instant;
 import java.util.List;
 
 import org.springframework.data.annotation.Id;
@@ -33,9 +33,9 @@ public class Message {
 
     private List<String> attachments; // list of attachment urls
 
-    private LocalDateTime createdAt;
+    private Instant createdAt;
 
-    private LocalDateTime updatedAt;
+    private Instant updatedAt;
 
     private boolean isUpdated;
 

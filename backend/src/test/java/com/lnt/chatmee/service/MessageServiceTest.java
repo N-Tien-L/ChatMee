@@ -16,7 +16,7 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
-import java.time.LocalDateTime;
+import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 
@@ -71,8 +71,8 @@ class MessageServiceTest {
                 .senderId("user1")
                 .content("hello")
                 .type(Message.MessageType.TEXT)
-                .createdAt(LocalDateTime.now())
-                .updatedAt(LocalDateTime.now())
+                .createdAt(Instant.now())
+                .updatedAt(Instant.now())
                 .isDeleted(false)
                 .isUpdated(false)
                 .build();
@@ -91,7 +91,7 @@ class MessageServiceTest {
     }
 
     @Test
-    void persistMessageAsync_savesMessage() {
+    void persistMessage_savesMessage() {
         Message msg = Message.builder()
                 .id("msg1")
                 .chatRoomId("room1")
@@ -99,7 +99,8 @@ class MessageServiceTest {
                 .content("hello")
                 .build();
 
-        messageService.persistMessageAsync(msg);
+        when(messageRepository.save(msg)).thenReturn(msg);
+        assertThat(messageService.persistMessage(msg)).isSameAs(msg);
 
         ArgumentCaptor<Message> captor = ArgumentCaptor.forClass(Message.class);
         verify(messageRepository).save(captor.capture());
@@ -108,4 +109,59 @@ class MessageServiceTest {
         assertThat(saved.getId()).isEqualTo("msg1");
         assertThat(saved.getContent()).isEqualTo("hello");
     }
+    @Test
+    void persistMessage_databaseFailure_propagatesFailure() {
+        Message message = Message.builder().id("failed").build();
+        when(messageRepository.save(message)).thenThrow(new org.springframework.dao.DataAccessResourceFailureException("unavailable"));
+        assertThatThrownBy(() -> messageService.persistMessage(message))
+                .isInstanceOf(com.lnt.chatmee.exception.DatabaseOperationException.class);
+    }
+
+    @Test
+    void serialize_messageResponse_usesUtcInstantAndFrontendFlagNames() throws Exception {
+        var mapper = new com.fasterxml.jackson.databind.ObjectMapper().findAndRegisterModules();
+        var instant = Instant.parse("2026-10-08T12:34:56Z");
+        var response = ChatMessageResponse.builder().createdAt(instant).updatedAt(instant)
+                .isUpdated(true).isDeleted(false).build();
+        var json = mapper.readTree(mapper.writeValueAsString(response));
+        assertThat(json.path("createdAt").asText()).isEqualTo("2026-10-08T12:34:56Z");
+        assertThat(json.path("updatedAt").asText()).isEqualTo("2026-10-08T12:34:56Z");
+        assertThat(json.path("isUpdated").asBoolean()).isTrue();
+        assertThat(json.has("isDeleted")).isTrue();
+        assertThat(json.has("updated")).isFalse();
+        assertThat(json.has("deleted")).isFalse();
+    }
+
+    @Test
+    void mongoMapping_legacyLocalDateTimeBsonDate_preservesStoredInstant() throws Exception {
+        var converter = mongoConverter();
+        var legacy = new org.bson.Document();
+        converter.write(java.util.Map.of("createdAt", java.time.LocalDateTime.of(2026, 10, 8, 12, 34, 56)), legacy);
+        assertThat(legacy.get("createdAt")).isInstanceOf(java.util.Date.class);
+        var message = converter.read(Message.class, legacy);
+        assertThat(message.getCreatedAt()).isEqualTo(((java.util.Date) legacy.get("createdAt")).toInstant());
+    }
+
+    @Test
+    void mongoMapping_isoString_readsInstantButRejectsTimezoneLessString() throws Exception {
+        var converter = mongoConverter();
+        var instant = Instant.parse("2026-10-08T12:34:56Z");
+        assertThat(converter.read(Message.class, new org.bson.Document("createdAt", instant.toString())).getCreatedAt())
+                .isEqualTo(instant);
+        assertThatThrownBy(() -> converter.read(Message.class, new org.bson.Document("createdAt", "2026-10-08T12:34:56")))
+                .isInstanceOf(org.springframework.core.convert.ConversionFailedException.class);
+    }
+
+    private org.springframework.data.mongodb.core.convert.MappingMongoConverter mongoConverter() throws Exception {
+        var conversions = org.springframework.data.mongodb.core.convert.MongoCustomConversions.create(adapter -> {});
+        var context = new org.springframework.data.mongodb.core.mapping.MongoMappingContext();
+        context.setSimpleTypeHolder(conversions.getSimpleTypeHolder());
+        context.afterPropertiesSet();
+        var converter = new org.springframework.data.mongodb.core.convert.MappingMongoConverter(
+                org.springframework.data.mongodb.core.convert.NoOpDbRefResolver.INSTANCE, context);
+        converter.setCustomConversions(conversions);
+        converter.afterPropertiesSet();
+        return converter;
+    }
+
 }

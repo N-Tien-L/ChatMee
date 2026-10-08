@@ -32,6 +32,43 @@ All payloads below are JSON. Directions are relative to the client.
 | `/topic/presence` | Server to client / SUBSCRIBE | `{userId, online}`; server supplies userId | Any authenticated Principal | Missing Principal receives STOMP ERROR and connection closure |
 | `/user/queue/errors` | Server to client / SUBSCRIBE | `{tempId?, message}` (`StompError`) | Any authenticated Principal, for its own user destination | Application errors are private to that Principal; never sent to a room topic |
 
+## Message delivery (CM-029)
+
+For `/app/chat.sendMessage`, the controller validates the payload, resolves the
+Principal's stored identity, and checks room membership. It then calls
+`MessageService.persistMessage` synchronously. Only after the repository returns
+successfully does it broadcast the saved message to `/topic/public/{roomId}`.
+The payload uses the saved `id`, `createdAt`, and `updatedAt`, plus the original
+`tempId`. Database failure sends `{tempId, message}` to the sender's
+`/user/queue/errors` and produces no room broadcast. There is no background
+message persistence executor. This is not an exactly-once delivery guarantee:
+a disconnect or broker failure after saving can still prevent confirmation.
+
+Message entity and response timestamps are `Instant`; JSON timestamps are
+ISO-8601 UTC strings ending in `Z`. Join announcements use the same timestamp
+format. The response flags are exactly `isUpdated` and `isDeleted`.
+`MessageList` parses the ISO string with `new Date(createdAt)` and the interface
+formats that Date with local `toLocaleTimeString` / `toLocaleDateString`.
+
+Each optimistic send has its own 10-second confirmation timer. A private error,
+local publish failure, or timeout marks that message `failed`; confirmation marks
+it `sent` (including a late confirmation after timeout). Confirmation and errors
+clear that message's timer; room changes and unmount clear all pending timers.
+Pending messages do not disable the input or send button. Error subscriptions
+are removed with room subscription cleanup so the next room receives errors.
+
+### Stored timestamp compatibility
+
+Default Spring Data Mongo mapping previously stored `LocalDateTime` as BSON
+Date, using the JVM's default zone when converting to UTC. Those BSON dates
+remain readable as `Instant`, preserving the stored point in time. Existing
+ISO strings with `Z` also read successfully. Offset-free strings such as
+`2026-10-08T12:34:56` cannot be converted to `Instant` by the default converter.
+No production data was inspected and no migration was run. If an inventory
+finds those strings, migrate them separately only after establishing the original
+writer's timezone; do not guess UTC or apply a blanket seven-hour adjustment.
+BSON Date retains millisecond precision; JSON Instant can retain nanoseconds.
+
 ## Authorization rules
 
 - SUBSCRIBE and SEND require an authenticated Principal with a nonblank name.
@@ -90,3 +127,14 @@ topic names are retained for compatibility.
 - `PresenceWebSocketControllerTest`: forged online/offline identity, omitted
   identity, and missing Principal.
 - `PresenceRestControllerTest`: offline POST mapping removed and online GET kept.
+
+CM-029 regression coverage:
+- `ChatWebSocketControllerAuthTest`: Mockito InOrder proves save before broadcast,
+  saved ID/timestamp propagation, and private error without broadcast on save failure.
+- `MessageServiceTest`: synchronous return/failure, UTC JSON and flag names, legacy
+  BSON Date and string timestamp compatibility using the Mongo mapping converter.
+- `StompMessagingIT`: real broker payload includes ID, UTC timestamp and frontend
+  flags; Mongo already contains the message when the broadcast arrives.
+- `messageReducer.test.ts`: pending sends stay enabled; fake-timer hook tests cover
+  the 10-second deadline, concurrent sends, confirmations, late confirmation,
+  private errors, local failure, room changes, and unmount cleanup.

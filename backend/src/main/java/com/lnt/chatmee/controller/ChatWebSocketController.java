@@ -2,7 +2,7 @@
 package com.lnt.chatmee.controller;
 
 import java.security.Principal;
-import java.time.LocalDateTime;
+import java.time.Instant;
 import java.util.UUID;
 
 import org.slf4j.Logger;
@@ -64,11 +64,14 @@ public class ChatWebSocketController {
                 .senderId(userId)
                 .type(request.getMessageType())
                 .content(request.getContent())
-                .createdAt(LocalDateTime.now())
-                .updatedAt(LocalDateTime.now())
+                .createdAt(Instant.now())
+                .updatedAt(Instant.now())
                 .isUpdated(false)
                 .isDeleted(false)
                 .build();
+
+            // Only a successfully persisted message can be acknowledged to the room.
+            message = messageService.persistMessage(message);
 
             // Create response
             ChatMessageResponse response = ChatMessageResponse.builder()
@@ -79,14 +82,13 @@ public class ChatWebSocketController {
                 .senderName(user.getName())
                 .content(message.getContent())
                 .type(message.getType())
-                .createdAt(message.getCreatedAt().toString())
-                .updatedAt(message.getUpdatedAt().toString())
+                .createdAt(message.getCreatedAt())
+                .updatedAt(message.getUpdatedAt())
                 .isUpdated(message.isUpdated())
                 .isDeleted(message.isDeleted())
                 .build();
 
             messagingTemplate.convertAndSend("/topic/public/" + request.getRoomId(), response);
-            messageService.persistMessageAsync(message);
         } catch (Exception e) {
             logger.error("Error sending message", e);
 
@@ -118,8 +120,8 @@ public class ChatWebSocketController {
                 .senderName(user.getName())
                 .content(user.getName() + " joined the chat")
                 .type(Message.MessageType.SYSTEM)
-                .createdAt(LocalDateTime.now().toString())
-                .updatedAt(LocalDateTime.now().toString())
+                .createdAt(Instant.now())
+                .updatedAt(Instant.now())
                 .isUpdated(false)
                 .isDeleted(false)
                 .build();

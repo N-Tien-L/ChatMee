@@ -68,7 +68,7 @@ class ChatWebSocketControllerAuthTest {
         authenticatedMember();
         dispatch("/app/chat.sendMessage", () -> "internal-user");
         ArgumentCaptor<Message> saved = ArgumentCaptor.forClass(Message.class);
-        verify(messages).persistMessageAsync(saved.capture());
+        verify(messages).persistMessage(saved.capture());
         assertEquals("internal-user", saved.getValue().getSenderId());
         verify(messaging).convertAndSend(eq("/topic/public/room"), argThat((ChatMessageResponse response) ->
                 response.getSenderId().equals("internal-user") && response.getSenderName().equals("Real Name")));
@@ -131,6 +131,31 @@ class ChatWebSocketControllerAuthTest {
         assertPrivateError();
     }
 
+    @Test
+    void sendMessage_validMessage_persistsBeforeBroadcast() {
+        authenticatedMember();
+        var storedAt = java.time.Instant.parse("2026-10-08T10:00:00Z");
+        when(messages.persistMessage(any(Message.class))).thenAnswer(invocation -> {
+            Message saved = invocation.getArgument(0);
+            saved.setId("stored-id");
+            saved.setCreatedAt(storedAt);
+            return saved;
+        });
+        dispatch("/app/chat.sendMessage", () -> "internal-user");
+        var order = inOrder(messages, messaging);
+        order.verify(messages).persistMessage(any(Message.class));
+        order.verify(messaging).convertAndSend(eq("/topic/public/room"), argThat((ChatMessageResponse response) ->
+                response.getId().equals("stored-id") && response.getCreatedAt().equals(storedAt)));
+    }
+
+    @Test
+    void sendMessage_saveFailure_sendsPrivateErrorWithoutBroadcast() {
+        authenticatedMember();
+        when(messages.persistMessage(any(Message.class))).thenThrow(new IllegalStateException("save failed"));
+        dispatch("/app/chat.sendMessage", () -> "internal-user");
+        assertPrivateError();
+    }
+
     private void assertPrivateError() {
         verify(messaging).convertAndSendToUser(eq("internal-user"), eq("/queue/errors"),
                 argThat((StompError error) -> "temp".equals(error.getTempId()) && !error.getMessage().isBlank()));
@@ -138,6 +163,7 @@ class ChatWebSocketControllerAuthTest {
     }
 
     private void authenticatedMember() {
+        when(messages.persistMessage(any(Message.class))).thenAnswer(invocation -> invocation.getArgument(0));
         when(users.findById("internal-user")).thenReturn(Optional.of(
                 User.builder().id("internal-user").name("Real Name").build()));
         when(participants.isUserParticipant("room", "internal-user")).thenReturn(true);

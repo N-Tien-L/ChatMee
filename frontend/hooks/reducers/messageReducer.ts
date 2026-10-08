@@ -46,7 +46,7 @@ export function messageReducer(state: MessageState, action: MessageAction): Mess
         case "ADD_OPTIMISTIC_MESSAGE":
             return {
                 ...state,
-                sending: true,
+                sending: false,
                 messages: [...state.messages, action.payload],
             };
 
@@ -55,7 +55,7 @@ export function messageReducer(state: MessageState, action: MessageAction): Mess
                 ...state,
                 sending: false,
                 messages: state.messages.map((m) =>
-                    m.isOptimistic && m.tempId === action.payload.tempId ? { ...action.payload, isOwn: true, status: "sent" } : m
+                    m.isOptimistic && m.tempId === action.payload.tempId ? { ...action.payload, isOwn: true, isOptimistic: false, status: "sent" } : m
                 ),
             };
 

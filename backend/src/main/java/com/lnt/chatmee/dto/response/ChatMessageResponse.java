@@ -2,6 +2,12 @@ package com.lnt.chatmee.dto.response;
 
 import com.lnt.chatmee.model.Message.MessageType;
 
+import java.time.Instant;
+
+import com.fasterxml.jackson.annotation.JsonFormat;
+import com.fasterxml.jackson.annotation.JsonProperty;
+
+import lombok.Getter;
 import lombok.Builder;
 import lombok.Data;
 
@@ -16,9 +22,13 @@ public class ChatMessageResponse {
     private String senderName;
     private String content;
     private MessageType type;
-    private String createdAt;
-    private String updatedAt;
+    @JsonFormat(shape = JsonFormat.Shape.STRING)
+    private Instant createdAt;
+    @JsonFormat(shape = JsonFormat.Shape.STRING)
+    private Instant updatedAt;
+    @Getter(onMethod_ = @JsonProperty("isUpdated"))
     private boolean isUpdated;
+    @Getter(onMethod_ = @JsonProperty("isDeleted"))
     private boolean isDeleted;
     
 }
