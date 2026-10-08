@@ -7,7 +7,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import org.springframework.stereotype.Service;
 
 @Service
-public class PresenseService {
+public class PresenceService {
     
     private final Set<String> onlineUsers = ConcurrentHashMap.newKeySet();
 

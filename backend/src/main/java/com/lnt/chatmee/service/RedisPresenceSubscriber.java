@@ -14,18 +14,18 @@ import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 @Service
-public class RedisPresenseSubcriber implements MessageListener {
+public class RedisPresenceSubscriber implements MessageListener {
 
-    private static final Logger logger = LoggerFactory.getLogger(RedisPresenseSubcriber.class);
+    private static final Logger logger = LoggerFactory.getLogger(RedisPresenceSubscriber.class);
     
     private final SimpMessagingTemplate simpMessagingTemplate;
     private final ObjectMapper objectMapper;
-    private final PresenseService presenseService;
+    private final PresenceService presenceService;
 
-    public RedisPresenseSubcriber(SimpMessagingTemplate simpMessagingTemplate, ObjectMapper objectMapper, PresenseService presenseService) {
+    public RedisPresenceSubscriber(SimpMessagingTemplate simpMessagingTemplate, ObjectMapper objectMapper, PresenceService presenceService) {
         this.simpMessagingTemplate = simpMessagingTemplate;
         this.objectMapper = objectMapper;
-        this.presenseService = presenseService;
+        this.presenceService = presenceService;
     }
 
     @Override
@@ -38,9 +38,9 @@ public class RedisPresenseSubcriber implements MessageListener {
             boolean isOnline = isOnlineObj != null ? isOnlineObj : false;
 
             if (isOnline) {
-                presenseService.userConnected(userId);
+                presenceService.userConnected(userId);
             } else {
-                presenseService.userDisconnected(userId);
+                presenceService.userDisconnected(userId);
             }
 
             // use the injected simpMessagingTemplate to broadcast presence updates

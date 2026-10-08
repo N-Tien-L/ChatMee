@@ -70,7 +70,7 @@ public class AuthApiController {
     @GetMapping("/status")
     public ResponseEntity<ApiResponse<Boolean>> getAuthStatus(@AuthenticationPrincipal OAuth2User principal) {
         boolean isAuthenticated = principal != null;
-        return ResponseEntity.ok(ApiResponse.success("Authenticated status retrived", isAuthenticated));
+        return ResponseEntity.ok(ApiResponse.success("Authenticated status retrieved", isAuthenticated));
     }
 
     @GetMapping("/user")

@@ -45,17 +45,17 @@ public class ChatRoomService {
 
     public ChatRoomResponse createRoom(CreateChatRoomRequest request, String provider, String providerId) {
 
-        User AuthenticatedUser = userRepository.findByProviderAndProviderId(provider, providerId)
+        User authenticatedUser = userRepository.findByProviderAndProviderId(provider, providerId)
             .orElseThrow(() -> new UserNotFoundException("Authenticated user not found"));
 
         ChatRoom room;
         switch (request.getRoomType()) {
             case DIRECT_MESSAGE:
-                room = createDirectRoom(request, AuthenticatedUser.getId());
+                room = createDirectRoom(request, authenticatedUser.getId());
                 break;
             case PRIVATE:
             case PUBLIC:
-                room = createConfigurableRoom(request, AuthenticatedUser.getId());
+                room = createConfigurableRoom(request, authenticatedUser.getId());
                 break;
             default:
                 throw new IllegalArgumentException("Invalid room type: " + request.getRoomType());

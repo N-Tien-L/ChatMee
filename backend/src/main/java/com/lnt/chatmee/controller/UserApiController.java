@@ -30,7 +30,7 @@ public class UserApiController {
                 .map(this::convertToUserResponse)
                 .collect(Collectors.toList());
 
-        return ResponseEntity.ok(ApiResponse.success("Users retrived successfully", userResponses));
+        return ResponseEntity.ok(ApiResponse.success("Users retrieved successfully", userResponses));
     }
 
     @GetMapping("/{userId}")

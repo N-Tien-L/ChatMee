@@ -1,7 +1,7 @@
 package com.lnt.chatmee.controller;
 
 import com.lnt.chatmee.dto.PresenceMessage;
-import com.lnt.chatmee.service.PresenseService;
+import com.lnt.chatmee.service.PresenceService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.messaging.handler.annotation.MessageMapping;
@@ -15,11 +15,11 @@ public class PresenceWebSocketController {
     private static final Logger logger = LoggerFactory.getLogger(PresenceWebSocketController.class);
     
     private final SimpMessagingTemplate messagingTemplate;
-    private final PresenseService presenseService;
+    private final PresenceService presenceService;
 
-    public PresenceWebSocketController(SimpMessagingTemplate messagingTemplate, PresenseService presenseService) {
+    public PresenceWebSocketController(SimpMessagingTemplate messagingTemplate, PresenceService presenceService) {
         this.messagingTemplate = messagingTemplate;
-        this.presenseService = presenseService;
+        this.presenceService = presenceService;
     }
 
     @MessageMapping("/presence")
@@ -28,9 +28,9 @@ public class PresenceWebSocketController {
         
         // Update presence service
         if (message.isOnline()) {
-            presenseService.userConnected(message.getUserId());
+            presenceService.userConnected(message.getUserId());
         } else {
-            presenseService.userDisconnected(message.getUserId());
+            presenceService.userDisconnected(message.getUserId());
         }
         
         // Broadcast presence update to all subscribers
