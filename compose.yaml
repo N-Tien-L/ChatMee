@@ -34,6 +34,11 @@ services:
         required: false
     environment:
       - SPRING_PROFILES_ACTIVE=local
+      - SPRING_DATA_MONGODB_URI=mongodb://mongo:27017/chatmee
+      - SPRING_DATA_REDIS_HOST=redis
+      - PORT=8080
+    ports:
+      - "8080:8080"
 
 volumes:
   mongo-data:

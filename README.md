@@ -66,6 +66,14 @@ cd backend
 ```
 (The `local` profile automatically connects to the Docker Compose services.)
 
+To build a production jar or docker image:
+```bash
+cd backend
+./mvnw clean package -DskipTests
+docker build -t chatmee-api:latest .
+```
+Alternatively, run the backend in Docker using the `full` profile: `docker compose --profile full up -d --build`.
+
 3. Configure and run the Frontend:
 ```bash
 # In a new terminal
