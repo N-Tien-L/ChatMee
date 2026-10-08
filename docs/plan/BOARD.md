@@ -20,7 +20,7 @@ Updated by master. Status: todo | in-progress | review | changes-requested | mer
 | CM-021 | Service layer unit tests | 1 | agy | test/CM-021-service-tests, test/CM-021b-service-coverage | merged (service coverage 83.0%, JaCoCo check >=80% enforced) | mvnw verify green; reviewed by master | b5917f9, f22c978 |
 | CM-022 | Controller slice tests | 1 | agy2 | | todo | | |
 | CM-023 | WS/Mongo integration tests | 1 | codex | test/CM-023-ws-integration-tests | merged (ParticipantRepositoryIT moved to CM-028) | mvnw verify green; StompMessagingIT 5, ActuatorSecurityIT 3 | 97131f7 |
-| CM-024 | Global exception handler (ProblemDetail) | 1 | codex | refactor/CM-024-problem-detail | in-progress | | |
+| CM-024 | Global exception handler (ProblemDetail) | 1 | codex | refactor/CM-024-problem-detail | merged (2 rounds) | verify green 145 unit + 12 IT, service cov 85%, JaCoCo check met; FE test/lint/tsc/build OK | 3ae42ea |
 | CM-025 | Full validation constraints | 1 | codex | | todo | | |
 | CM-026 | OpenAPI/Swagger setup | 1 | agy2 | | todo | | |
 | CM-027 | CI setup (GitHub Actions) | 1 | agy2 | ci/CM-027-github-actions | approved, merge blocked (owner must delete untracked empty .github/workflows/*.yml in main checkout) | YAML parsed; reviewed by master | |
