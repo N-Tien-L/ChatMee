@@ -126,7 +126,7 @@ export const useWebSocket = () => {
             if (!clientRef.current?.connected || !user?.id) return;
             clientRef.current.publish({
                 destination: "/app/presence",
-                body: JSON.stringify({ userId: user.id, online }),
+                body: JSON.stringify({ online }),
             });
         },
         [user?.id]
@@ -219,7 +219,7 @@ export const useWebSocket = () => {
             if (!clientRef.current?.connected || !user?.id) return;
             clientRef.current.publish({
                 destination: "/app/typing",
-                body: JSON.stringify({ roomId, userId: user.id, typing }),
+                body: JSON.stringify({ roomId, typing }),
             });
         },
         [user?.id]
