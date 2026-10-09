@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { ChatRoomResponse, UserResponse } from "@/lib/type/ResponseType";
+import { ChatRoomResponse, UserSummaryResponse } from "@/lib/type/ResponseType";
 import { RoomType } from "@/lib/type/CoreModelsAndEnum";
 import {
   UpdateChatRoomRequest,
@@ -60,8 +60,8 @@ export const RoomSettingsDialog: React.FC<RoomSettingsDialogProps> = ({
   const [room, setRoom] = useState<ChatRoomResponse | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
-  const [participants, setParticipants] = useState<UserResponse[]>([]);
-  const [allUsers, setAllUsers] = useState<UserResponse[]>([]);
+  const [participants, setParticipants] = useState<UserSummaryResponse[]>([]);
+  const [allUsers, setAllUsers] = useState<UserSummaryResponse[]>([]);
 
   // Form state
   const [formData, setFormData] = useState({
@@ -128,9 +128,9 @@ export const RoomSettingsDialog: React.FC<RoomSettingsDialogProps> = ({
 
   const loadAllUsers = async () => {
     try {
-      const response = await userApi.getAllUsers();
+      const response = await userApi.searchUsers("", 0, 50);
       if (response.success && response.data) {
-        setAllUsers(response.data);
+        setAllUsers(response.data.content);
       }
     } catch (error) {
       console.error("Error loading users:", error);
@@ -344,9 +344,6 @@ export const RoomSettingsDialog: React.FC<RoomSettingsDialogProps> = ({
                         <p className="text-sm font-medium truncate">
                           {participant.name || "Unknown User"}
                         </p>
-                        <p className="text-xs text-gray-500 truncate">
-                          {participant.email || "No email"}
-                        </p>
                       </div>
                     </div>
                   ))
@@ -373,7 +370,7 @@ export const RoomSettingsDialog: React.FC<RoomSettingsDialogProps> = ({
                     {availableUsers.length > 0 ? (
                       availableUsers.map((user) => (
                         <SelectItem key={user.id} value={user.id}>
-                          {user.name} ({user.email})
+                          {user.name}
                         </SelectItem>
                       ))
                     ) : (

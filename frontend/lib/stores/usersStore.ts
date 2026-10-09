@@ -1,24 +1,24 @@
 import { create } from 'zustand'
 import { userApi } from '../api/userApi'
-import { UserResponse } from "../type/ResponseType";
+import { UserSummaryResponse } from "../type/ResponseType";
 import toast from 'react-hot-toast'
-import Fuse from 'fuse.js';
 
 interface UsersState {
-    users: UserResponse[],
-    usersCache: Map<string, UserResponse>
+    users: UserSummaryResponse[],
+    usersCache: Map<string, UserSummaryResponse>
     loading: boolean
     searchQuery: string;
-    filteredUsers: UserResponse[];
+    filteredUsers: UserSummaryResponse[];
 
-    setUsers: (users: UserResponse[]) => void
-    addUserToCache: (user: UserResponse) => void
-    getUserFromCache: (id: string) => UserResponse | null
-    fetchUsers: () => Promise<void>
-    fetchUserById: (id: string) => Promise<UserResponse | null>
+    setUsers: (users: UserSummaryResponse[]) => void
+    addUserToCache: (user: UserSummaryResponse) => void
+    getUserFromCache: (id: string) => UserSummaryResponse | null
+    fetchUsers: (query?: string) => Promise<void>
+    fetchUserById: (id: string) => Promise<UserSummaryResponse | null>
     setSearchQuery: (query: string) => void;
-    applyFilters: () => void;
 }
+
+let searchTimeout: ReturnType<typeof setTimeout> | null = null;
 
 export const useUsersStore = create<UsersState>((set, get) => ({
     // Initial state
@@ -30,7 +30,7 @@ export const useUsersStore = create<UsersState>((set, get) => ({
 
     // Actions
     setUsers: (users) => {
-        set({ users })
+        set({ users, filteredUsers: users })
         // Also update cache with these users
         const currentCache = get().usersCache
         const newCache = new Map(currentCache)
@@ -53,13 +53,15 @@ export const useUsersStore = create<UsersState>((set, get) => ({
         return usersCache.get(id) || null
     },
 
-    fetchUsers: async () => {
+    fetchUsers: async (query = "") => {
         try {
             set({ loading: true })
-            const response = await userApi.getAllUsers()
+            const response = await userApi.searchUsers(query, 0, 50)
+            // Ignore responses for queries the user has already typed past.
+            if (query !== get().searchQuery) return
 
             if (response.success) {
-                get().setUsers(response.data)
+                get().setUsers(response.data.content)
             } else {
                 console.error('Failed to fetch users:', response.message)
                 toast.error('Failed to fetch users')
@@ -98,22 +100,13 @@ export const useUsersStore = create<UsersState>((set, get) => ({
 
     setSearchQuery: (query) => {
         set({ searchQuery: query });
-        get().applyFilters();
-    },
-
-    applyFilters: () => {
-        const { users, searchQuery } = get()
-        let filtered = [...users]
-
-        if (searchQuery.trim()) {
-            const fuse = new Fuse(filtered, {
-                keys: ["name", "email"],
-                threshold: 0.3,
-            })
-            const searchResults = fuse.search(searchQuery);
-            filtered = searchResults.map((result) => result.item)
+        
+        if (searchTimeout) {
+            clearTimeout(searchTimeout);
         }
-
-        set({ filteredUsers: filtered })
+        
+        searchTimeout = setTimeout(() => {
+            get().fetchUsers(query);
+        }, 300);
     },
 }))

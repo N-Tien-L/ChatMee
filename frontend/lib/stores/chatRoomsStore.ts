@@ -4,7 +4,7 @@ import { userApi } from "../api/userApi";
 import {
     RoomType,
 } from "../type/CoreModelsAndEnum";
-import { ChatRoomResponse, UserResponse } from "../type/ResponseType";
+import { ChatRoomResponse, UserSummaryResponse } from "../type/ResponseType";
 import { useAuthStore } from "./authStore";
 import toast from "react-hot-toast";
 import Fuse from "fuse.js";
@@ -17,7 +17,7 @@ interface chatRoomState {
     roomTypeFilter: RoomType | "ALL";
     loading: boolean;
     error: string | null;
-    usersCache: Map<string, UserResponse>;
+    usersCache: Map<string, UserSummaryResponse>;
     isCreateRoomModalOpen: boolean;
 
     setRooms: (rooms: ChatRoomResponse[]) => void;

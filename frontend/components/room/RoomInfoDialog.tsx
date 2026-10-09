@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { ChatRoomResponse, UserResponse } from "@/lib/type/ResponseType";
+import { ChatRoomResponse, UserSummaryResponse } from "@/lib/type/ResponseType";
 import { RoomType } from "@/lib/type/CoreModelsAndEnum";
 import { Globe, Lock, Users, Calendar, UserCheck, Shield } from "lucide-react";
 import { useIsMobile } from "@/hooks/use-mobile";
@@ -68,7 +68,7 @@ export const RoomInfoDialog: React.FC<RoomInfoDialogProps> = ({
   const isMobile = useIsMobile();
   const { user } = useAuthStore();
   const [room, setRoom] = useState<ChatRoomResponse | null>(null);
-  const [participants, setParticipants] = useState<UserResponse[]>([]);
+  const [participants, setParticipants] = useState<UserSummaryResponse[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [isActionLoading, setIsActionLoading] = useState(false);
 
@@ -262,9 +262,6 @@ export const RoomInfoDialog: React.FC<RoomInfoDialogProps> = ({
                             (You)
                           </span>
                         )}
-                      </p>
-                      <p className="text-xs text-gray-500 truncate">
-                        {participant.email || "No email"}
                       </p>
                     </div>
                     {participant.id === room.createdBy && (
