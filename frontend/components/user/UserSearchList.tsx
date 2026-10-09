@@ -1,5 +1,5 @@
 import { useUsersStore } from "@/lib/stores";
-import { UserSummaryResponse } from "@/lib/type/ResponseType";
+import { UserSummaryResponse } from "@/lib/types";
 import { Search, User } from "lucide-react";
 import React, { useEffect, useMemo, useState } from "react";
 import { useShallow } from "zustand/react/shallow";

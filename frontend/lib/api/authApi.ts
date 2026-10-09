@@ -1,4 +1,4 @@
-import { ApiResponse, AuthResponse, UserResponse } from "../type/ResponseType";
+import { ApiResponse, AuthResponse, UserResponse } from "@/lib/types";
 import { apiClient } from "./apiClient";
 
 // Auth API endpoints

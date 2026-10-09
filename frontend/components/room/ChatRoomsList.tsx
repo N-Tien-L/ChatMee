@@ -1,6 +1,6 @@
 "use client";
 import React, { Suspense } from "react";
-import { RoomType } from "@/lib/type/CoreModelsAndEnum";
+import { RoomType } from "@/lib/types";
 import { Search, Plus, MessageSquare, Users, Lock, Globe } from "lucide-react";
 import ChatRoomListItem from "./ChatRoomListItem";
 import { useChatRoomsStore } from "@/lib/stores/chatRoomsStore";

@@ -1,4 +1,4 @@
-import { UserSummaryResponse } from "@/lib/type/ResponseType";
+import { UserSummaryResponse } from "@/lib/types";
 import React from "react";
 import { Check, Plus } from "lucide-react";
 import { Card, CardContent } from "../ui/card";

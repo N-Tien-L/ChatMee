@@ -43,11 +43,12 @@ export interface ChatRoomResponse {
     maxUsers: number;
     settings: RoomSettings;
     participants?: string[];
+    updatedAt?: string;
 }
 
 export interface MessageResponse {
     id: string;
-    tempId: string;
+    tempId?: string;
     chatRoomId: string;
     senderId: string;
     senderName?: string;
