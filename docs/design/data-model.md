@@ -93,7 +93,7 @@ role assignment checks and atomic capacity reservation/compensation remain in
 | DIRECT_MESSAGE / DirectRoomPolicy | Existing other user, OWNER + MEMBER, fixed capacity 2; self DM denied (400) | Denied (403) | Denied (403 FORBIDDEN_ACTION) | Capacity changes denied (400); other fields allowed | Denied (403) |
 
 `ParticipantService.isUserParticipant` requires both an active room and a membership
-row. STOMP room SUBSCRIBE/SEND authorization, typing, message sending/join events,
+row. STOMP room SUBSCRIBE/SEND authorization, typing, message sending,
 and REST message history all use this guard. A join that inserts after soft-delete
 cleanup may still leave an orphan row, but it cannot grant access to the inactive room.
 Already established broker subscriptions are not revoked by this check (F6, CM-058).

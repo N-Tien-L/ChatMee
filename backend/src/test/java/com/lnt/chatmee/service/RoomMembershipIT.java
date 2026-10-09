@@ -192,8 +192,6 @@ class RoomMembershipIT {
         request.setMessageType(com.lnt.chatmee.model.Message.MessageType.TEXT);
         assertThatThrownBy(() -> messageService.sendMessage(request, "user-0"))
             .isInstanceOf(com.lnt.chatmee.exception.ForbiddenActionException.class);
-        assertThatThrownBy(() -> messageService.addUser(request, "user-0"))
-            .isInstanceOf(com.lnt.chatmee.exception.ForbiddenActionException.class);
         assertThatThrownBy(() -> messageService.getRecentMessages(room.getId(), "user-0"))
             .isInstanceOf(com.lnt.chatmee.exception.ForbiddenActionException.class);
     }

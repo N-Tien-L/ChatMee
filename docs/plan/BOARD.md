@@ -33,7 +33,7 @@ Updated by master. Status: todo | in-progress | review | changes-requested | mer
 | CM-042 | Resource-based API/WS routes | 2 | agy | | todo | | |
 | CM-043 | Multi-instance presence | 2 | codex | | todo | | |
 | CM-044 | Message pagination with cursor | 2 | codex | | todo | | |
-| CM-045 | Frontend STOMP refactor | 2 | claude-w | refactor/CM-045-stomp-provider | in-progress (after security review) | | |
+| CM-045 | Frontend STOMP refactor | 2 | claude-w | refactor/CM-045-stomp-provider | merged | one STOMP session (lib/realtime) with registry resubscribe, error queue dispatched to current handlers, capped backoff, resync merge by id, ConnectionBanner; client sends TEXT only, no chat.addUser; FE gate: 49 vitest, lint 0 errors, tsc, build OK | a014c70 |
 | CM-046 | Frontend UI state and a11y | 2 | agy | | todo | | |
 | CM-047 | Server-side user search | 2 | agy + master | feat/CM-047-user-search | merged | paged server search, no emails, provider endpoint removed; UserServiceTest 10, UserApiControllerTest 4, UserRepositoryIT 4 (regex literal), usersStore tests 3; verify green 172 unit + 16 IT; FE 35 tests | 9ec729a |
 | CM-048 | PUBLIC room discovery | 2 | agy | | todo | | |
@@ -41,11 +41,11 @@ Updated by master. Status: todo | in-progress | review | changes-requested | mer
 | CM-050 | Professional README rewrite | 2 | agy | | todo | | |
 | CM-051 | Dockerfile improvements | 2 | agy2 (a), master (b) | chore/CM-051-dockerfile, chore/CM-051b-structured-logs | a merged (non-root, layered jar, actuator healthcheck); b merged (X-Request-Id + requestId/userId MDC for HTTP and STOMP, ECS JSON logs in prod, presence logs at DEBUG) | a: compose full healthy, uid 100; b: verify green 249 unit + 36 IT (RequestCorrelationIT) | 4a68c62, 646486f |
 | CM-052 | Major framework upgrades | 2 | agy | | todo | | |
-| CM-053 | Replace SockJS with pure WebSocket | 2 | agy | | todo | | |
-| CM-054 | TypeScript types cleanup | 2 | agy | | todo | | |
+| CM-053 | Replace SockJS with pure WebSocket (+ review F3 strict origins) | 2 | claude-w | refactor/CM-053-plain-websocket | in-progress | | |
+| CM-054 | TypeScript types cleanup | 2 | master | refactor/CM-054-types-cleanup | merged | lib/type merged into lib/types (aligned with backend records), no-console ESLint rule, middleware route guard (JSESSIONID cookie, UX only); FE gate 52 vitest, lint 0 errors, tsc, build OK; OpenAPI type generation not done (would add a dependency) | ee2e6cc |
 | CM-055 | Backfill specs SPEC-001..007 from the audit drafts | 2 | agy (a: 001-004), agy2 (b: 005-007) | docs/CM-055a-specs, docs/CM-055b-specs | todo (waiting for agy/agy2 relaunch) | | |
 | CM-057 | Rate limit: do not count login/health paths (review F2) | 2 | master | fix/CM-057-rate-limit-proxy | merged | health, auth/status, OAuth2 authorization/callback exempt; servlet double registration disabled; RateLimitingIT 4; verify green 259 unit + 40 IT | 75e2cea |
-| CM-056 | WebSocket hardening (review F1, F3, F4, NV-4) | 2 | master | | todo (after CM-045) | | |
+| CM-056 | WebSocket hardening (review F1, F4 server side, NV-4; F3 moved to CM-053) | 2 | master | fix/CM-056-ws-hardening | merged | STOMP SEND rate limit per user+destination in Redis (chat 10/5 s with private RATE_LIMITED error, typing 10/5 s, presence 20/60 s, dropped not thrown); TEXT-only client messages; /app/chat.addUser removed; StompError.code; verify green 274 unit + 42 IT (WsRateLimitIT) | 42447b4 |
 | CM-058 | Server-side STOMP subscription revocation on leave/delete (review F6) | 2 | | | todo (after CM-042) | | |
 
 ## Notes
@@ -64,3 +64,4 @@ Updated by master. Status: todo | in-progress | review | changes-requested | mer
 - Follow-ups from CM-022: controllers still inject `UserRepository` (MessageController, AuthApiController) - CM-040.
 - 2026-10-09 22:00 (Claude weekly reset): codex restarted without the background daemon ("Run without daemon this time"; the codex update prompt was skipped). agy/agy2 had exited and relaunching them with `--dangerously-skip-permissions` is blocked for master by the auto-mode classifier: the owner relaunches them. claude-w first reviews the merged security work (SEC-REVIEW-claude-w-REPORT.md), then CM-045. CM-055 added: the specs promised by SPEC_DRIVEN_SETUP were never written (docs/specs had only the template).
 - Security review (claude-w, 2026-10-09, SEC-REVIEW-claude-w-REPORT.md): no Critical/High. F1 STOMP SEND not rate limited (CM-056), F2 shared anonymous bucket behind Vercel locked the login flow (fixed in CM-057), F3 `setAllowedOriginPatterns("*")` on /ws (CM-056), F4 clients choose messageType incl. SYSTEM (CM-056 server side, CM-045 client side), F5 orphan membership in a soft-deleted room (folded into CM-041), F6 subscriptions not revoked server-side (CM-058), F7 frontend console.log (CM-054) and presence INFO logs (fixed in CM-051b).
+- Follow-ups from CM-045: a pending message whose confirmation was lost while disconnected shows twice after resync (history has no tempId: CM-044/CM-046); room-deleted event is matched by content (dedicated type in CM-042/CM-056); optional immediate retry on online/visibilitychange.

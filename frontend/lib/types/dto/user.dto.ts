@@ -1,20 +1,4 @@
-import { User } from "../entities/user/user.entity"
-
-// Request
-
-export interface UpdateUserRequest {
-    name?: string
-    email?: string
-    profilePicURL?: string
-}
-
-// Response
-
-export interface AuthResponse {
-    authenticated: string
-    user?: User
-    message: string
-}
+// Responses (backend dto/response records)
 
 export interface UserResponse {
     id: string
@@ -22,4 +6,17 @@ export interface UserResponse {
     email: string
     avatarUrl: string
     provider: string
+}
+
+/** Another user's public profile: never carries an email (CM-047). */
+export interface UserSummaryResponse {
+    id: string;
+    name: string;
+    avatarUrl: string;
+}
+
+export interface AuthResponse {
+    authenticated: boolean
+    user?: UserResponse
+    message: string
 }

@@ -1,5 +1,8 @@
 package com.lnt.chatmee.dto.request;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
+
+import jakarta.validation.constraints.AssertTrue;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
@@ -22,4 +25,11 @@ public class ChatMessageRequest {
     private MessageType messageType = MessageType.TEXT; // default to TEXT
 
     private String tempId;
+
+    /** SYSTEM (and future media) messages are created by the server only; clients send TEXT. */
+    @JsonIgnore
+    @AssertTrue(message = "Only TEXT messages can be sent")
+    public boolean isTextMessage() {
+        return messageType == null || messageType == MessageType.TEXT;
+    }
 }

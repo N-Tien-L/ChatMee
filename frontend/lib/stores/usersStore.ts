@@ -1,6 +1,6 @@
 import { create } from 'zustand'
 import { userApi } from '../api/userApi'
-import { UserSummaryResponse } from "../type/ResponseType";
+import { UserSummaryResponse } from "@/lib/types";
 import toast from 'react-hot-toast'
 
 interface UsersState {

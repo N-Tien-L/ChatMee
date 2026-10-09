@@ -51,22 +51,6 @@ public class MessageService {
         return response;
     }
 
-    public ChatMessageResponse addUser(ChatMessageRequest request, String userId) {
-        User user = userRepository.findById(userId)
-                .orElseThrow(() -> new UserNotFoundException("Authenticated user not found"));
-        if (!participantService.isUserParticipant(request.getRoomId(), userId)) {
-            throw new ForbiddenActionException("Room membership required");
-        }
-        Instant now = Instant.now();
-        Message message = Message.builder().id(UUID.randomUUID().toString())
-                .chatRoomId(request.getRoomId()).senderId(userId)
-                .content(user.getName() + " joined the chat").type(Message.MessageType.SYSTEM)
-                .createdAt(now).updatedAt(now).build();
-        ChatMessageResponse response = ChatMessageResponse.from(message, user.getName(), null);
-
-        return response;
-    }
-
     public List<ChatMessageResponse> getRecentMessages(String roomId, String userId) {
         userRepository.findById(userId)
                 .orElseThrow(() -> new UserNotFoundException("Authenticated user not found"));

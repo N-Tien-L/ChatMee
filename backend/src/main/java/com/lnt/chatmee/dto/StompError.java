@@ -11,5 +11,7 @@ import lombok.NoArgsConstructor;
 @Builder
 public class StompError {
     private String tempId;
+    /** ErrorCode name (e.g. RATE_LIMITED, VALIDATION_FAILED, FORBIDDEN_ACTION, INTERNAL_ERROR). */
+    private String code;
     private String message;
 }

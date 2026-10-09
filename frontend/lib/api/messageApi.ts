@@ -1,4 +1,4 @@
-import { ApiResponse } from "../type/ResponseType";
+import { ApiResponse } from "@/lib/types";
 import { MessageResponse } from "../types";
 import { apiClient } from "./apiClient";
 

@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { useUsersStore } from './usersStore';
 import { userApi } from '../api/userApi';
-import { UserSummaryResponse, PagedResponse } from '../type/ResponseType';
+import { UserSummaryResponse, PagedResponse } from "@/lib/types";
 
 vi.mock('../api/userApi', () => ({
     userApi: {

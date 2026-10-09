@@ -160,7 +160,7 @@ class AuthChannelInterceptorTest {
 
     @Test
     void preSend_knownApplicationSend_allowsControllerAuthorization() {
-        for (String destination : List.of("/app/chat.sendMessage", "/app/chat.addUser", "/app/typing", "/app/presence")) {
+        for (String destination : List.of("/app/chat.sendMessage", "/app/typing", "/app/presence")) {
             Message<?> message = applicationFrame(StompCommand.SEND, destination, "internal-user");
             assertSame(message, interceptor.preSend(message, channel));
         }
@@ -170,7 +170,7 @@ class AuthChannelInterceptorTest {
     @Test
     void preSend_brokerOrUnknownSend_deniesDirectPublication() {
         for (String destination : List.of("/topic/public/room", "/topic/typing/room", "/topic/presence",
-                "/queue/errors", "/user/internal-user/queue/errors", "/app/unknown")) {
+                "/queue/errors", "/user/internal-user/queue/errors", "/app/unknown", "/app/chat.addUser")) {
             assertThrows(AccessDeniedException.class, () -> interceptor.preSend(
                     applicationFrame(StompCommand.SEND, destination, "internal-user"), channel));
         }

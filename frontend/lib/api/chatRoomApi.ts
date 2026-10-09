@@ -1,9 +1,9 @@
-import { ApiResponse, ChatRoomResponse } from "../type/ResponseType";
+import { ApiResponse, ChatRoomResponse } from "@/lib/types";
 import {
     CreateChatRoomRequest,
     UpdateChatRoomRequest,
     JoinChatRoomRequest
-} from "../type/RequestType";
+} from "@/lib/types";
 import { apiClient } from "./apiClient";
 
 // Chat room API endpoints

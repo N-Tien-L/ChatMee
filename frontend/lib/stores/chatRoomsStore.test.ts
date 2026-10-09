@@ -1,8 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { useChatRoomsStore } from './chatRoomsStore';
 import { chatRoomApi } from '../api/chatRoomApi';
-import { RoomType, RoomSettings } from '../type/CoreModelsAndEnum';
-import { ChatRoomResponse } from '../type/ResponseType';
+import { RoomType, RoomSettings } from "@/lib/types";
+import { ChatRoomResponse } from "@/lib/types";
 
 // Mock dependencies
 vi.mock('../api/chatRoomApi', () => ({

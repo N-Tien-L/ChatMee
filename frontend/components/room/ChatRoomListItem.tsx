@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from "react";
-import { ChatRoomResponse } from "@/lib/type/ResponseType";
-import { RoomType } from "@/lib/type/CoreModelsAndEnum";
+import { ChatRoom } from "@/lib/types";
+import { RoomType } from "@/lib/types";
 import {
   MoreVertical,
   Users,
@@ -19,7 +19,7 @@ import { RoomInfoDialog } from "./RoomInfoDialog";
 import { RoomSettingsDialog } from "./RoomSettingsDialog";
 
 interface ChatRoomListItemProps {
-  room: ChatRoomResponse;
+  room: ChatRoom;
   onJoin: () => Promise<boolean>;
   onLeave?: () => Promise<boolean>;
   onDelete: () => Promise<boolean>;

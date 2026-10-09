@@ -76,33 +76,10 @@ class ChatWebSocketControllerAuthTest {
     }
 
     @Test
-    void addUser_forgedSender_broadcastsPrincipalIdentity() {
-        authenticatedMember();
-        dispatch("/app/chat.addUser", () -> "internal-user");
-        verify(messaging).convertAndSend(eq("/topic/public/room"), argThat((ChatMessageResponse response) ->
-                response.senderId().equals("internal-user")
-                        && response.senderName().equals("Real Name")
-                        && response.content().equals("Real Name joined the chat")));
-        verify(participants).isUserParticipant("room", "internal-user");
-        verify(users, never()).findById("victim");
-        verify(messages, never()).persistMessage(any());
-    }
-
-    @Test
     void sendMessage_nonMemberPrincipal_doesNotSaveOrBroadcast() {
         when(users.findById("internal-user")).thenReturn(Optional.of(
                 User.builder().id("internal-user").name("Real Name").build()));
         dispatch("/app/chat.sendMessage", () -> "internal-user");
-        verify(participants).isUserParticipant("room", "internal-user");
-        verify(messages, never()).persistMessage(any());
-        assertPrivateError();
-    }
-
-    @Test
-    void addUser_nonMemberPrincipal_doesNotBroadcast() {
-        when(users.findById("internal-user")).thenReturn(Optional.of(
-                User.builder().id("internal-user").name("Real Name").build()));
-        dispatch("/app/chat.addUser", () -> "internal-user");
         verify(participants).isUserParticipant("room", "internal-user");
         verify(messages, never()).persistMessage(any());
         assertPrivateError();
@@ -118,14 +95,6 @@ class ChatWebSocketControllerAuthTest {
     void sendMessage_processingFailure_sendsErrorOnlyToPrincipal() {
         when(users.findById("internal-user")).thenThrow(new IllegalStateException("lookup failed"));
         dispatch("/app/chat.sendMessage", () -> "internal-user");
-        verify(messages, never()).persistMessage(any());
-        assertPrivateError();
-    }
-
-    @Test
-    void addUser_processingFailure_sendsErrorOnlyToPrincipal() {
-        when(users.findById("internal-user")).thenThrow(new IllegalStateException("lookup failed"));
-        dispatch("/app/chat.addUser", () -> "internal-user");
         verify(messages, never()).persistMessage(any());
         assertPrivateError();
     }

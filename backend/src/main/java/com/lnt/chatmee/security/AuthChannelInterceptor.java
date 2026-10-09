@@ -21,7 +21,7 @@ import lombok.RequiredArgsConstructor;
 @RequiredArgsConstructor
 public class AuthChannelInterceptor implements ChannelInterceptor {
     private static final Set<String> SEND_DESTINATIONS = Set.of(
-            "/app/chat.sendMessage", "/app/chat.addUser", "/app/typing", "/app/presence");
+            "/app/chat.sendMessage", "/app/typing", "/app/presence");
     private final WsTokenService wsTokenService;
     private final ParticipantService participantService;
 
