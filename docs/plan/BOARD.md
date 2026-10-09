@@ -12,21 +12,21 @@ Updated by master. Status: todo | in-progress | review | changes-requested | mer
 | CM-007 | Enable Bean Validation | 0 | codex | fix/CM-007-bean-validation | merged (2 rounds) | validation tests + actuator test green, package OK | 6e820d5 |
 | CM-008 | Restrict join/role rules | 0 | codex | fix/CM-008-join-role-rules | merged | mvnw verify green (ParticipantServiceTest 17, ChatRoomControllerAuthorizationTest 7) | 66d63b5 |
 | CM-009 | Local environment setup (compose, .env) | 0 | agy2 | chore/CM-009-local-compose | merged (2 rounds) | compose healthy, local profile + full profile start; reviewed by master | 57bd232 |
-| CM-010 | Remove sensitive logs and fix CSRF | 0 | agy2 | fix/CM-010-logs-csrf | in-progress | | |
+| CM-010 | Remove sensitive logs and fix CSRF | 0 | agy2 + master | fix/CM-010-logs-csrf | merged | mvnw verify green (152 unit + 12 IT); SPA cookie CSRF, logout POST, sensitive logs removed; FE gates OK | 380be49 |
 | CM-011 | Fix presence Redis channel (minimal) | 0 | codex | feat/CM-003-ws-token-auth | merged (folded into CM-003) | PresenceEventListenerTest | 7204e72 |
 | CM-012 | Fix frontend linting | 0 | agy | fix/CM-012-frontend-lint | merged | lint 0 errors/11 warnings, tsc OK, build OK; reviewed by master | 570636d |
 | CM-013 | Fix frontend room switch leakage | 0 | agy | fix/CM-013-room-switch | merged (manual GIF test pending: owner) | lint/tsc/build OK; reviewed by master | 56b1be3 |
 | CM-020 | Setup testing infrastructure | 1 | agy | test/CM-020-test-infra | merged | mvnw verify green (40 unit + 1 IT, contextLoads green), JaCoCo 28% lines; npm test/lint/tsc/build OK | b6fb35d |
 | CM-021 | Service layer unit tests | 1 | agy | test/CM-021-service-tests, test/CM-021b-service-coverage | merged (service coverage 83.0%, JaCoCo check >=80% enforced) | mvnw verify green; reviewed by master | b5917f9, f22c978 |
-| CM-022 | Controller slice tests | 1 | agy2 | | todo | | |
+| CM-022 | Controller slice tests | 1 | master | test/CM-022-controller-slices | merged | ChatRoom/Message/AuthControllerWebMvcTest (27) with real SecurityConfig: 200/201/400/401/403/404/409 + ProblemDetail schema; verify green 234 unit + 31 IT | 0815d78 |
 | CM-023 | WS/Mongo integration tests | 1 | codex | test/CM-023-ws-integration-tests | merged (ParticipantRepositoryIT moved to CM-028) | mvnw verify green; StompMessagingIT 5, ActuatorSecurityIT 3 | 97131f7 |
 | CM-024 | Global exception handler (ProblemDetail) | 1 | codex | refactor/CM-024-problem-detail | merged (2 rounds) | verify green 145 unit + 12 IT, service cov 85%, JaCoCo check met; FE test/lint/tsc/build OK | 3ae42ea |
-| CM-025 | Full validation constraints | 1 | codex | | todo | | |
-| CM-026 | OpenAPI/Swagger setup | 1 | agy2 | | todo | | |
+| CM-025 | Full validation constraints | 1 | master | feat/CM-025-validation | merged | @RoomName + per-type group sequence; ValidationUtil.validateRoomName removed; verify green 193 unit + 16 IT | 23d05ba |
+| CM-026 | OpenAPI/Swagger setup | 1 | master | docs/CM-026-openapi | merged | springdoc 2.8.9, dev/local only, behind login; OpenApiDocsIT 4 (all endpoints + Problem schema); README link | b466d23 |
 | CM-027 | CI setup (GitHub Actions) | 1 | agy2 | ci/CM-027-github-actions | merged | YAML parsed; reviewed by master | a40100b |
-| CM-028 | Room membership data integrity | 1 | codex | | todo | | |
-| CM-029 | Async message saving and timestamps | 1 | codex | fix/CM-029-persist-then-broadcast | in-progress | | |
-| CM-030 | Rate limiting enhancements | 1 | codex | | todo | | |
+| CM-028 | Room membership data integrity | 1 | master | fix/CM-028-membership-integrity | merged (memberCount backfill for old rooms pending: owner) | participants single source, atomic seat $inc, soft delete + SYSTEM event, auditing, ADR-0005; RoomMembershipIT (20 threads, cap 10 -> 10), ParticipantRepositoryIT; verify green 207 unit + 31 IT | 1a43243 |
+| CM-029 | Async message saving and timestamps | 1 | codex | fix/CM-029-persist-then-broadcast | merged | verify green 158 unit + 12 IT; FE 32 tests; reviewed by master | e645bfd |
+| CM-030 | Rate limiting enhancements | 1 | master | fix/CM-030-rate-limit | merged (verify Render proxy IP: owner) | remote-address key (no XFF parsing) + forward-headers-strategy=native in prod, X-RateLimit-*/Retry-After, fail-open; verify green 177 unit + 16 IT | e086ed8 |
 | CM-031 | Basic frontend tests | 1 | agy | test/CM-031-frontend-tests | merged | 22 vitest tests green, lint/tsc/build OK; reviewed by master | c2f69d6 |
 | CM-040 | UserPrincipal and DTO mappers | 2 | codex | | todo | | |
 | CM-041 | RoomTypePolicy strategy pattern | 2 | codex | | todo | | |
@@ -35,7 +35,7 @@ Updated by master. Status: todo | in-progress | review | changes-requested | mer
 | CM-044 | Message pagination with cursor | 2 | codex | | todo | | |
 | CM-045 | Frontend STOMP refactor | 2 | claude-w | | todo | | |
 | CM-046 | Frontend UI state and a11y | 2 | agy | | todo | | |
-| CM-047 | Server-side user search | 2 | agy | feat/CM-047-user-search | in-progress | | |
+| CM-047 | Server-side user search | 2 | agy + master | feat/CM-047-user-search | merged | paged server search, no emails, provider endpoint removed; UserServiceTest 10, UserApiControllerTest 4, UserRepositoryIT 4 (regex literal), usersStore tests 3; verify green 172 unit + 16 IT; FE 35 tests | 9ec729a |
 | CM-048 | PUBLIC room discovery | 2 | agy | | todo | | |
 | CM-049 | DM unique member keys | 2 | agy | | todo | | |
 | CM-050 | Professional README rewrite | 2 | agy | | todo | | |
@@ -53,3 +53,8 @@ Updated by master. Status: todo | in-progress | review | changes-requested | mer
 - Follow-ups from CM-008: frontend shows Join for non-PUBLIC rooms (ChatRoomListItem.tsx:221); duplicate join still returns 500 (CM-024/CM-028); add-participant into a DIRECT_MESSAGE room is still allowed (CM-041/CM-049).
 - CM-021 done. CustomOAuth2UserService still untested (could use DefaultOAuth2UserService.setRestOperations); candidate for CM-022.
 - Follow-up from CM-031: frontend DTO naming drift (chatRoomId vs roomId, type vs messageType) between lib/type and lib/types (CM-054).
+- 2026-10-09: herdr panes were not drivable from the new master session (auto-mode block; agy/agy2 had exited, codex stuck on a daemon dialog), so master implemented CM-022/025/026/028/030 and finished CM-047 directly, with the same verify gates.
+- Follow-ups from CM-028: backfill `memberCount` for rooms created before CM-028 (owner, production); optional periodic recount; deleted rooms keep live STOMP subscriptions until reconnect (CM-045); `MessageService` uses `existsById`, so a deleted room answers 403 instead of 404.
+- Follow-up from CM-030: behind Vercel rewrites, anonymous requests may all share the Vercel egress IP as remote address (owner to check Render proxy headers); authenticated requests are keyed by user.
+- Follow-up from CM-047: frontend room dialogs no longer show emails; `UserResponse` (with email) is still returned by `/auth/me` and `/auth/user` for the caller only.
+- Follow-ups from CM-022: controllers still inject `UserRepository` (MessageController, AuthApiController) - CM-040.
