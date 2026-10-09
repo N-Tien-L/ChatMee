@@ -14,9 +14,12 @@ interface UserSearchListProps {
   placeHolder?: string;
 }
 
+// Stable default: a new [] on every render would re-run the excludeUserIds effect forever.
+const NO_EXCLUDED_USERS: string[] = [];
+
 const UserSearchList = ({
   onUserAdd,
-  excludeUserIds = [],
+  excludeUserIds = NO_EXCLUDED_USERS,
   placeHolder = "Search user by name...",
 }: UserSearchListProps) => {
   const { users, loading, error, searchQuery, filteredUsers, setSearchQuery } =
