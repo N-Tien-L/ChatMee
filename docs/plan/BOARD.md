@@ -29,19 +29,19 @@ Updated by master. Status: todo | in-progress | review | changes-requested | mer
 | CM-030 | Rate limiting enhancements | 1 | master | fix/CM-030-rate-limit | merged (verify Render proxy IP: owner) | remote-address key (no XFF parsing) + forward-headers-strategy=native in prod, X-RateLimit-*/Retry-After, fail-open; verify green 177 unit + 16 IT | e086ed8 |
 | CM-031 | Basic frontend tests | 1 | agy | test/CM-031-frontend-tests | merged | 22 vitest tests green, lint/tsc/build OK; reviewed by master | c2f69d6 |
 | CM-040 | UserPrincipal and DTO mappers | 2 | codex | refactor/CM-040-user-principal | merged | UserPrincipal (getName = internal id), @CurrentUser resolver, no repositories/OAuth2User in controllers (ControllerArchitectureTest), response records with static from(); gate verify green 269 unit + 40 IT, service cov 98% | 73a79ef |
-| CM-041 | RoomTypePolicy strategy pattern (+ review F5: active-room membership check) | 2 | codex | refactor/CM-041-room-type-policy | in-progress | | |
+| CM-041 | RoomTypePolicy strategy pattern (+ review F5: active-room membership check) | 2 | codex | refactor/CM-041-room-type-policy | review (round 2: integrate develop after CM-056) | | |
 | CM-042 | Resource-based API/WS routes | 2 | agy | | todo | | |
 | CM-043 | Multi-instance presence | 2 | codex | | todo | | |
 | CM-044 | Message pagination with cursor | 2 | codex | | todo | | |
 | CM-045 | Frontend STOMP refactor | 2 | claude-w | refactor/CM-045-stomp-provider | merged | one STOMP session (lib/realtime) with registry resubscribe, error queue dispatched to current handlers, capped backoff, resync merge by id, ConnectionBanner; client sends TEXT only, no chat.addUser; FE gate: 49 vitest, lint 0 errors, tsc, build OK | a014c70 |
-| CM-046 | Frontend UI state and a11y | 2 | agy | | todo | | |
+| CM-046 | Frontend UI state and a11y (+ resync duplicate follow-up) | 2 | claude-w | feat/CM-046-ui-states-a11y | in-progress | | |
 | CM-047 | Server-side user search | 2 | agy + master | feat/CM-047-user-search | merged | paged server search, no emails, provider endpoint removed; UserServiceTest 10, UserApiControllerTest 4, UserRepositoryIT 4 (regex literal), usersStore tests 3; verify green 172 unit + 16 IT; FE 35 tests | 9ec729a |
 | CM-048 | PUBLIC room discovery | 2 | agy | | todo | | |
 | CM-049 | DM unique member keys | 2 | agy | | todo | | |
 | CM-050 | Professional README rewrite | 2 | agy | | todo | | |
 | CM-051 | Dockerfile improvements | 2 | agy2 (a), master (b) | chore/CM-051-dockerfile, chore/CM-051b-structured-logs | a merged (non-root, layered jar, actuator healthcheck); b merged (X-Request-Id + requestId/userId MDC for HTTP and STOMP, ECS JSON logs in prod, presence logs at DEBUG) | a: compose full healthy, uid 100; b: verify green 249 unit + 36 IT (RequestCorrelationIT) | 4a68c62, 646486f |
 | CM-052 | Major framework upgrades | 2 | agy | | todo | | |
-| CM-053 | Replace SockJS with pure WebSocket (+ review F3 strict origins) | 2 | claude-w | refactor/CM-053-plain-websocket | in-progress | | |
+| CM-053 | Replace SockJS with pure WebSocket (+ review F3 strict origins) | 2 | claude-w | refactor/CM-053-plain-websocket | merged (deploy backend then frontend together: owner) | /ws plain WebSocket, allowed origin = app.client.url only (403 otherwise, proven without CORS filter), brokerURL derived from NEXT_PUBLIC_WS_URL (no env change), sockjs-client removed, ADR-0003 amended; gate 275 unit + 44 IT, 55 vitest | 0d31153 |
 | CM-054 | TypeScript types cleanup | 2 | master | refactor/CM-054-types-cleanup | merged | lib/type merged into lib/types (aligned with backend records), no-console ESLint rule, middleware route guard (JSESSIONID cookie, UX only); FE gate 52 vitest, lint 0 errors, tsc, build OK; OpenAPI type generation not done (would add a dependency) | ee2e6cc |
 | CM-055 | Backfill specs SPEC-001..007 from the audit drafts | 2 | agy (a: 001-004), agy2 (b: 005-007) | docs/CM-055a-specs, docs/CM-055b-specs | todo (waiting for agy/agy2 relaunch) | | |
 | CM-057 | Rate limit: do not count login/health paths (review F2) | 2 | master | fix/CM-057-rate-limit-proxy | merged | health, auth/status, OAuth2 authorization/callback exempt; servlet double registration disabled; RateLimitingIT 4; verify green 259 unit + 40 IT | 75e2cea |
