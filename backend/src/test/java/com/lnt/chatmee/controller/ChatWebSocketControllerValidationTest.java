@@ -82,17 +82,32 @@ class ChatWebSocketControllerValidationTest {
     }
 
     @Test
-    void addUser_oversizedPayload_reportsErrorWithoutBroadcasting() {
-        dispatch("/app/chat.addUser", 5001);
+    void sendMessage_systemMessageType_reportsErrorWithoutSavingOrBroadcasting() {
+        dispatch("/app/chat.sendMessage", 10, com.lnt.chatmee.model.Message.MessageType.SYSTEM);
         verifyNoInteractions(messages, users, participants);
-        verify(messaging).convertAndSendToUser(eq("test-user"), eq("/queue/errors"), any(StompError.class));
+        ArgumentCaptor<StompError> error = ArgumentCaptor.forClass(StompError.class);
+        verify(messaging).convertAndSendToUser(eq("test-user"), eq("/queue/errors"), error.capture());
+        assertEquals("test-temp", error.getValue().getTempId());
+        assertEquals("VALIDATION_FAILED", error.getValue().getCode());
+        assertTrue(error.getValue().getMessage().contains("Only TEXT messages can be sent"));
         verifyNoMoreInteractions(messaging);
     }
 
+    @Test
+    void addUser_removedDestination_isNotHandled() {
+        dispatch("/app/chat.addUser", 10);
+        verifyNoInteractions(messages, users, participants, messaging);
+    }
+
     private void dispatch(String destination, int length) {
+        dispatch(destination, length, com.lnt.chatmee.model.Message.MessageType.TEXT);
+    }
+
+    private void dispatch(String destination, int length, com.lnt.chatmee.model.Message.MessageType type) {
         ChatMessageRequest request = new ChatMessageRequest();
         request.setRoomId("test-room");
         request.setContent("x".repeat(length));
+        request.setMessageType(type);
         request.setTempId("test-temp");
         SimpMessageHeaderAccessor headers = SimpMessageHeaderAccessor.create(SimpMessageType.MESSAGE);
         headers.setDestination(destination);
