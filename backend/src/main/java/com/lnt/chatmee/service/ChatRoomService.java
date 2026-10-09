@@ -74,8 +74,7 @@ public class ChatRoomService {
     }
 
     private ChatRoom createDirectRoom(CreateChatRoomRequest request, String creatorId) {
-        // Validate participant ID
-        ValidationUtil.validateId(request.getParticipantId(), "Participant ID");
+        // Participant ID presence and format are enforced by CreateChatRoomRequest bean validation
         if(userRepository.findById(request.getParticipantId()).isEmpty()) {
             throw new UserNotFoundException("Participant not found");
         }
@@ -117,9 +116,7 @@ public class ChatRoomService {
     }
 
     private ChatRoom createConfigurableRoom(CreateChatRoomRequest request, String creatorId) {
-        // Validate room name for private/public rooms
-        boolean isRoomNameRequired = (request.getRoomType() == RoomType.PRIVATE || request.getRoomType() == RoomType.PUBLIC);
-        ValidationUtil.validateRoomName(request.getRoomName(), isRoomNameRequired);
+        // Room name presence and format are enforced by CreateChatRoomRequest bean validation
 
         Set<String> participants = new HashSet<>();
         participants.add(creatorId);

@@ -62,25 +62,4 @@ public class ValidationUtil {
             throw new InvalidRequestException(fieldName + " must be a valid identifier");
         }
     }
-
-    /**
-     * Validates room name for private/public rooms
-     */
-    public static void validateRoomName(String roomName, boolean isRequired) {
-        if (isRequired && (roomName == null || roomName.trim().isEmpty())) {
-            throw new InvalidRequestException("Room name is required for this room type");
-        }
-
-        if (roomName != null && !roomName.trim().isEmpty()) {
-            String trimmed = roomName.trim();
-            if (trimmed.length() > 100) {
-                throw new InvalidRequestException("Room name cannot exceed 100 characters");
-            }
-
-            // Allow Unicode letters (including Vietnamese), numbers, spaces, and . _ -
-            if (!trimmed.matches("^[\\p{L}0-9\\s._-]+$")) {
-                throw new InvalidRequestException("Room name contains invalid characters");
-            }
-        }
-    }
 }
