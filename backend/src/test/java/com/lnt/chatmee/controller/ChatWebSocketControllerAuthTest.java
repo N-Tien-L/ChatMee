@@ -35,7 +35,7 @@ import com.lnt.chatmee.service.MessageService;
 class ChatWebSocketControllerAuthTest {
     private final SimpMessagingTemplate messaging = mock(SimpMessagingTemplate.class);
     private final UserRepository users = mock(UserRepository.class);
-    private final com.lnt.chatmee.repository.ParticipantRepository participants = mock(com.lnt.chatmee.repository.ParticipantRepository.class);
+    private final com.lnt.chatmee.service.ParticipantService participants = mock(com.lnt.chatmee.service.ParticipantService.class);
     private final MessageService messages = spy(new MessageService(mock(com.lnt.chatmee.repository.ChatRoomRepository.class), participants, mock(com.lnt.chatmee.repository.MessageRepository.class), users));
     private final StaticApplicationContext context = new StaticApplicationContext();
     private final OptionalValidatorFactoryBean validator = new OptionalValidatorFactoryBean();
@@ -71,7 +71,7 @@ class ChatWebSocketControllerAuthTest {
         assertEquals("internal-user", saved.getValue().getSenderId());
         verify(messaging).convertAndSend(eq("/topic/public/room"), argThat((ChatMessageResponse response) ->
                 response.senderId().equals("internal-user") && response.senderName().equals("Real Name")));
-        verify(participants).existsByChatRoomIdAndUserId("room", "internal-user");
+        verify(participants).isUserParticipant("room", "internal-user");
         verify(users, never()).findById("victim");
     }
 
@@ -83,7 +83,7 @@ class ChatWebSocketControllerAuthTest {
                 response.senderId().equals("internal-user")
                         && response.senderName().equals("Real Name")
                         && response.content().equals("Real Name joined the chat")));
-        verify(participants).existsByChatRoomIdAndUserId("room", "internal-user");
+        verify(participants).isUserParticipant("room", "internal-user");
         verify(users, never()).findById("victim");
         verify(messages, never()).persistMessage(any());
     }
@@ -93,7 +93,7 @@ class ChatWebSocketControllerAuthTest {
         when(users.findById("internal-user")).thenReturn(Optional.of(
                 User.builder().id("internal-user").name("Real Name").build()));
         dispatch("/app/chat.sendMessage", () -> "internal-user");
-        verify(participants).existsByChatRoomIdAndUserId("room", "internal-user");
+        verify(participants).isUserParticipant("room", "internal-user");
         verify(messages, never()).persistMessage(any());
         assertPrivateError();
     }
@@ -103,7 +103,7 @@ class ChatWebSocketControllerAuthTest {
         when(users.findById("internal-user")).thenReturn(Optional.of(
                 User.builder().id("internal-user").name("Real Name").build()));
         dispatch("/app/chat.addUser", () -> "internal-user");
-        verify(participants).existsByChatRoomIdAndUserId("room", "internal-user");
+        verify(participants).isUserParticipant("room", "internal-user");
         verify(messages, never()).persistMessage(any());
         assertPrivateError();
     }
@@ -165,10 +165,10 @@ class ChatWebSocketControllerAuthTest {
         doAnswer(invocation -> invocation.getArgument(0)).when(messages).persistMessage(any());
         when(users.findById("internal-user")).thenReturn(Optional.of(
                 User.builder().id("internal-user").name("Real Name").build()));
-        when(participants.existsByChatRoomIdAndUserId("room", "internal-user")).thenReturn(true);
+        when(participants.isUserParticipant("room", "internal-user")).thenReturn(true);
         when(users.findById("victim")).thenReturn(Optional.of(
                 User.builder().id("victim").name("Victim Name").build()));
-        when(participants.existsByChatRoomIdAndUserId("room", "victim")).thenReturn(true);
+        when(participants.isUserParticipant("room", "victim")).thenReturn(true);
     }
 
     private void dispatch(String destination, Principal principal) {

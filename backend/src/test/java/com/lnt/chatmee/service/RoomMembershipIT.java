@@ -43,6 +43,8 @@ class RoomMembershipIT {
     private static final int THREADS = 20;
 
     @Autowired private ParticipantService participantService;
+    @Autowired private MessageService messageService;
+    @Autowired private com.lnt.chatmee.security.AuthChannelInterceptor authChannelInterceptor;
     @Autowired private ChatRoomRepository chatRoomRepository;
     @Autowired private ParticipantRepository participantRepository;
     @Autowired private UserRepository userRepository;
@@ -167,6 +169,33 @@ class RoomMembershipIT {
     @Test
     void save_newRoom_fillsCreatedAtByAuditing() {
         assertThat(room(10, 0).getCreatedAt()).isNotNull();
+    }
+
+    @Test
+    void softDelete_orphanMembership_deniesMessageAndStompAuthorization() {
+        ChatRoom room = room(10, 0);
+        chatRoomRepository.softDelete(room.getId(), LocalDateTime.now());
+        // Reproduce the post-delete insert window of a join that already reserved its seat.
+        participantService.createParticipant(room.getId(), "user-0", Role.MEMBER);
+        assertThat(participantRepository.existsByChatRoomIdAndUserId(room.getId(), "user-0")).isTrue();
+        assertThat(participantService.isUserParticipant(room.getId(), "user-0")).isFalse();
+        for (String destination : List.of("/topic/public/", "/topic/typing/")) {
+            var headers = org.springframework.messaging.simp.stomp.StompHeaderAccessor.create(
+                org.springframework.messaging.simp.stomp.StompCommand.SUBSCRIBE);
+            headers.setUser(() -> "user-0"); headers.setDestination(destination + room.getId());
+            var frame = org.springframework.messaging.support.MessageBuilder.createMessage(new byte[0], headers.getMessageHeaders());
+            assertThatThrownBy(() -> authChannelInterceptor.preSend(frame, null))
+                .isInstanceOf(org.springframework.security.access.AccessDeniedException.class);
+        }
+        var request = new com.lnt.chatmee.dto.request.ChatMessageRequest();
+        request.setRoomId(room.getId()); request.setContent("Blocked");
+        request.setMessageType(com.lnt.chatmee.model.Message.MessageType.TEXT);
+        assertThatThrownBy(() -> messageService.sendMessage(request, "user-0"))
+            .isInstanceOf(com.lnt.chatmee.exception.ForbiddenActionException.class);
+        assertThatThrownBy(() -> messageService.addUser(request, "user-0"))
+            .isInstanceOf(com.lnt.chatmee.exception.ForbiddenActionException.class);
+        assertThatThrownBy(() -> messageService.getRecentMessages(room.getId(), "user-0"))
+            .isInstanceOf(com.lnt.chatmee.exception.ForbiddenActionException.class);
     }
 
     private ChatRoom room(int maxParticipants, int memberCount) {

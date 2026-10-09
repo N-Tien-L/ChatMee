@@ -31,7 +31,7 @@ import com.lnt.chatmee.service.MessageService;
 class ChatWebSocketControllerValidationTest {
     private final SimpMessagingTemplate messaging = mock(SimpMessagingTemplate.class);
     private final UserRepository users = mock(UserRepository.class);
-    private final com.lnt.chatmee.repository.ParticipantRepository participants = mock(com.lnt.chatmee.repository.ParticipantRepository.class);
+    private final com.lnt.chatmee.service.ParticipantService participants = mock(com.lnt.chatmee.service.ParticipantService.class);
     private final MessageService messages = spy(new MessageService(mock(com.lnt.chatmee.repository.ChatRoomRepository.class), participants, mock(com.lnt.chatmee.repository.MessageRepository.class), users));
     private final StaticApplicationContext context = new StaticApplicationContext();
     private final OptionalValidatorFactoryBean validator = new OptionalValidatorFactoryBean();
@@ -73,7 +73,7 @@ class ChatWebSocketControllerValidationTest {
     void sendMessage_contentOf5000Characters_savesAndBroadcasts() {
         when(users.findById("test-user")).thenReturn(Optional.of(
                 User.builder().id("test-user").name("Test User").build()));
-        when(participants.existsByChatRoomIdAndUserId("test-room", "test-user")).thenReturn(true);
+        when(participants.isUserParticipant("test-room", "test-user")).thenReturn(true);
         doAnswer(invocation -> invocation.getArgument(0)).when(messages).persistMessage(any());
         dispatch("/app/chat.sendMessage", 5000);
         verify(messages).persistMessage(argThat(message -> message.getContent().length() == 5000));

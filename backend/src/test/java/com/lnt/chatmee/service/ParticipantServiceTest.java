@@ -11,6 +11,8 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
+import org.mockito.Spy;
+import com.lnt.chatmee.service.policy.*;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import com.lnt.chatmee.exception.ChatRoomNotFoundException;
@@ -31,6 +33,8 @@ class ParticipantServiceTest {
     @Mock ParticipantRepository participants;
     @Mock UserRepository users;
     @Mock ChatRoomRepository rooms;
+    @Spy RoomTypePolicyRegistry policies = new RoomTypePolicyRegistry(List.of(
+        new PublicRoomPolicy(), new PrivateRoomPolicy(), new DirectRoomPolicy()));
     @InjectMocks ParticipantService service;
     private ChatRoom room;
 
@@ -210,6 +214,40 @@ class ParticipantServiceTest {
         when(participants.save(any())).thenThrow(new org.springframework.dao.DuplicateKeyException("duplicate"));
         assertThrows(UserAlreadyInRoomException.class,
                 () -> service.createParticipant("room", "actor", Role.MEMBER));
+    }
+
+    @Test
+    void addParticipant_directRoom_throwsForbiddenWithoutReservingSeat() {
+        actor(Role.OWNER);
+        room.setType(RoomType.DIRECT_MESSAGE);
+        when(rooms.findByIdAndIsActiveTrue("room")).thenReturn(Optional.of(room));
+        lenient().when(users.findById("target")).thenReturn(Optional.of(User.builder().id("target").build()));
+        lenient().when(rooms.reserveSeat(eq("room"), any())).thenReturn(1L);
+        ForbiddenActionException failure = assertThrows(ForbiddenActionException.class,
+                () -> service.addParticipant("room", "actor", "target", "MEMBER"));
+        assertEquals(com.lnt.chatmee.exception.ErrorCode.FORBIDDEN_ACTION, failure.getErrorCode());
+        verify(rooms, never()).reserveSeat(any(), any());
+        verify(participants, never()).save(any());
+    }
+
+    @Test
+    void isUserParticipant_deletedRoomWithOrphanMembership_returnsFalse() {
+        lenient().when(participants.existsByChatRoomIdAndUserId("room", "actor")).thenReturn(true);
+        when(rooms.findByIdAndIsActiveTrue("room")).thenReturn(Optional.empty());
+        assertFalse(service.isUserParticipant("room", "actor"));
+    }
+
+    @Test
+    void isUserParticipant_activeRoomMember_returnsTrue() {
+        when(rooms.findByIdAndIsActiveTrue("room")).thenReturn(Optional.of(room));
+        when(participants.existsByChatRoomIdAndUserId("room", "actor")).thenReturn(true);
+        assertTrue(service.isUserParticipant("room", "actor"));
+    }
+
+    @Test
+    void isUserParticipant_activeRoomNonMember_returnsFalse() {
+        when(rooms.findByIdAndIsActiveTrue("room")).thenReturn(Optional.of(room));
+        assertFalse(service.isUserParticipant("room", "actor"));
     }
 
     private void actor(Role role) {

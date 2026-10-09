@@ -167,7 +167,7 @@
 								<rule>
 									<element>PACKAGE</element>
 									<includes>
-										<include>com.lnt.chatmee.service</include>
+										<include>com.lnt.chatmee.service*</include>
 									</includes>
 									<limits>
 										<limit>

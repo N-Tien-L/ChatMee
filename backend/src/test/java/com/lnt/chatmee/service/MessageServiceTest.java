@@ -35,7 +35,7 @@ class MessageServiceTest {
     private ChatRoomRepository chatRoomRepository;
 
     @Mock
-    private ParticipantRepository participantRepository;
+    private ParticipantService participantService;
 
     @Mock
     private MessageRepository messageRepository;
@@ -57,7 +57,7 @@ class MessageServiceTest {
     @Test
     void getRecentMessages_nonParticipant_throwsException() {
         when(chatRoomRepository.existsById("room1")).thenReturn(true);
-        when(participantRepository.existsByChatRoomIdAndUserId("room1", "user1")).thenReturn(false);
+        when(participantService.isUserParticipant("room1", "user1")).thenReturn(false);
 
         assertThatThrownBy(() -> messageService.getRecentMessages("room1", "user1"))
                 .isInstanceOf(ForbiddenActionException.class);
@@ -66,7 +66,7 @@ class MessageServiceTest {
     @Test
     void getRecentMessages_isParticipant_returnsMessages() {
         when(chatRoomRepository.existsById("room1")).thenReturn(true);
-        when(participantRepository.existsByChatRoomIdAndUserId("room1", "user1")).thenReturn(true);
+        when(participantService.isUserParticipant("room1", "user1")).thenReturn(true);
 
         Message msg = Message.builder()
                 .id("msg1")
