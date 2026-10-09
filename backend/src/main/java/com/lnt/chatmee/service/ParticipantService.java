@@ -67,8 +67,8 @@ public class ParticipantService {
         logger.info("Created participant: {} for room: {} with role: {}", userId, chatRoomId, role);
     }
 
-    public void joinRoom(String roomId, String provider, String providerId) {
-        User user = userRepository.findByProviderAndProviderId(provider, providerId)
+    public void joinRoom(String roomId, String userId) {
+        User user = userRepository.findById(userId)
             .orElseThrow(() -> new UserNotFoundException("Authenticated user not found"));
         ValidationUtil.validateId(roomId, "Room ID");
         ChatRoom room = chatRoomRepository.findByIdAndIsActiveTrue(roomId)
@@ -79,8 +79,8 @@ public class ParticipantService {
         addParticipant(roomId, user.getId(), Role.MEMBER);
     }
 
-    public void addParticipant(String roomId, String provider, String providerId, String targetUserId, String requestedRole) {
-        User actor = userRepository.findByProviderAndProviderId(provider, providerId)
+    public void addParticipant(String roomId, String userId, String targetUserId, String requestedRole) {
+        User actor = userRepository.findById(userId)
             .orElseThrow(() -> new UserNotFoundException("Authenticated user not found"));
         Participant participant = participantRepository.findByChatRoomIdAndUserId(roomId, actor.getId())
             .orElseThrow(() -> new ForbiddenActionException("User is not a participant of the chat room"));

@@ -6,8 +6,8 @@ import com.lnt.chatmee.exception.UserNotFoundException;
 
 import org.springframework.http.CacheControl;
 import org.springframework.http.ResponseEntity;
-import org.springframework.security.core.annotation.AuthenticationPrincipal;
-import org.springframework.security.oauth2.core.user.OAuth2User;
+import com.lnt.chatmee.security.CurrentUser;
+import com.lnt.chatmee.security.UserPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -20,7 +20,6 @@ import com.lnt.chatmee.dto.response.WsTokenResponse;
 import com.lnt.chatmee.model.User;
 import com.lnt.chatmee.repository.UserRepository;
 import com.lnt.chatmee.security.WsTokenService;
-import com.lnt.chatmee.util.OAuthUtil;
 
 import lombok.RequiredArgsConstructor;
 
@@ -31,36 +30,33 @@ import lombok.RequiredArgsConstructor;
 public class AuthApiController {
 
     private final UserRepository userRepository;
-    private final OAuthUtil oAuthUtil;
     private final WsTokenService wsTokenService;
 
     @Operation(summary = "Issue a single-use, 60-second token for the STOMP CONNECT header")
     @PostMapping("/ws-token")
-    public ResponseEntity<WsTokenResponse> getWsToken(@AuthenticationPrincipal OAuth2User principal) {
+    public ResponseEntity<WsTokenResponse> getWsToken(@CurrentUser UserPrincipal user) {
         return ResponseEntity.ok().cacheControl(CacheControl.noStore())
-                .body(new WsTokenResponse(wsTokenService.issueToken(principal)));
+                .body(new WsTokenResponse(wsTokenService.issueToken(user.userId())));
     }
 
     @Operation(summary = "Get the authenticated user and session status")
     @GetMapping("/me")
-    public ResponseEntity<ApiResponse<AuthResponse>> getCurrentUser(@AuthenticationPrincipal OAuth2User principal) {
-        if (principal == null) {
+    public ResponseEntity<ApiResponse<AuthResponse>> getCurrentUser(@CurrentUser UserPrincipal user) {
+        if (user == null) {
             throw new org.springframework.security.authentication.AuthenticationCredentialsNotFoundException("Authentication required");
         }
 
-        String provider = oAuthUtil.determineProvider(principal);
-        String providerId = oAuthUtil.getProviderId(principal, provider);
 
-        User user = userRepository.findByProviderAndProviderId(provider, providerId)
+        User profile = userRepository.findById(user.userId())
                 .orElse(null);
 
-        if (user != null) {
+        if (profile != null) {
             UserResponse userResponse = UserResponse.builder()
-                    .id(user.getId())
-                    .name(user.getName())
-                    .email(user.getEmail())
-                    .avatarUrl(user.getAvatarUrl())
-                    .provider(user.getProvider())
+                    .id(profile.getId())
+                    .name(profile.getName())
+                    .email(profile.getEmail())
+                    .avatarUrl(profile.getAvatarUrl())
+                    .provider(profile.getProvider())
                     .build();
 
             AuthResponse authResponse = AuthResponse.builder()
@@ -77,31 +73,29 @@ public class AuthApiController {
 
     @Operation(summary = "Check whether the session is authenticated")
     @GetMapping("/status")
-    public ResponseEntity<ApiResponse<Boolean>> getAuthStatus(@AuthenticationPrincipal OAuth2User principal) {
-        boolean isAuthenticated = principal != null;
+    public ResponseEntity<ApiResponse<Boolean>> getAuthStatus(org.springframework.security.core.Authentication authentication) {
+        boolean isAuthenticated = authentication != null && authentication.getPrincipal() instanceof UserPrincipal;
         return ResponseEntity.ok(ApiResponse.success("Authenticated status retrieved", isAuthenticated));
     }
 
     @Operation(summary = "Get the authenticated user profile")
     @GetMapping("/user")
-    public ResponseEntity<ApiResponse<UserResponse>> getUserInfo(@AuthenticationPrincipal OAuth2User principal) {
-        if (principal == null) {
+    public ResponseEntity<ApiResponse<UserResponse>> getUserInfo(@CurrentUser UserPrincipal user) {
+        if (user == null) {
             throw new org.springframework.security.authentication.AuthenticationCredentialsNotFoundException("Authentication required");
         }
 
-        String provider = oAuthUtil.determineProvider(principal);
-        String providerId = oAuthUtil.getProviderId(principal, provider);
 
-        User user = userRepository.findByProviderAndProviderId(provider, providerId)
+        User profile = userRepository.findById(user.userId())
                 .orElse(null);
 
-        if (user != null) {
+        if (profile != null) {
             UserResponse userResponse = UserResponse.builder()
-                    .id(user.getId())
-                    .name(user.getName())
-                    .email(user.getEmail())
-                    .avatarUrl(user.getAvatarUrl())
-                    .provider(user.getProvider())
+                    .id(profile.getId())
+                    .name(profile.getName())
+                    .email(profile.getEmail())
+                    .avatarUrl(profile.getAvatarUrl())
+                    .provider(profile.getProvider())
                     .build();
 
             return ResponseEntity.ok(ApiResponse.success(userResponse));
