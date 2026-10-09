@@ -1,0 +1,91 @@
+package com.lnt.chatmee.controller;
+
+import static org.mockito.Mockito.verifyNoInteractions;
+import static org.mockito.Mockito.when;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.oauth2Login;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+
+import java.time.Instant;
+import java.util.List;
+import java.util.Optional;
+
+import org.junit.jupiter.api.Test;
+import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
+import org.springframework.context.annotation.Import;
+import org.springframework.test.context.ActiveProfiles;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
+
+import com.lnt.chatmee.config.SecurityConfig;
+import com.lnt.chatmee.dto.response.ChatMessageResponse;
+import com.lnt.chatmee.exception.ChatRoomNotFoundException;
+import com.lnt.chatmee.exception.ForbiddenActionException;
+import com.lnt.chatmee.model.Message.MessageType;
+import com.lnt.chatmee.model.User;
+import com.lnt.chatmee.repository.UserRepository;
+import com.lnt.chatmee.service.MessageService;
+import com.lnt.chatmee.support.SecuredWebMvcTestSupport;
+
+@WebMvcTest(controllers = MessageController.class, properties = "app.client.url=http://localhost:3000")
+@ActiveProfiles("actuator-test")
+@Import(SecurityConfig.class)
+class MessageControllerWebMvcTest extends SecuredWebMvcTestSupport {
+
+    private static final String HISTORY = "/api/v1/messages/room/room-1";
+
+    @MockitoBean MessageService messageService;
+    @MockitoBean UserRepository userRepository;
+
+    @Test
+    void getRecentMessages_member_returnsMessagesWithIsoTimestamps() throws Exception {
+        caller();
+        when(messageService.getRecentMessages("room-1", "u1")).thenReturn(List.of(ChatMessageResponse.builder()
+                .id("m1").chatRoomId("room-1").senderId("u2").content("hi").type(MessageType.TEXT)
+                .createdAt(Instant.parse("2026-10-09T01:02:03Z")).updatedAt(Instant.parse("2026-10-09T01:02:03Z"))
+                .build()));
+
+        mvc.perform(get(HISTORY).with(oauth2Login()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data[0].id").value("m1"))
+                .andExpect(jsonPath("$.data[0].createdAt").value("2026-10-09T01:02:03Z"))
+                .andExpect(jsonPath("$.data[0].isDeleted").value(false));
+    }
+
+    @Test
+    void getRecentMessages_nonMember_returns403Problem() throws Exception {
+        caller();
+        when(messageService.getRecentMessages("room-1", "u1"))
+                .thenThrow(new ForbiddenActionException("You are not a participant of this room"));
+
+        expectProblem(mvc.perform(get(HISTORY).with(oauth2Login())), 403, "FORBIDDEN_ACTION");
+    }
+
+    @Test
+    void getRecentMessages_unknownRoom_returns404Problem() throws Exception {
+        caller();
+        when(messageService.getRecentMessages("room-1", "u1"))
+                .thenThrow(new ChatRoomNotFoundException("Chat room not found: room-1"));
+
+        expectProblem(mvc.perform(get(HISTORY).with(oauth2Login())), 404, "ROOM_NOT_FOUND");
+    }
+
+    @Test
+    void getRecentMessages_callerWithoutAccount_returns404Problem() throws Exception {
+        when(userRepository.findByProviderAndProviderId(PROVIDER, PROVIDER_ID)).thenReturn(Optional.empty());
+
+        expectProblem(mvc.perform(get(HISTORY).with(oauth2Login())), 404, "USER_NOT_FOUND");
+        verifyNoInteractions(messageService);
+    }
+
+    @Test
+    void getRecentMessages_unauthenticated_returns401Problem() throws Exception {
+        expectProblem(mvc.perform(get(HISTORY)), 401, "UNAUTHENTICATED");
+        verifyNoInteractions(messageService);
+    }
+
+    private void caller() {
+        when(userRepository.findByProviderAndProviderId(PROVIDER, PROVIDER_ID))
+                .thenReturn(Optional.of(User.builder().id("u1").build()));
+    }
+}
