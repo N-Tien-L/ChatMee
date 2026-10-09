@@ -28,21 +28,22 @@ Updated by master. Status: todo | in-progress | review | changes-requested | mer
 | CM-029 | Async message saving and timestamps | 1 | codex | fix/CM-029-persist-then-broadcast | merged | verify green 158 unit + 12 IT; FE 32 tests; reviewed by master | e645bfd |
 | CM-030 | Rate limiting enhancements | 1 | master | fix/CM-030-rate-limit | merged (verify Render proxy IP: owner) | remote-address key (no XFF parsing) + forward-headers-strategy=native in prod, X-RateLimit-*/Retry-After, fail-open; verify green 177 unit + 16 IT | e086ed8 |
 | CM-031 | Basic frontend tests | 1 | agy | test/CM-031-frontend-tests | merged | 22 vitest tests green, lint/tsc/build OK; reviewed by master | c2f69d6 |
-| CM-040 | UserPrincipal and DTO mappers | 2 | codex | | todo | | |
+| CM-040 | UserPrincipal and DTO mappers | 2 | codex | refactor/CM-040-user-principal | in-progress | | |
 | CM-041 | RoomTypePolicy strategy pattern | 2 | codex | | todo | | |
 | CM-042 | Resource-based API/WS routes | 2 | agy | | todo | | |
 | CM-043 | Multi-instance presence | 2 | codex | | todo | | |
 | CM-044 | Message pagination with cursor | 2 | codex | | todo | | |
-| CM-045 | Frontend STOMP refactor | 2 | claude-w | | todo | | |
+| CM-045 | Frontend STOMP refactor | 2 | claude-w | refactor/CM-045-stomp-provider | in-progress (after security review) | | |
 | CM-046 | Frontend UI state and a11y | 2 | agy | | todo | | |
 | CM-047 | Server-side user search | 2 | agy + master | feat/CM-047-user-search | merged | paged server search, no emails, provider endpoint removed; UserServiceTest 10, UserApiControllerTest 4, UserRepositoryIT 4 (regex literal), usersStore tests 3; verify green 172 unit + 16 IT; FE 35 tests | 9ec729a |
 | CM-048 | PUBLIC room discovery | 2 | agy | | todo | | |
 | CM-049 | DM unique member keys | 2 | agy | | todo | | |
 | CM-050 | Professional README rewrite | 2 | agy | | todo | | |
-| CM-051 | Dockerfile improvements | 2 | agy2 | chore/CM-051-dockerfile | a merged (non-root, layered jar, actuator healthcheck); b (JSON logs/MDC) todo after CM-010 | compose full: healthy, uid 100 | 4a68c62 |
+| CM-051 | Dockerfile improvements | 2 | agy2 (a), master (b) | chore/CM-051-dockerfile, chore/CM-051b-structured-logs | a merged (non-root, layered jar, actuator healthcheck); b (JSON logs/MDC) in-progress | compose full: healthy, uid 100 | 4a68c62 |
 | CM-052 | Major framework upgrades | 2 | agy | | todo | | |
 | CM-053 | Replace SockJS with pure WebSocket | 2 | agy | | todo | | |
 | CM-054 | TypeScript types cleanup | 2 | agy | | todo | | |
+| CM-055 | Backfill specs SPEC-001..007 from the audit drafts | 2 | agy (a: 001-004), agy2 (b: 005-007) | docs/CM-055a-specs, docs/CM-055b-specs | todo (waiting for agy/agy2 relaunch) | | |
 
 ## Notes
 - CM-011 is folded into CM-003. CM-006 already aligned the subscriber channel with the publisher ("presence-channel").
@@ -58,3 +59,4 @@ Updated by master. Status: todo | in-progress | review | changes-requested | mer
 - Follow-up from CM-030: behind Vercel rewrites, anonymous requests may all share the Vercel egress IP as remote address (owner to check Render proxy headers); authenticated requests are keyed by user.
 - Follow-up from CM-047: frontend room dialogs no longer show emails; `UserResponse` (with email) is still returned by `/auth/me` and `/auth/user` for the caller only.
 - Follow-ups from CM-022: controllers still inject `UserRepository` (MessageController, AuthApiController) - CM-040.
+- 2026-10-09 22:00 (Claude weekly reset): codex restarted without the background daemon ("Run without daemon this time"; the codex update prompt was skipped). agy/agy2 had exited and relaunching them with `--dangerously-skip-permissions` is blocked for master by the auto-mode classifier: the owner relaunches them. claude-w first reviews the merged security work (SEC-REVIEW-claude-w-REPORT.md), then CM-045. CM-055 added: the specs promised by SPEC_DRIVEN_SETUP were never written (docs/specs had only the template).
