@@ -5,6 +5,8 @@ import com.lnt.chatmee.service.RateLimitingService;
 import jakarta.servlet.FilterChain;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.http.MediaType;
 import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.mock.web.MockHttpServletResponse;
@@ -28,6 +30,31 @@ class RateLimitingFilterTest {
     @AfterEach
     void clearContext() {
         SecurityContextHolder.clearContext();
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"/actuator/health", "/actuator/health/liveness", "/api/v1/auth/status",
+            "/oauth2/authorization/google", "/login/oauth2/code/github"})
+    void filter_loginAndHealthPaths_skipRateLimit(String path) throws Exception {
+        var request = new MockHttpServletRequest("GET", path);
+        var response = new MockHttpServletResponse();
+        var chain = mock(FilterChain.class);
+
+        filter.doFilter(request, response, chain);
+
+        verifyNoInteractions(limit);
+        verify(chain).doFilter(request, response);
+        assertThat(response.getHeader("X-RateLimit-Limit")).isNull();
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"/api/v1/auth/me", "/api/v1/auth/status/extra", "/oauth2/other", "/login", "/actuator/info"})
+    void filter_otherPaths_areRateLimited(String path) throws Exception {
+        when(limit.check(anyString(), anyBoolean())).thenReturn(new RateLimitingService.Decision(true, 20, 19, 60));
+
+        filter.doFilter(new MockHttpServletRequest("GET", path), new MockHttpServletResponse(), mock(FilterChain.class));
+
+        verify(limit).check(anyString(), anyBoolean());
     }
 
     @Test
