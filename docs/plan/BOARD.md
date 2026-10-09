@@ -29,9 +29,9 @@ Updated by master. Status: todo | in-progress | review | changes-requested | mer
 | CM-030 | Rate limiting enhancements | 1 | master | fix/CM-030-rate-limit | merged (verify Render proxy IP: owner) | remote-address key (no XFF parsing) + forward-headers-strategy=native in prod, X-RateLimit-*/Retry-After, fail-open; verify green 177 unit + 16 IT | e086ed8 |
 | CM-031 | Basic frontend tests | 1 | agy | test/CM-031-frontend-tests | merged | 22 vitest tests green, lint/tsc/build OK; reviewed by master | c2f69d6 |
 | CM-040 | UserPrincipal and DTO mappers | 2 | codex | refactor/CM-040-user-principal | merged | UserPrincipal (getName = internal id), @CurrentUser resolver, no repositories/OAuth2User in controllers (ControllerArchitectureTest), response records with static from(); gate verify green 269 unit + 40 IT, service cov 98% | 73a79ef |
-| CM-041 | RoomTypePolicy strategy pattern (+ review F5: active-room membership check) | 2 | codex | refactor/CM-041-room-type-policy | review (round 2: integrate develop after CM-056) | | |
+| CM-041 | RoomTypePolicy strategy pattern (+ review F5: active-room membership check) | 2 | codex | refactor/CM-041-room-type-policy | merged (2 rounds) | Public/Private/DirectRoomPolicy + EnumMap registry (fails fast), policy create() as factory, DM add-participant 403, active-room guard for WS/history (RoomMembershipIT orphan test); gate 306 unit + 45 IT, service* cov 98% | 81bb592 |
 | CM-042 | Resource-based API/WS routes | 2 | agy | | todo | | |
-| CM-043 | Multi-instance presence | 2 | codex | | todo | | |
+| CM-043 | Multi-instance presence | 2 | codex | feat/CM-043-multi-instance-presence | in-progress | | |
 | CM-044 | Message pagination with cursor | 2 | codex | | todo | | |
 | CM-045 | Frontend STOMP refactor | 2 | claude-w | refactor/CM-045-stomp-provider | merged | one STOMP session (lib/realtime) with registry resubscribe, error queue dispatched to current handlers, capped backoff, resync merge by id, ConnectionBanner; client sends TEXT only, no chat.addUser; FE gate: 49 vitest, lint 0 errors, tsc, build OK | a014c70 |
 | CM-046 | Frontend UI state and a11y (+ resync duplicate follow-up) | 2 | claude-w | feat/CM-046-ui-states-a11y | in-progress | | |
