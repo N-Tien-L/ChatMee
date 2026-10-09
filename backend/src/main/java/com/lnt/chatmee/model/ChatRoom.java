@@ -4,6 +4,7 @@ import java.time.LocalDateTime;
 
 import org.springframework.data.annotation.CreatedDate;
 import org.springframework.data.annotation.Id;
+import org.springframework.data.mongodb.core.index.Indexed;
 import org.springframework.data.mongodb.core.mapping.Document;
 
 import lombok.AllArgsConstructor;
@@ -53,6 +54,13 @@ public class ChatRoom {
     private int memberCount;
 
     private boolean isActive;
+
+    /**
+     * Only on active DIRECT_MESSAGE rooms: the two member ids, sorted and joined with ':'. The unique sparse
+     * index allows one active DM per pair; soft delete unsets it so the pair can start a new DM later.
+     */
+    @Indexed(unique = true, sparse = true)
+    private String memberKey;
 
 
     /** Set when the room is soft-deleted (isActive = false). */

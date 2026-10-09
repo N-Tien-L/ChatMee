@@ -20,11 +20,18 @@ public record ChatRoomResponse(
     LocalDateTime updatedAt,
     int maxUsers,
     RoomSettings settings,
-    Set<String> participants
+    Set<String> participants,
+    /** DIRECT_MESSAGE rooms only: the other member, from the caller's point of view; null otherwise. */
+    UserSummaryResponse counterpart
 ) {
     public static ChatRoomResponse from(com.lnt.chatmee.model.ChatRoom room, Set<String> participants) {
+        return from(room, participants, null);
+    }
+
+    public static ChatRoomResponse from(com.lnt.chatmee.model.ChatRoom room, Set<String> participants,
+            UserSummaryResponse counterpart) {
         return new ChatRoomResponse(room.getId(), room.getName(), room.getType(), room.getDescription(),
                 room.getCreatedBy(), room.getCreatedAt(), room.getLastActivity(), room.getMaxParticipants(),
-                room.getSettings(), participants);
+                room.getSettings(), participants, counterpart);
     }
 }

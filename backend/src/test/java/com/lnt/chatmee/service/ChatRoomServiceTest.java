@@ -79,7 +79,7 @@ class ChatRoomServiceTest {
                 .createdBy("user1")
                 .build();
         when(chatRoomRepository.save(any(ChatRoom.class))).thenReturn(savedRoom);
-        when(participantService.getParticipantUserIds("room1")).thenReturn(Set.of("user1", "user2"));
+        when(participantService.getParticipantUserIds(List.of("room1"))).thenReturn(Map.of("room1", Set.of("user1", "user2")));
 
         ChatRoomResponse response = chatRoomService.createRoom(request, "user1");
 
@@ -186,7 +186,7 @@ class ChatRoomServiceTest {
         when(participantService.getParticipantUserIds(List.of("room1", "room2")))
                 .thenReturn(Map.of("room1", Set.of("user1")));
 
-        List<ChatRoomResponse> responses = chatRoomService.toResponses(List.of(first, second));
+        List<ChatRoomResponse> responses = chatRoomService.toResponses(List.of(first, second), "user1");
 
         assertThat(responses.get(0).participants()).containsExactly("user1");
         assertThat(responses.get(1).participants()).isEmpty();
@@ -611,5 +611,64 @@ class ChatRoomServiceTest {
         assertThatThrownBy(() -> chatRoomService.leaveChatRoomById("user2", "room1"))
                 .isInstanceOf(DataIntegrityViolationException.class)
                 .hasMessage("db error");
+    }
+
+    @Test
+    void toResponses_directRoom_showsOtherMemberAsCounterpart() {
+        ChatRoom dm = ChatRoom.builder().id("dm").type(ChatRoom.RoomType.DIRECT_MESSAGE).build();
+        ChatRoom group = ChatRoom.builder().id("group").type(ChatRoom.RoomType.PUBLIC).build();
+        when(participantService.getParticipantUserIds(List.of("dm", "group")))
+                .thenReturn(Map.of("dm", Set.of("user1", "user2"), "group", Set.of("user1", "user3")));
+        when(userRepository.findAllById(Set.of("user2")))
+                .thenReturn(List.of(User.builder().id("user2").name("Bob").avatarUrl("b.png").email("bob@x").build()));
+
+        List<ChatRoomResponse> responses = chatRoomService.toResponses(List.of(dm, group), "user1");
+
+        assertThat(responses.get(0).counterpart().id()).isEqualTo("user2");
+        assertThat(responses.get(0).counterpart().name()).isEqualTo("Bob");
+        assertThat(responses.get(1).counterpart()).isNull();
+    }
+
+    @Test
+    void findExistingDirectRoom_activePair_returnsThatRoomWithOrderIndependentKey() {
+        CreateChatRoomRequest request = new CreateChatRoomRequest();
+        request.setRoomType(ChatRoom.RoomType.DIRECT_MESSAGE);
+        request.setParticipantId("user1");
+        ChatRoom existing = ChatRoom.builder().id("dm").type(ChatRoom.RoomType.DIRECT_MESSAGE).memberKey("user1:user2").build();
+        when(chatRoomRepository.findByMemberKeyAndIsActiveTrue("user1:user2")).thenReturn(Optional.of(existing));
+        when(participantService.getParticipantUserIds(List.of("dm"))).thenReturn(Map.of("dm", Set.of("user1", "user2")));
+
+        Optional<ChatRoomResponse> found = chatRoomService.findExistingDirectRoom(request, "user2");
+
+        assertThat(found).map(ChatRoomResponse::id).contains("dm");
+    }
+
+    @Test
+    void findExistingDirectRoom_groupRoom_neverLooksUp() {
+        CreateChatRoomRequest request = new CreateChatRoomRequest();
+        request.setRoomType(ChatRoom.RoomType.PUBLIC);
+        request.setRoomName("General");
+
+        assertThat(chatRoomService.findExistingDirectRoom(request, "user1")).isEmpty();
+        verify(chatRoomRepository, never()).findByMemberKeyAndIsActiveTrue(anyString());
+    }
+
+    @Test
+    void createRoom_concurrentDuplicateDirectRoom_returnsTheRoomThatWon() {
+        when(userRepository.findById("user1")).thenReturn(Optional.of(User.builder().id("user1").build()));
+        when(userRepository.findById("user2")).thenReturn(Optional.of(User.builder().id("user2").build()));
+        CreateChatRoomRequest request = new CreateChatRoomRequest();
+        request.setRoomType(ChatRoom.RoomType.DIRECT_MESSAGE);
+        request.setParticipantId("user2");
+        when(chatRoomRepository.save(any(ChatRoom.class)))
+                .thenThrow(new org.springframework.dao.DuplicateKeyException("memberKey"));
+        ChatRoom winner = ChatRoom.builder().id("dm").type(ChatRoom.RoomType.DIRECT_MESSAGE).memberKey("user1:user2").build();
+        when(chatRoomRepository.findByMemberKeyAndIsActiveTrue("user1:user2")).thenReturn(Optional.of(winner));
+        when(participantService.getParticipantUserIds(List.of("dm"))).thenReturn(Map.of("dm", Set.of("user1", "user2")));
+
+        ChatRoomResponse response = chatRoomService.createRoom(request, "user1");
+
+        assertThat(response.id()).isEqualTo("dm");
+        verify(participantService, never()).createParticipant(anyString(), anyString(), any());
     }
 }

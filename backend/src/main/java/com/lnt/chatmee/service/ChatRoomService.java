@@ -1,5 +1,10 @@
 package com.lnt.chatmee.service;
 
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.Optional;
+import org.springframework.dao.DuplicateKeyException;
+import com.lnt.chatmee.dto.response.UserSummaryResponse;
 import java.time.Instant;
 import java.time.LocalDateTime;
 import java.util.List;
@@ -54,31 +59,67 @@ public class ChatRoomService {
             .orElseThrow(() -> new UserNotFoundException("Authenticated user not found"));
 
         RoomTypePolicy policy = policies.get(request.getRoomType());
-        ChatRoom room = chatRoomRepository.save(policy.create(request, authenticatedUser.getId(),
-            id -> userRepository.findById(id).isPresent()));
+        ChatRoom candidate = policy.create(request, authenticatedUser.getId(),
+            id -> userRepository.findById(id).isPresent());
+        ChatRoom room;
+        try {
+            room = chatRoomRepository.save(candidate);
+        } catch (DuplicateKeyException ex) {
+            // A concurrent request created the same DM first: return that room instead of a duplicate.
+            return findActiveDirectRoom(candidate.getMemberKey(), authenticatedUser.getId()).orElseThrow(() -> ex);
+        }
         policy.initialMembers(request, authenticatedUser.getId()).forEach((id, role) ->
             participantService.createParticipant(room.getId(), id, role));
         logger.info("Created {} room: {} with creator: {}", room.getType(), room.getId(), authenticatedUser.getId());
 
-        return toResponse(room);
+        return toResponse(room, authenticatedUser.getId());
     }
 
-    /** Maps a room to its API response, reading the member ids from the participants collection. */
-    public ChatRoomResponse toResponse(ChatRoom room) {
-        return toResponse(room, participantService.getParticipantUserIds(room.getId()));
+    /** The caller's active DM with the request's participant, if one exists (one DM per pair, SPEC-003). */
+    public Optional<ChatRoomResponse> findExistingDirectRoom(CreateChatRoomRequest request, String userId) {
+        if (request.getRoomType() == null) {
+            return Optional.empty();
+        }
+        return findActiveDirectRoom(policies.get(request.getRoomType()).memberKey(request, userId), userId);
     }
 
-    /** Maps several rooms with a single participants query. */
-    public List<ChatRoomResponse> toResponses(List<ChatRoom> rooms) {
+    private Optional<ChatRoomResponse> findActiveDirectRoom(String memberKey, String userId) {
+        if (memberKey == null) {
+            return Optional.empty();
+        }
+        return chatRoomRepository.findByMemberKeyAndIsActiveTrue(memberKey).map(room -> toResponse(room, userId));
+    }
+
+    /** Maps a room to the caller's view of it, reading the member ids from the participants collection. */
+    public ChatRoomResponse toResponse(ChatRoom room, String callerId) {
+        return toResponses(List.of(room), callerId).get(0);
+    }
+
+    /**
+     * Maps several rooms with one participants query and one user query; DM rooms carry the other member
+     * as {@code counterpart} so the client needs no per-room lookup.
+     */
+    public List<ChatRoomResponse> toResponses(List<ChatRoom> rooms, String callerId) {
         Map<String, Set<String>> members = participantService.getParticipantUserIds(
             rooms.stream().map(ChatRoom::getId).toList());
+        Map<String, String> counterpartIds = new HashMap<>();
+        for (ChatRoom room : rooms) {
+            if (room.getType() != null && policies.get(room.getType()).showsCounterpart()) {
+                members.getOrDefault(room.getId(), Set.of()).stream()
+                    .filter(id -> !id.equals(callerId))
+                    .findFirst()
+                    .ifPresent(id -> counterpartIds.put(room.getId(), id));
+            }
+        }
+        Map<String, UserSummaryResponse> summaries = new HashMap<>();
+        if (!counterpartIds.isEmpty()) {
+            userRepository.findAllById(new HashSet<>(counterpartIds.values())).forEach(user ->
+                summaries.put(user.getId(), new UserSummaryResponse(user.getId(), user.getName(), user.getAvatarUrl())));
+        }
         return rooms.stream()
-            .map(room -> toResponse(room, members.getOrDefault(room.getId(), Set.of())))
+            .map(room -> ChatRoomResponse.from(room, members.getOrDefault(room.getId(), Set.of()),
+                summaries.get(counterpartIds.get(room.getId()))))
             .toList();
-    }
-
-    private static ChatRoomResponse toResponse(ChatRoom room, Set<String> participantIds) {
-        return ChatRoomResponse.from(room, participantIds);
     }
 
     public ChatRoom findById(String roomId) {
