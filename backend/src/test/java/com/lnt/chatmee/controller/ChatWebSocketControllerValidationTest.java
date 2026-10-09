@@ -75,8 +75,9 @@ class ChatWebSocketControllerValidationTest {
         when(users.findById("test-user")).thenReturn(Optional.of(
                 User.builder().id("test-user").name("Test User").build()));
         when(participants.isUserParticipant("test-room", "test-user")).thenReturn(true);
+        when(messages.persistMessage(any())).thenAnswer(invocation -> invocation.getArgument(0));
         dispatch("/app/chat.sendMessage", 5000);
-        verify(messages).persistMessageAsync(argThat(message -> message.getContent().length() == 5000));
+        verify(messages).persistMessage(argThat(message -> message.getContent().length() == 5000));
         verify(messaging).convertAndSend(eq("/topic/public/test-room"), any(ChatMessageResponse.class));
         verifyNoMoreInteractions(messaging);
     }

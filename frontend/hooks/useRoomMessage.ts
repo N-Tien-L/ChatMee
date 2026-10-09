@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useReducer } from "react";
+import { useCallback, useEffect, useReducer, useRef } from "react";
 import { StompError, useWebSocket } from "./useWebSocket";
 import { messageApi } from "@/lib/api/messageApi";
 import { useAuthStore } from "@/lib/stores/authStore";
@@ -22,6 +22,20 @@ function isApiError(err: unknown): err is { response?: { data?: { detail?: strin
 export const useRoomMessages = (roomId: string) => {
     const [state, dispatch] = useReducer(messageReducer, initialState)
     const { user } = useAuthStore();
+    const pendingTimers = useRef(new Map<string, ReturnType<typeof setTimeout>>());
+    const clearPendingTimer = useCallback((tempId: string) => {
+        const timer = pendingTimers.current.get(tempId);
+        if (timer !== undefined) clearTimeout(timer);
+        pendingTimers.current.delete(tempId);
+    }, []);
+
+    useEffect(() => {
+        const timers = pendingTimers.current;
+        return () => {
+            timers.forEach(clearTimeout);
+            timers.clear();
+        };
+    }, [roomId]);
     const {
         connected,
         connecting,
@@ -76,6 +90,7 @@ export const useRoomMessages = (roomId: string) => {
         const handleNewMessage = (message: Message) => {
             // Check if this message confirms one we sent optimistically
             if (message.tempId && message.senderId === user?.id) {
+                clearPendingTimer(message.tempId);
                 dispatch({ type: "CONFIRM_SENT_MESSAGE", payload: message });
             } else {
                 dispatch({ type: "RECEIVE_WEBSOCKET_MESSAGE", payload: { message, userId: user?.id } });
@@ -87,6 +102,7 @@ export const useRoomMessages = (roomId: string) => {
         const handleError = (error: StompError) => {
             console.error("Message delivery failed:", error);
             if (error.tempId) {
+                clearPendingTimer(error.tempId);
                 dispatch({ type: "FAIL_SENT_MESSAGE", payload: { tempId: error.tempId, error: error.message } });
             }
         };
@@ -98,8 +114,11 @@ export const useRoomMessages = (roomId: string) => {
         }
 
         subscribeRoom(roomId, handleNewMessage);
-        return () => unsubscribe(`/topic/public/${roomId}`);
-    }, [roomId, connected, subscribeRoom, unsubscribe, user?.id]);
+        return () => {
+            unsubscribe(`/topic/public/${roomId}`);
+            unsubscribe("/user/queue/errors");
+        };
+    }, [roomId, connected, subscribeRoom, unsubscribe, user?.id, joinRoom, subscribeErrors, clearPendingTimer]);
 
     // Action for sending a message
     const sendMessage = useCallback(async (content: string) => {
@@ -125,13 +144,19 @@ export const useRoomMessages = (roomId: string) => {
 
         dispatch({ type: "ADD_OPTIMISTIC_MESSAGE", payload: optimisticMessage });
 
+        pendingTimers.current.set(tempId, setTimeout(() => {
+            pendingTimers.current.delete(tempId);
+            dispatch({ type: "FAIL_SENT_MESSAGE", payload: { tempId, error: "Message confirmation timed out" } });
+        }, 10_000));
+
         try {
             sendWebSocketMessage(roomId, content.trim(), tempId);
         } catch (err) {
+            clearPendingTimer(tempId);
             console.error("Send message failed:", err);
             dispatch({ type: "FAIL_SENT_MESSAGE", payload: { tempId, error: "Failed to send" } });
         }
-    }, [connected, roomId, user, sendWebSocketMessage]);
+    }, [connected, roomId, user, sendWebSocketMessage, clearPendingTimer]);
 
     return {
         ...state,

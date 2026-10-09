@@ -4,7 +4,6 @@ import java.util.List;
 import java.util.stream.Collectors;
 
 import org.springframework.dao.DataAccessException;
-import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 
 import com.lnt.chatmee.dto.response.ChatMessageResponse;
@@ -60,23 +59,19 @@ public class MessageService {
             .senderName(senderName)
             .content(message.getContent())
             .type(message.getType())
-            .createdAt(message.getCreatedAt().toString())
-            .updatedAt(message.getUpdatedAt().toString())
+            .createdAt(message.getCreatedAt())
+            .updatedAt(message.getUpdatedAt())
             .isUpdated(message.isUpdated())
             .isDeleted(message.isDeleted())
             .build();
     }
 
-    /**
-     * Asynchronously persist a message to the database.
-     * This method runs on a separate thread pool to avoid blocking the WebSocket message broker.
-     */
-    @Async("messageIOExecutor")
-    public void persistMessageAsync(Message message) {
+    /** Persist synchronously; callers may broadcast only the returned saved message. */
+    public Message persistMessage(Message message) {
         try {
-            messageRepository.save(message);
+            return messageRepository.save(message);
         } catch (DataAccessException ex) {
-            org.slf4j.LoggerFactory.getLogger(MessageService.class).error("Asynchronous message persistence failed", ex);
+            throw new DatabaseOperationException("Failed to save message", ex);
         }
     }
 }

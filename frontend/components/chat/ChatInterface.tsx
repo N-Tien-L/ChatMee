@@ -164,7 +164,7 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
         value={newMessage}
         onChange={handleInputChange}
         onSubmit={handleSendMessage}
-        disabled={!newMessage.trim() || !connected || sending}
+        disabled={!newMessage.trim() || !connected}
         sending={sending}
         inputRef={inputRef}
       />

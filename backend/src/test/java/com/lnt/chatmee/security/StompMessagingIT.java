@@ -113,7 +113,16 @@ class StompMessagingIT {
         assertThat(response.path("chatRoomId").asText()).isEqualTo(roomId);
         assertThat(response.path("tempId").asText()).isEqualTo(tempId);
         assertThat(response.path("content").asText()).isEqualTo("Integration message");
-        Message persisted = awaitMessage(response.path("id").asText());
+        assertThat(response.path("id").asText()).isNotBlank();
+        assertThat(response.path("createdAt").asText()).endsWith("Z");
+        java.time.Instant.parse(response.path("createdAt").asText());
+        assertThat(response.has("isUpdated")).isTrue();
+        assertThat(response.has("isDeleted")).isTrue();
+        Message persisted = mongo.findById(response.path("id").asText(), Message.class);
+        assertThat(persisted).isNotNull();
+        // BSON dates retain milliseconds, while the wire Instant can retain nanoseconds.
+        assertThat(persisted.getCreatedAt().toEpochMilli()).isEqualTo(
+                java.time.Instant.parse(response.path("createdAt").asText()).toEpochMilli());
         assertThat(persisted.getSenderId()).isEqualTo(member.getId());
         assertThat(persisted.getChatRoomId()).isEqualTo(roomId);
         assertThat(persisted.getContent()).isEqualTo("Integration message");
@@ -237,16 +246,6 @@ class StompMessagingIT {
         String value = queue.poll(10, TimeUnit.SECONDS);
         assertThat(value).as("Expected STOMP payload within ten seconds").isNotNull();
         return value;
-    }
-
-    private Message awaitMessage(String id) throws Exception {
-        long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(10);
-        while (System.nanoTime() < deadline) {
-            Message message = mongo.findById(id, Message.class);
-            if (message != null) return message;
-            TimeUnit.MILLISECONDS.sleep(50);
-        }
-        throw new AssertionError("Broadcast message was not persisted within ten seconds");
     }
 
     private static class ProtocolEvents extends StompSessionHandlerAdapter {

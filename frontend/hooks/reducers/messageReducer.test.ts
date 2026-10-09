@@ -1,4 +1,8 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { createElement, createRef } from 'react';
+import MessageList from '@/components/chat/MessageList';
+import { act, render, renderHook } from '@testing-library/react';
+import { useRoomMessages } from '../useRoomMessage';
 import { messageReducer, initialState, MessageState, MessageAction } from './messageReducer';
 import { Message, MessageResponse } from '@/lib/types';
 import { MessageType } from '@/lib/types/entities/chat/enums';
@@ -53,13 +57,13 @@ describe('messageReducer', () => {
         expect(nextState.hasMoreMessages).toBe(false);
     });
 
-    it('ADD_OPTIMISTIC_MESSAGE adds message and sets sending to true', () => {
+    it('ADD_OPTIMISTIC_MESSAGE adds message without blocking another send', () => {
         const msg: Message = { ...baseMessage, id: 'tmp1', isOwn: true, status: 'sending', isOptimistic: true, tempId: 'tmp1' };
         const nextState = messageReducer(initialState, {
             type: 'ADD_OPTIMISTIC_MESSAGE',
             payload: msg
         });
-        expect(nextState.sending).toBe(true);
+        expect(nextState.sending).toBe(false);
         expect(nextState.messages).toHaveLength(1);
         expect(nextState.messages[0]).toEqual(msg);
     });
@@ -125,5 +129,116 @@ describe('messageReducer', () => {
     it('default case returns current state', () => {
         const nextState = messageReducer(initialState, { type: 'UNKNOWN_ACTION' } as unknown as MessageAction);
         expect(nextState).toBe(initialState);
+    });
+});
+
+
+const transport = vi.hoisted(() => ({
+    connected: true, connecting: false, error: null,
+    sendMessage: vi.fn(), joinRoom: vi.fn(), unsubscribe: vi.fn(),
+    subscribeRoom: vi.fn(), subscribeErrors: vi.fn(),
+}));
+vi.mock('../useWebSocket', () => ({ useWebSocket: () => transport }));
+vi.mock('@/lib/stores/authStore', () => ({
+    useAuthStore: () => ({ user: { id: 'u1', name: 'Alice' } }),
+}));
+vi.mock('@/lib/api/messageApi', () => ({
+    messageApi: { get50RecentMessages: vi.fn().mockResolvedValue({ success: true, data: [] }) },
+}));
+
+describe('useRoomMessages delivery timeout', () => {
+    let sequence = 0;
+    beforeEach(() => {
+        vi.useFakeTimers();
+        vi.clearAllMocks();
+        transport.sendMessage.mockReset();
+    });
+    afterEach(() => { vi.useRealTimers(); });
+
+    async function mountRoom() {
+        const roomId = `timeout-room-${++sequence}`;
+        const hook = renderHook(({ room }) => useRoomMessages(room), { initialProps: { room: roomId } });
+        await act(async () => {});
+        return { ...hook, roomId };
+    }
+
+    it('fails only after 10 seconds and allows another send while pending', async () => {
+        const { result } = await mountRoom();
+        act(() => { void result.current.sendMessage('first'); });
+        expect(result.current.sending).toBe(false);
+        expect(result.current.messages[0].status).toBe('sending');
+        act(() => { void result.current.sendMessage('second'); });
+        expect(transport.sendMessage).toHaveBeenCalledTimes(2);
+        act(() => { vi.advanceTimersByTime(9999); });
+        expect(result.current.messages.every(message => message.status === 'sending')).toBe(true);
+        act(() => { vi.advanceTimersByTime(1); });
+        expect(result.current.messages.every(message => message.status === 'failed')).toBe(true);
+        expect(vi.getTimerCount()).toBe(0);
+    });
+
+    it('clears the timer on confirmation and replaces a late failed message', async () => {
+        const { result, roomId } = await mountRoom();
+        act(() => { void result.current.sendMessage('first'); });
+        const pending = result.current.messages[0];
+        const receive = transport.subscribeRoom.mock.calls.find(call => call[0] === roomId)![1];
+        act(() => { receive({ ...pending, id: 'saved', isOptimistic: undefined }); });
+        expect(vi.getTimerCount()).toBe(0);
+        act(() => { vi.advanceTimersByTime(10000); });
+        expect(result.current.messages[0].status).toBe('sent');
+        expect(result.current.messages[0].isOptimistic).toBe(false);
+        act(() => { void result.current.sendMessage('late'); });
+        const late = result.current.messages[1];
+        act(() => { vi.advanceTimersByTime(10000); });
+        expect(result.current.messages[1].status).toBe('failed');
+        act(() => { receive({ ...late, id: 'saved-late' }); });
+        expect(result.current.messages[1].status).toBe('sent');
+    });
+
+    it('clears timers on server error and synchronous send failure', async () => {
+        const { result } = await mountRoom();
+        act(() => { void result.current.sendMessage('first'); });
+        const pending = result.current.messages[0];
+        const onError = transport.subscribeErrors.mock.calls[0][0];
+        act(() => { onError({ tempId: pending.tempId, message: 'Save failed' }); });
+        expect(result.current.messages[0].status).toBe('failed');
+        expect(vi.getTimerCount()).toBe(0);
+        transport.sendMessage.mockImplementationOnce(() => { throw new Error('Disconnected'); });
+        act(() => { void result.current.sendMessage('second'); });
+        expect(result.current.messages[1].status).toBe('failed');
+        expect(vi.getTimerCount()).toBe(0);
+    });
+
+    it('clears timers and error subscriptions on room change and unmount', async () => {
+        const { result, rerender, unmount } = await mountRoom();
+        act(() => { void result.current.sendMessage('old room'); });
+        expect(vi.getTimerCount()).toBe(1);
+        await act(async () => { rerender({ room: `timeout-room-${++sequence}` }); });
+        expect(vi.getTimerCount()).toBe(0);
+        expect(transport.unsubscribe).toHaveBeenCalledWith('/user/queue/errors');
+        act(() => { void result.current.sendMessage('new room'); });
+        expect(vi.getTimerCount()).toBe(1);
+        unmount();
+        expect(vi.getTimerCount()).toBe(0);
+    });
+});
+
+
+describe('MessageList UTC display', () => {
+    it('parses ISO UTC timestamps before local formatting and exposes delivery failures', () => {
+        const previousScroll = HTMLElement.prototype.scrollIntoView;
+        HTMLElement.prototype.scrollIntoView = vi.fn();
+        const formatTime = vi.fn((date: Date) => date.toLocaleTimeString('en-GB', {
+            hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Bangkok',
+        }));
+        const view = render(createElement(MessageList, {
+            messages: [{ ...baseMessage, id: 'failed', createdAt: '2026-10-08T12:34:56Z',
+                isOwn: true, status: 'failed', errorMessage: 'Message confirmation timed out' }],
+            onlineUsers: new Set<string>(), formatTime, formatDate: () => 'Today',
+            messagesEndRef: createRef<HTMLDivElement>(),
+        }));
+        expect(view.getByText('19:34')).toBeInTheDocument();
+        expect(formatTime.mock.calls[0][0].toISOString()).toBe('2026-10-08T12:34:56.000Z');
+        expect(view.getByRole('img', { name: 'Failed to send' })).toHaveAttribute('title', 'Message confirmation timed out');
+        HTMLElement.prototype.scrollIntoView = previousScroll;
     });
 });
