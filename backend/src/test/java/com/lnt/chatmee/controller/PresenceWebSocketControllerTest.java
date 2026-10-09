@@ -31,7 +31,7 @@ class PresenceWebSocketControllerTest {
 
     @BeforeEach
     void setUp() {
-        context.getBeanFactory().registerSingleton("presenceController", new PresenceWebSocketController(messaging, presence));
+        context.getBeanFactory().registerSingleton("presenceController", new PresenceWebSocketController(presence));
         context.refresh();
         handler = new SimpAnnotationMethodMessageHandler(
                 new ExecutorSubscribableChannel(), new ExecutorSubscribableChannel(), messaging);
@@ -45,29 +45,26 @@ class PresenceWebSocketControllerTest {
     void tearDown() { context.close(); }
 
     @Test
-    void handlePresenceEvent_forgedOnlineIdentity_updatesAndBroadcastsPrincipal() {
+    void handlePresenceEvent_forgedOnlineIdentity_onlyRefreshesOwnSession() {
         dispatch(() -> "internal-user", "{\"userId\":\"victim\",\"online\":true}");
-        verify(presence).userConnected("internal-user");
-        verify(messaging).convertAndSend(eq("/topic/presence"), argThat((PresenceMessage message) ->
-                "internal-user".equals(message.getUserId()) && message.isOnline()));
-        verifyNoMoreInteractions(presence, messaging);
+        verify(presence).heartbeat("internal-user", "presence-session");
+        verifyNoMoreInteractions(presence);
+        verifyNoInteractions(messaging);
     }
 
     @Test
-    void handlePresenceEvent_forgedOfflineIdentity_updatesAndBroadcastsPrincipal() {
+    void handlePresenceEvent_forgedOfflineIdentity_cannotSetOffline() {
         dispatch(() -> "internal-user", "{\"userId\":\"victim\",\"online\":false}");
-        verify(presence).userDisconnected("internal-user");
-        verify(messaging).convertAndSend(eq("/topic/presence"), argThat((PresenceMessage message) ->
-                "internal-user".equals(message.getUserId()) && !message.isOnline()));
-        verifyNoMoreInteractions(presence, messaging);
+        verify(presence).heartbeat("internal-user", "presence-session");
+        verifyNoMoreInteractions(presence);
+        verifyNoInteractions(messaging);
     }
 
     @Test
-    void handlePresenceEvent_identityOmitted_broadcastsSameMessageShape() {
+    void handlePresenceEvent_identityOmitted_refreshesOwnSession() {
         dispatch(() -> "internal-user", "{\"online\":true}");
-        verify(presence).userConnected("internal-user");
-        verify(messaging).convertAndSend(eq("/topic/presence"), argThat((PresenceMessage message) ->
-                "internal-user".equals(message.getUserId()) && message.isOnline()));
+        verify(presence).heartbeat("internal-user", "presence-session");
+        verifyNoInteractions(messaging);
     }
 
     @Test

@@ -33,7 +33,7 @@ class RedisPresenceSubscriberTest {
     private RedisPresenceSubscriber subscriber;
 
     @Test
-    void onMessage_validOnlineMessage_updatesPresenceAndBroadcasts() throws Exception {
+    void onMessage_validOnlineMessage_forwardsWithoutMutatingRegistry() throws Exception {
         Message message = mock(Message.class);
         when(message.getBody()).thenReturn("{\"userId\":\"user1\",\"online\":true}".getBytes());
 
@@ -42,12 +42,12 @@ class RedisPresenceSubscriberTest {
 
         subscriber.onMessage(message, new byte[0]);
 
-        verify(presenceService).userConnected("user1");
+        verifyNoInteractions(presenceService);
         verify(simpMessagingTemplate).convertAndSend("/topic/presence", presenceUpdate);
     }
 
     @Test
-    void onMessage_validOfflineMessage_updatesPresenceAndBroadcasts() throws Exception {
+    void onMessage_validOfflineMessage_forwardsWithoutMutatingRegistry() throws Exception {
         Message message = mock(Message.class);
         when(message.getBody()).thenReturn("{\"userId\":\"user2\",\"online\":false}".getBytes());
 
@@ -56,12 +56,12 @@ class RedisPresenceSubscriberTest {
 
         subscriber.onMessage(message, new byte[0]);
 
-        verify(presenceService).userDisconnected("user2");
+        verifyNoInteractions(presenceService);
         verify(simpMessagingTemplate).convertAndSend("/topic/presence", presenceUpdate);
     }
 
     @Test
-    void onMessage_nullOnlineField_defaultsToOffline() throws Exception {
+    void onMessage_nullOnlineField_forwardsWithoutMutatingRegistry() throws Exception {
         Message message = mock(Message.class);
         when(message.getBody()).thenReturn("{\"userId\":\"user3\"}".getBytes());
 
@@ -70,7 +70,7 @@ class RedisPresenceSubscriberTest {
 
         subscriber.onMessage(message, new byte[0]);
 
-        verify(presenceService).userDisconnected("user3");
+        verifyNoInteractions(presenceService);
         verify(simpMessagingTemplate).convertAndSend("/topic/presence", presenceUpdate);
     }
 
