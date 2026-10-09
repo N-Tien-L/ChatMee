@@ -1,5 +1,7 @@
 package com.lnt.chatmee.controller;
 
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.data.domain.Page;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -18,12 +20,14 @@ import com.lnt.chatmee.service.UserService;
 import lombok.RequiredArgsConstructor;
 
 @RestController
+@Tag(name = "Users", description = "User search without private fields")
 @RequestMapping("/api/v1/users")
 @RequiredArgsConstructor
 public class UserApiController {
 
     private final UserService userService;
 
+    @Operation(summary = "Search users by name (paged, excludes the caller, no emails)")
     @GetMapping
     public ResponseEntity<ApiResponse<PagedResponse<UserSummaryResponse>>> searchUsers(
             @RequestParam(defaultValue = "") String query,
@@ -44,6 +48,7 @@ public class UserApiController {
         return ResponseEntity.ok(ApiResponse.success("Users retrieved successfully", pageData));
     }
 
+    @Operation(summary = "Get a user summary by id")
     @GetMapping("/{userId}")
     public ResponseEntity<ApiResponse<UserSummaryResponse>> getUserById(@PathVariable String userId) {
         UserSummaryResponse userResponse = userService.getUserSummary(userId);

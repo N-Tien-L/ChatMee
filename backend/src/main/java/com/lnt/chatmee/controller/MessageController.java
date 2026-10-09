@@ -1,5 +1,7 @@
 package com.lnt.chatmee.controller;
 
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import java.util.List;
 
 import org.springframework.http.ResponseEntity;
@@ -21,6 +23,7 @@ import com.lnt.chatmee.util.OAuthUtil;
 import lombok.RequiredArgsConstructor;
 
 @RestController
+@Tag(name = "Messages", description = "Message history")
 @RequestMapping("/api/v1/messages")
 @RequiredArgsConstructor
 public class MessageController {
@@ -30,6 +33,7 @@ public class MessageController {
     private final OAuthUtil oAuthUtil;
     private final UserRepository userRepository;
 
+    @Operation(summary = "Get recent messages of a room the caller belongs to")
     @GetMapping("/room/{roomId}")
     public ResponseEntity<ApiResponse<List<ChatMessageResponse>>> getRecentMessages(
             @PathVariable String roomId,
