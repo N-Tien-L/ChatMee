@@ -5,7 +5,6 @@ import static org.springframework.security.test.web.servlet.request.SecurityMock
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-import java.util.HashSet;
 import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -48,12 +47,13 @@ class ChatRoomControllerAuthorizationTest {
         when(oauth.getProviderId(any(), eq("google"))).thenReturn("subject");
         when(users.findByProviderAndProviderId("google", "subject"))
                 .thenReturn(Optional.of(User.builder().id("actor").build()));
+        lenient().when(rooms.reserveSeat(any(), any())).thenReturn(1L);
     }
 
     @Test
     void joinRoom_privateRoom_returnsForbidden() throws Exception {
-        when(rooms.findById("room")).thenReturn(Optional.of(ChatRoom.builder()
-                .id("room").type(RoomType.PRIVATE).participants(new HashSet<>()).build()));
+        when(rooms.findByIdAndIsActiveTrue("room")).thenReturn(Optional.of(ChatRoom.builder()
+                .id("room").type(RoomType.PRIVATE).isActive(true).build()));
         mvc.perform(post("/api/v1/chatrooms/room/join").with(oauth2Login()).with(csrf()))
                 .andExpect(status().isForbidden());
         verify(participants, never()).save(any());
@@ -63,8 +63,8 @@ class ChatRoomControllerAuthorizationTest {
     @Test
     void addParticipant_adminAssigningAdmin_returnsForbidden() throws Exception {
         actor(Role.ADMIN);
-        when(rooms.findById("room")).thenReturn(Optional.of(ChatRoom.builder()
-                .id("room").type(RoomType.PRIVATE).participants(new HashSet<>()).build()));
+        when(rooms.findByIdAndIsActiveTrue("room")).thenReturn(Optional.of(ChatRoom.builder()
+                .id("room").type(RoomType.PRIVATE).isActive(true).build()));
         when(users.findById("target")).thenReturn(Optional.of(User.builder().id("target").build()));
         add("ADMIN", 403);
         verify(participants, never()).save(any());
@@ -86,8 +86,8 @@ class ChatRoomControllerAuthorizationTest {
 
     @Test
     void joinRoom_publicRoom_returnsOk() throws Exception {
-        when(rooms.findById("room")).thenReturn(Optional.of(ChatRoom.builder()
-                .id("room").type(RoomType.PUBLIC).participants(new HashSet<>()).build()));
+        when(rooms.findByIdAndIsActiveTrue("room")).thenReturn(Optional.of(ChatRoom.builder()
+                .id("room").type(RoomType.PUBLIC).isActive(true).build()));
         when(users.findById("actor")).thenReturn(Optional.of(User.builder().id("actor").build()));
         mvc.perform(post("/api/v1/chatrooms/room/join").with(oauth2Login()).with(csrf()))
                 .andExpect(status().isOk());
@@ -96,8 +96,8 @@ class ChatRoomControllerAuthorizationTest {
 
     @Test
     void joinRoom_directMessageRoom_returnsForbidden() throws Exception {
-        when(rooms.findById("room")).thenReturn(Optional.of(ChatRoom.builder()
-                .id("room").type(RoomType.DIRECT_MESSAGE).participants(new HashSet<>()).build()));
+        when(rooms.findByIdAndIsActiveTrue("room")).thenReturn(Optional.of(ChatRoom.builder()
+                .id("room").type(RoomType.DIRECT_MESSAGE).isActive(true).build()));
         mvc.perform(post("/api/v1/chatrooms/room/join").with(oauth2Login()).with(csrf()))
                 .andExpect(status().isForbidden());
         verify(participants, never()).save(any());
@@ -107,8 +107,8 @@ class ChatRoomControllerAuthorizationTest {
     @Test
     void addParticipant_ownerAssigningAdmin_returnsOk() throws Exception {
         actor(Role.OWNER);
-        when(rooms.findById("room")).thenReturn(Optional.of(ChatRoom.builder()
-                .id("room").type(RoomType.PRIVATE).participants(new HashSet<>()).build()));
+        when(rooms.findByIdAndIsActiveTrue("room")).thenReturn(Optional.of(ChatRoom.builder()
+                .id("room").type(RoomType.PRIVATE).isActive(true).build()));
         when(users.findById("target")).thenReturn(Optional.of(User.builder().id("target").build()));
         add("ADMIN", 200);
         verify(participants).save(argThat(p -> p.getUserId().equals("target") && p.getRole() == Role.ADMIN));

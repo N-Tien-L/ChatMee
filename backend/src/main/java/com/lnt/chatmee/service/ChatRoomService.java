@@ -1,17 +1,19 @@
 package com.lnt.chatmee.service;
 
+import java.time.Instant;
 import java.time.LocalDateTime;
-import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
-import java.util.UUID;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.stereotype.Service;
 
 import com.lnt.chatmee.dto.request.CreateChatRoomRequest;
 import com.lnt.chatmee.dto.request.UpdateChatRoomRequest;
+import com.lnt.chatmee.dto.response.ChatMessageResponse;
 import com.lnt.chatmee.dto.response.ChatRoomResponse;
 import com.lnt.chatmee.exception.ChatRoomNotFoundException;
 import com.lnt.chatmee.exception.ForbiddenActionException;
@@ -19,27 +21,32 @@ import com.lnt.chatmee.exception.InvalidRequestException;
 import com.lnt.chatmee.exception.UnauthorizedRoomActionException;
 import com.lnt.chatmee.exception.UserNotFoundException;
 import com.lnt.chatmee.model.ChatRoom;
+import com.lnt.chatmee.model.Message;
 import com.lnt.chatmee.model.Participant;
 import com.lnt.chatmee.model.User;
 import com.lnt.chatmee.model.ChatRoom.RoomType;
 import com.lnt.chatmee.repository.ChatRoomRepository;
-import com.lnt.chatmee.repository.ParticipantRepository;
 import com.lnt.chatmee.repository.UserRepository;
 import com.lnt.chatmee.util.ValidationUtil;
 
-import org.springframework.transaction.annotation.Transactional;
 import lombok.RequiredArgsConstructor;
 
+/**
+ * Room use cases. Membership lives only in the participants collection (ADR-0005); writes that touch the
+ * member counter go through the atomic updates in {@link ChatRoomRepository}, never through a full save.
+ */
 @Service
 @RequiredArgsConstructor
 public class ChatRoomService {
+
+    static final String ROOM_DELETED_MESSAGE = "This room has been deleted";
 
     private static final Logger logger = LoggerFactory.getLogger(ChatRoomService.class);
 
     private final ChatRoomRepository chatRoomRepository;
     private final UserRepository userRepository;
     private final ParticipantService participantService;
-    private final ParticipantRepository participantRepository;
+    private final SimpMessagingTemplate messagingTemplate;
 
     public ChatRoomResponse createRoom(CreateChatRoomRequest request, String provider, String providerId) {
 
@@ -59,6 +66,24 @@ public class ChatRoomService {
                 throw new InvalidRequestException("Invalid room type: " + request.getRoomType());
         }
 
+        return toResponse(room);
+    }
+
+    /** Maps a room to its API response, reading the member ids from the participants collection. */
+    public ChatRoomResponse toResponse(ChatRoom room) {
+        return toResponse(room, participantService.getParticipantUserIds(room.getId()));
+    }
+
+    /** Maps several rooms with a single participants query. */
+    public List<ChatRoomResponse> toResponses(List<ChatRoom> rooms) {
+        Map<String, Set<String>> members = participantService.getParticipantUserIds(
+            rooms.stream().map(ChatRoom::getId).toList());
+        return rooms.stream()
+            .map(room -> toResponse(room, members.getOrDefault(room.getId(), Set.of())))
+            .toList();
+    }
+
+    private static ChatRoomResponse toResponse(ChatRoom room, Set<String> participantIds) {
         return ChatRoomResponse.builder()
             .id(room.getId())
             .roomType(room.getType())
@@ -69,7 +94,7 @@ public class ChatRoomService {
             .description(room.getDescription())
             .maxUsers(room.getMaxParticipants())
             .settings(room.getSettings())
-            .participants(room.getParticipants())
+            .participants(participantIds)
             .build();
     }
 
@@ -82,20 +107,12 @@ public class ChatRoomService {
             throw new InvalidRequestException("Cannot create direct message with yourself");
         }
 
-        Set<String> participants = new HashSet<>();
-        participants.add(creatorId);
-        participants.add(request.getParticipantId());
-
-        String roomId = UUID.randomUUID().toString();
-
         ChatRoom chatRoom = ChatRoom.builder()
-            .id(roomId)
             .type(RoomType.DIRECT_MESSAGE)
             .createdBy(creatorId)
-            .participants(participants)
-            .createdAt(LocalDateTime.now())
             .lastActivity(LocalDateTime.now())
             .maxParticipants(2)
+            .memberCount(2)
             .isActive(true)
             .settings(ChatRoom.RoomSettings.builder()
                 .allowFileSharing(true)
@@ -117,69 +134,46 @@ public class ChatRoomService {
 
     private ChatRoom createConfigurableRoom(CreateChatRoomRequest request, String creatorId) {
         // Room name presence and format are enforced by CreateChatRoomRequest bean validation
-
-        Set<String> participants = new HashSet<>();
-        participants.add(creatorId);
-        String roomId = UUID.randomUUID().toString();
-
-        logger.info("SETTINGS: {}", request.getSettings());
-
-        ChatRoom chatRoom;
-        if (request.getSettings() != null) {
-            logger.info("CREATING ROOM WITH SETTINGS");
-            chatRoom = ChatRoom.builder()
-                .id(roomId)
-                .name(request.getRoomName())
-                .description(request.getDescription())
-                .type(request.getRoomType())
-                .createdBy(creatorId)
-                .createdAt(LocalDateTime.now())
-                .lastActivity(LocalDateTime.now())
-                .participants(participants)
-                .maxParticipants(request.getMaxUsers() != null ? request.getMaxUsers() : -1)
-                .admins(java.util.Collections.singleton(creatorId))
-                .isActive(true)
-                .settings(request.getSettings())
+        ChatRoom.RoomSettings settings = request.getSettings() != null
+            ? request.getSettings()
+            : ChatRoom.RoomSettings.builder()
+                .allowFileSharing(false)
+                .allowGuestUsers(false)
+                .moderationRequired(false)
+                .welcomeMessage("")
                 .build();
-        } else {
-            logger.info("CREATING ROOM WITHOUT SETTINGS");
-            chatRoom = ChatRoom.builder()
-                .id(roomId)
-                .name(request.getRoomName())
-                .description(request.getDescription())
-                .type(request.getRoomType())
-                .createdBy(creatorId)
-                .createdAt(LocalDateTime.now())
-                .lastActivity(LocalDateTime.now())
-                .participants(participants)
-                .maxParticipants(request.getMaxUsers() != null ? request.getMaxUsers() : -1)
-                .admins(java.util.Collections.singleton(creatorId))
-                .isActive(true)
-                .settings(ChatRoom.RoomSettings.builder()
-                    .allowFileSharing(false)
-                    .allowGuestUsers(false)
-                    .moderationRequired(false)
-                    .welcomeMessage("")
-                    .build())
-                .build();
-        }
+
+        ChatRoom chatRoom = ChatRoom.builder()
+            .name(request.getRoomName())
+            .description(request.getDescription())
+            .type(request.getRoomType())
+            .createdBy(creatorId)
+            .lastActivity(LocalDateTime.now())
+            .maxParticipants(request.getMaxUsers() != null ? request.getMaxUsers() : -1)
+            .memberCount(1)
+            .isActive(true)
+            .settings(settings)
+            .build();
 
         ChatRoom savedRoom = chatRoomRepository.save(chatRoom);
 
         // Create participant instance for room creator
         participantService.createParticipant(savedRoom.getId(), creatorId, Participant.Role.OWNER);
 
-        logger.info("Created {} room: {} - {} with creator: {}", request.getRoomType(), savedRoom.getId(), request.getRoomName(), creatorId);
+        logger.info("Created {} room: {} with creator: {}", request.getRoomType(), savedRoom.getId(), creatorId);
 
         return savedRoom;
     }
 
     public ChatRoom findById(String roomId) {
-        return chatRoomRepository.findById(roomId)
+        return chatRoomRepository.findByIdAndIsActiveTrue(roomId)
             .orElseThrow(() -> new ChatRoomNotFoundException("Can't find chat room with id: " + roomId));
     }
 
-    @Transactional
+    /**
+     * Soft-deletes the room: it is marked inactive, every membership is removed (which also revokes STOMP
+     * authorization for the room), and a SYSTEM message is broadcast to the room topic.
+     */
     public void deleteChatRoomById(String provider, String providerId, String roomId) {
         User authenticatedUser = userRepository.findByProviderAndProviderId(provider, providerId)
         .orElseThrow(() -> new UserNotFoundException("Authenticated user not found"));
@@ -193,90 +187,94 @@ public class ChatRoomService {
             throw new UnauthorizedRoomActionException("Only room creator can delete the room");
         }
 
-        chatRoomRepository.delete(room);
-        logger.info("Room {} deleted by user {}", roomId, authenticatedUser.getId());
+        if (chatRoomRepository.softDelete(roomId, LocalDateTime.now()) == 0) {
+            throw new ChatRoomNotFoundException("Can't find chat room with id: " + roomId);
+        }
+        long removed = participantService.removeAllParticipants(roomId);
+
+        Instant now = Instant.now();
+        messagingTemplate.convertAndSend("/topic/public/" + roomId, ChatMessageResponse.builder()
+            .chatRoomId(roomId)
+            .senderId(authenticatedUser.getId())
+            .senderName(authenticatedUser.getName())
+            .content(ROOM_DELETED_MESSAGE)
+            .type(Message.MessageType.SYSTEM)
+            .createdAt(now)
+            .updatedAt(now)
+            .isUpdated(false)
+            .isDeleted(false)
+            .build());
+
+        logger.info("Room {} soft-deleted by user {}, {} memberships removed", roomId, authenticatedUser.getId(), removed);
     }
 
-    @Transactional(readOnly = true)
     public List<ChatRoom> getList(String provider, String providerId) {
         User authenticatedUser = userRepository.findByProviderAndProviderId(provider, providerId)
             .orElseThrow(() -> new UserNotFoundException("Authenticated user not found"));
 
-        List<ChatRoom> chatRoomList = chatRoomRepository.findByParticipantsContainingAndIsActiveTrue(authenticatedUser.getId());
-        return chatRoomList;
+        List<String> roomIds = participantService.getRoomIdsOfUser(authenticatedUser.getId());
+        if (roomIds.isEmpty()) {
+            return List.of();
+        }
+        return chatRoomRepository.findByIdInAndIsActiveTrue(roomIds);
     }
 
-    @Transactional
     public ChatRoom getChatRoomById(String provider, String providerId, String roomId) {
         User authenticatedUser = userRepository.findByProviderAndProviderId(provider, providerId)
             .orElseThrow(() -> new UserNotFoundException("Authenticated user not found"));
 
-        ChatRoom room = chatRoomRepository.findByIdAndParticipantsContaining(roomId, authenticatedUser.getId())
-            .orElseThrow(() -> new ChatRoomNotFoundException("Can't find chat room with id: " + roomId + " or user is not a participant"));
+        return getRoomOfMember(roomId, authenticatedUser.getId());
+    }
 
+    private ChatRoom getRoomOfMember(String roomId, String userId) {
+        ChatRoom room = chatRoomRepository.findByIdAndIsActiveTrue(roomId)
+            .orElseThrow(() -> new ChatRoomNotFoundException("Can't find chat room with id: " + roomId + " or user is not a participant"));
+        if (!participantService.isUserParticipant(roomId, userId)) {
+            throw new ChatRoomNotFoundException("Can't find chat room with id: " + roomId + " or user is not a participant");
+        }
         return room;
     }
 
-    @Transactional
     public ChatRoom updateChatRoomById(String provider, String providerId, String roomId, UpdateChatRoomRequest request) {
-        ChatRoom room = getChatRoomById(provider, providerId, roomId);
-
         User authenticatedUser = userRepository.findByProviderAndProviderId(provider, providerId)
             .orElseThrow(() -> new UserNotFoundException("Authenticated user not found"));
+
+        ChatRoom room = getRoomOfMember(roomId, authenticatedUser.getId());
 
         if(!room.getCreatedBy().equals(authenticatedUser.getId())) {
             throw new UnauthorizedRoomActionException("Only room creator can update the room");
         }
 
-        switch(room.getType()) {
-            case DIRECT_MESSAGE:
-                validateDirectMessageUpdate(request);
-                break;
-            case PRIVATE:
-            case PUBLIC:
-                validateConfigurableRoomUpdate(room, request);
-                break;
+        if (room.getType() == RoomType.DIRECT_MESSAGE && request.getMaxUsers() != null) {
+            throw new InvalidRequestException("Cannot change max users for direct message rooms");
         }
 
-        // Update room fields if provided in request
-        if (request.getRoomName() != null && !request.getRoomName().trim().isEmpty()) {
-            room.setName(request.getRoomName().trim());
+        String name = request.getRoomName() != null && !request.getRoomName().trim().isEmpty()
+            ? request.getRoomName().trim()
+            : room.getName();
+        String description = request.getDescription() != null ? request.getDescription().trim() : room.getDescription();
+        int maxParticipants = request.getMaxUsers() != null ? request.getMaxUsers() : room.getMaxParticipants();
+        ChatRoom.RoomSettings settings = request.getSettings() != null ? request.getSettings() : room.getSettings();
+
+        // A targeted $set keeps concurrent joins/leaves intact and re-checks capacity against the live counter
+        long updated = chatRoomRepository.updateEditableFields(roomId, name, description, maxParticipants,
+            settings, LocalDateTime.now());
+        if (updated == 0) {
+            throw new InvalidRequestException("Max users cannot be less than current participants");
         }
 
-        if (request.getDescription() != null) {
-            room.setDescription(request.getDescription().trim());
-        }
-
-        if (request.getMaxUsers() != null) {
-            room.setMaxParticipants(request.getMaxUsers());
-        }
-
-        if (request.getSettings() != null) {
-            room.setSettings(request.getSettings());
-        }
-
-        // Update the last activity timestamp
-        room.setLastActivity(LocalDateTime.now());
-
-        // Save the updated room to database
-        return chatRoomRepository.save(room);
+        return findById(roomId);
     }
 
-    @Transactional
     public void leaveChatRoomById(String provider, String providerId, String roomId) {
         User authenticatedUser = userRepository.findByProviderAndProviderId(provider, providerId)
             .orElseThrow(() -> new UserNotFoundException("Authenticated user not found"));
 
-        ChatRoom room = getChatRoomById(provider, providerId, roomId);
+        ChatRoom room = getRoomOfMember(roomId, authenticatedUser.getId());
 
         // Prevent leaving direct message rooms
         if(room.getType() == RoomType.DIRECT_MESSAGE) {
             throw new ForbiddenActionException("Cannot leave direct message rooms. Please delete the room instead.");
-        }
-
-        // Check if user is actually a participant
-        if(!room.getParticipants().contains(authenticatedUser.getId())) {
-            throw new UnauthorizedRoomActionException("User is not a participant of this room");
         }
 
         // Prevent room creator from leaving - they must delete the room or transfer ownership first
@@ -284,33 +282,10 @@ public class ChatRoomService {
             throw new ForbiddenActionException("Room creator cannot leave the room. Please delete the room or transfer ownership first.");
         }
 
-        // Remove user from participants set
-        Set<String> roomParticipants = room.getParticipants();
-        roomParticipants.remove(authenticatedUser.getId());
-        room.setParticipants(roomParticipants);
-        room.setLastActivity(LocalDateTime.now());
-
-        // Delete participant record
-        participantRepository.deleteByChatRoomIdAndUserId(roomId, authenticatedUser.getId());
-
-        // Save updated room to database
-        chatRoomRepository.save(room);
+        if (!participantService.removeParticipant(roomId, authenticatedUser.getId())) {
+            throw new UnauthorizedRoomActionException("User is not a participant of this room");
+        }
 
         logger.info("User {} successfully left room {}", authenticatedUser.getId(), roomId);
-    }
-
-    private void validateDirectMessageUpdate(UpdateChatRoomRequest request) {
-        if(request.getMaxUsers() != null) {
-            throw new InvalidRequestException("Cannot change max users for direct message rooms");
-        }
-    }
-
-    private void validateConfigurableRoomUpdate(ChatRoom room, UpdateChatRoomRequest request) {
-        if(request.getMaxUsers() != null) {
-            Long currentParticipantsCount = (long) room.getParticipants().size();
-            if(request.getMaxUsers() < currentParticipantsCount) {
-                throw new InvalidRequestException("Max users cannot be less than current participants");
-            }
-        }
     }
 }

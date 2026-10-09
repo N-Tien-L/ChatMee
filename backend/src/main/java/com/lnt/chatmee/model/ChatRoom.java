@@ -1,8 +1,8 @@
 package com.lnt.chatmee.model;
 
 import java.time.LocalDateTime;
-import java.util.Set;
 
+import org.springframework.data.annotation.CreatedDate;
 import org.springframework.data.annotation.Id;
 import org.springframework.data.mongodb.core.mapping.Document;
 
@@ -29,19 +29,35 @@ public class ChatRoom {
 
     private String createdBy;
 
+    @CreatedDate
+
     private LocalDateTime createdAt;
 
     private LocalDateTime lastActivity;
 
     private RoomType type;
 
-    private Set<String> participants;
-
-    private Set<String> admins;
-
     private int maxParticipants; // -1 for unlimited
 
+
+    /**
+
+     * Number of rows in the participants collection for this room. It is changed only through the atomic
+
+     * conditional updates in ChatRoomRepository so that concurrent joins cannot exceed maxParticipants.
+
+     * The participants collection stays the source of truth for who the members are.
+
+     */
+
+    private int memberCount;
+
     private boolean isActive;
+
+
+    /** Set when the room is soft-deleted (isActive = false). */
+
+    private LocalDateTime deletedAt;
 
     public RoomSettings settings;
 
