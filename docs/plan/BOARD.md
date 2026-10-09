@@ -45,7 +45,7 @@ Updated by master. Status: todo | in-progress | review | changes-requested | mer
 | CM-054 | TypeScript types cleanup | 2 | agy | | todo | | |
 | CM-055 | Backfill specs SPEC-001..007 from the audit drafts | 2 | agy (a: 001-004), agy2 (b: 005-007) | docs/CM-055a-specs, docs/CM-055b-specs | todo (waiting for agy/agy2 relaunch) | | |
 | CM-057 | Rate limit: do not count login/health paths (review F2) | 2 | master | fix/CM-057-rate-limit-proxy | merged | health, auth/status, OAuth2 authorization/callback exempt; servlet double registration disabled; RateLimitingIT 4; verify green 259 unit + 40 IT | 75e2cea |
-| CM-056 | WebSocket hardening (review F1, F4 server side, NV-4; F3 moved to CM-053) | 2 | master | | todo (after CM-045) | | |
+| CM-056 | WebSocket hardening (review F1, F4 server side, NV-4; F3 moved to CM-053) | 2 | master | fix/CM-056-ws-hardening | merged | STOMP SEND rate limit per user+destination in Redis (chat 10/5 s with private RATE_LIMITED error, typing 10/5 s, presence 20/60 s, dropped not thrown); TEXT-only client messages; /app/chat.addUser removed; StompError.code; verify green 274 unit + 42 IT (WsRateLimitIT) | 42447b4 |
 | CM-058 | Server-side STOMP subscription revocation on leave/delete (review F6) | 2 | | | todo (after CM-042) | | |
 
 ## Notes
