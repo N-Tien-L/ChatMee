@@ -10,6 +10,7 @@ import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpHeaders;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Component;
@@ -21,6 +22,9 @@ import java.io.IOException;
 @RequiredArgsConstructor
 public class RateLimitingFilter extends OncePerRequestFilter {
 
+    static final String LIMIT_HEADER = "X-RateLimit-Limit";
+    static final String REMAINING_HEADER = "X-RateLimit-Remaining";
+
     private final ObjectMapper objectMapper;
     private final RateLimitingService rateLimitingService;
 
@@ -28,26 +32,24 @@ public class RateLimitingFilter extends OncePerRequestFilter {
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain filterChain)
             throws ServletException, IOException {
 
-        String clientIp = getClientIp(request);
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
         boolean isAuthenticated = authentication != null && authentication.isAuthenticated() && !"anonymousUser".equals(authentication.getPrincipal());
 
-        String key = isAuthenticated ? authentication.getName() : clientIp;
+        // The remote address is never taken from X-Forwarded-For here: clients can forge that header.
+        // Behind a proxy, server.forward-headers-strategy lets Tomcat resolve it from trusted proxies only.
+        String key = isAuthenticated ? "user:" + authentication.getName() : "ip:" + request.getRemoteAddr();
 
-        if (!rateLimitingService.isAllowed(key, isAuthenticated)) {
+        RateLimitingService.Decision decision = rateLimitingService.check(key, isAuthenticated);
+        response.setHeader(LIMIT_HEADER, String.valueOf(decision.limit()));
+        response.setHeader(REMAINING_HEADER, String.valueOf(decision.remaining()));
+
+        if (!decision.allowed()) {
+            response.setHeader(HttpHeaders.RETRY_AFTER, String.valueOf(decision.retryAfterSeconds()));
             GlobalExceptionHandler.writeProblem(objectMapper, request, response,
                     ErrorCode.RATE_LIMITED, "Too many requests");
             return;
         }
 
         filterChain.doFilter(request, response);
-    }
-
-    private String getClientIp(HttpServletRequest request) {
-        String xfHeader = request.getHeader("X-Forwarded-For");
-        if (xfHeader == null) {
-            return request.getRemoteAddr();
-        }
-        return xfHeader.split(",")[0];
     }
 }
