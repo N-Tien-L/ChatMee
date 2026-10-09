@@ -54,8 +54,10 @@ Each optimistic send has its own 10-second confirmation timer. A private error,
 local publish failure, or timeout marks that message `failed`; confirmation marks
 it `sent` (including a late confirmation after timeout). Confirmation and errors
 clear that message's timer; room changes and unmount clear all pending timers.
-Pending messages do not disable the input or send button. Error subscriptions
-are removed with room subscription cleanup so the next room receives errors.
+Pending messages do not disable the input or send button. Since CM-045 the
+session subscribes `/user/queue/errors` once and dispatches each error to the
+handlers registered at that moment; a room view removes its handler on cleanup,
+so the current room always receives its errors.
 
 ### Stored timestamp compatibility
 
@@ -77,8 +79,48 @@ is marked inactive and its memberships are removed, the server broadcasts one
 `type = SYSTEM`, no `id`/`tempId`, `senderId` = the deleting creator and
 `content = "This room has been deleted"`. No new destination is introduced.
 Because the memberships are gone, later SUBSCRIBE and SEND frames for that room are
-denied by the normal membership rule; existing subscriptions are not revoked
-(known follow-up for CM-045).
+denied by the normal membership rule. The server does not revoke existing
+subscriptions; since CM-045 the client removes the room from its list when it
+receives this event, which unmounts the room view and unsubscribes its topics.
+
+## Client (CM-045)
+
+The frontend opens exactly one STOMP connection for the authenticated area.
+`frontend/lib/realtime/stompSession.ts` is a framework-free session (client
+lifecycle, subscription registry, publish); `StompProvider` mounts it once in
+`app/dashboard/layout.tsx`, and `hooks/useWebSocket.ts` is a thin wrapper with
+room helpers. No component creates its own client.
+
+- Token: `beforeConnect` fetches a fresh single-use token from
+  `POST /api/v1/auth/ws-token` for every connection attempt, including reconnects.
+- Registry: subscriptions are kept by destination and handler. Each onConnect
+  re-subscribes every destination that still has handlers; one wire subscription
+  is shared by all handlers of a destination. Unsubscribe functions stay valid
+  across reconnects and release the wire subscription with the last handler.
+- Errors: `/user/queue/errors` is subscribed once by the session (see above).
+- Reconnect: the stompjs `reconnectDelay` is 0 and the session drives retries
+  with exponential backoff (1 s doubling, capped at 30 s) after a socket close,
+  an ERROR frame, or a failed token fetch. The backoff resets only after a
+  connection stayed up for 10 s, so CONNECT followed by ERROR cannot loop tightly.
+- Denied SUBSCRIBE: every SUBSCRIBE carries a `receipt` header; Spring copies it
+  to `receipt-id` on the ERROR frame of a denied SUBSCRIBE. The session then stops
+  re-subscribing that destination (otherwise each reconnect would be closed
+  again) and the provider refreshes the room list.
+- Resync: after a reconnect (not the first connect) the open room refetches the
+  latest history page through `messageApi` and merges it by message id; server
+  copies win, older confirmed messages stay, and pending/failed optimistic
+  messages are kept at the end. Cached history of other rooms loaded before the
+  reconnect is refetched when the room is opened. Cursor-based catch-up is CM-044.
+- Banner: a connection-state banner (`connecting`, `reconnecting`,
+  `disconnected` after three failed attempts) is rendered in an
+  `aria-live="polite"` region.
+- Presence: the provider subscribes `/topic/presence` and reports
+  `{online: true}` on each connect and every 30 s; it reports `{online: false}`
+  on logout/unmount. The `beforeunload` report was removed; the server derives
+  offline from the session disconnect.
+- Sends: `/app/chat.sendMessage` always uses `messageType: "TEXT"`. The client no
+  longer sends `/app/chat.addUser` (server-side removal and TEXT-only validation
+  are CM-056).
 
 ## Authorization rules
 

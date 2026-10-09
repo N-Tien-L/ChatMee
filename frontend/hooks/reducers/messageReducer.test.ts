@@ -6,6 +6,7 @@ import { useRoomMessages } from '../useRoomMessage';
 import { messageReducer, initialState, MessageState, MessageAction } from './messageReducer';
 import { Message, MessageResponse } from '@/lib/types';
 import { MessageType } from '@/lib/types/entities/chat/enums';
+import { messageApi } from '@/lib/api/messageApi';
 
 // Provide a valid base message to reduce boilerplate
 const baseMessage = {
@@ -133,11 +134,18 @@ describe('messageReducer', () => {
 });
 
 
-const transport = vi.hoisted(() => ({
-    connected: true, connecting: false, error: null,
-    sendMessage: vi.fn(), joinRoom: vi.fn(), unsubscribe: vi.fn(),
-    subscribeRoom: vi.fn(), subscribeErrors: vi.fn(),
-}));
+const transport = vi.hoisted(() => {
+    const roomCleanup = vi.fn();
+    const errorCleanup = vi.fn();
+    return {
+        connected: true, connecting: false, roomCleanup, errorCleanup,
+        sendMessage: vi.fn(),
+        subscribeRoom: vi.fn<(roomId: string, onMessage: (message: Message) => void) => () => void>(() => roomCleanup),
+        subscribeErrors: vi.fn<(handler: (error: { tempId?: string; message: string }) => void) => () => void>(
+            () => errorCleanup),
+        onReconnect: vi.fn<(listener: () => void) => () => void>(() => () => {}), getLastReconnectAt: vi.fn(() => 0),
+    };
+});
 vi.mock('../useWebSocket', () => ({ useWebSocket: () => transport }));
 vi.mock('@/lib/stores/authStore', () => ({
     useAuthStore: () => ({ user: { id: 'u1', name: 'Alice' } }),
@@ -208,13 +216,28 @@ describe('useRoomMessages delivery timeout', () => {
         expect(vi.getTimerCount()).toBe(0);
     });
 
+    it('resyncs the open room after a reconnect and keeps pending messages', async () => {
+        const { result, roomId } = await mountRoom();
+        act(() => { void result.current.sendMessage('pending'); });
+        const pending = result.current.messages[0];
+        const missed: MessageResponse = {
+            ...baseMessage, id: 'missed', chatRoomId: roomId, senderId: 'u2', createdAt: '2026-10-09T10:00:00Z',
+        };
+        vi.mocked(messageApi.get50RecentMessages).mockResolvedValueOnce({ success: true, message: 'ok', data: [missed] });
+        const reconnected = transport.onReconnect.mock.calls.at(-1)![0];
+        await act(async () => { reconnected(); });
+        expect(result.current.messages.map(m => m.id)).toEqual(['missed', pending.id]);
+        expect(result.current.messages[1].status).toBe('sending');
+    });
+
     it('clears timers and error subscriptions on room change and unmount', async () => {
         const { result, rerender, unmount } = await mountRoom();
         act(() => { void result.current.sendMessage('old room'); });
         expect(vi.getTimerCount()).toBe(1);
         await act(async () => { rerender({ room: `timeout-room-${++sequence}` }); });
         expect(vi.getTimerCount()).toBe(0);
-        expect(transport.unsubscribe).toHaveBeenCalledWith('/user/queue/errors');
+        expect(transport.errorCleanup).toHaveBeenCalled();
+        expect(transport.roomCleanup).toHaveBeenCalled();
         act(() => { void result.current.sendMessage('new room'); });
         expect(vi.getTimerCount()).toBe(1);
         unmount();
