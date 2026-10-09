@@ -2,8 +2,8 @@
 
 import { useChatRoomsStore } from "@/lib/stores";
 import { useAuthStore } from "@/lib/stores";
-import { RoomType } from "@/lib/type/CoreModelsAndEnum";
-import { UserSummaryResponse } from "@/lib/type/ResponseType";
+import { RoomType } from "@/lib/types";
+import { UserSummaryResponse } from "@/lib/types";
 import {
   Dialog,
   DialogContent,
@@ -24,7 +24,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Checkbox } from "../ui/checkbox";
-import { CreateChatRoomRequest } from "@/lib/type/RequestType";
+import { CreateChatRoomRequest } from "@/lib/types";
 import UserSearchList from "../user/UserSearchList";
 import { X } from "lucide-react";
 

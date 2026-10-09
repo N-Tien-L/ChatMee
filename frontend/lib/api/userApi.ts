@@ -1,4 +1,4 @@
-import { ApiResponse, UserSummaryResponse, PagedResponse } from "../type/ResponseType";
+import { ApiResponse, UserSummaryResponse, PagedResponse } from "@/lib/types";
 import { apiClient } from "./apiClient";
 
 export const userApi = {

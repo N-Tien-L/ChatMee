@@ -1,10 +1,10 @@
 import React, { useEffect, useState } from "react";
-import { ChatRoomResponse, UserSummaryResponse } from "@/lib/type/ResponseType";
-import { RoomType } from "@/lib/type/CoreModelsAndEnum";
+import { ChatRoom, UserSummaryResponse } from "@/lib/types";
+import { RoomType } from "@/lib/types";
 import {
   UpdateChatRoomRequest,
   JoinChatRoomRequest,
-} from "@/lib/type/RequestType";
+} from "@/lib/types";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { chatRoomApi } from "@/lib/api/chatRoomApi";
 import { userApi } from "@/lib/api/userApi";
@@ -38,7 +38,7 @@ interface RoomSettingsDialogProps {
   roomId: string;
   isOpen: boolean;
   onClose: () => void;
-  onSaved?: (room: ChatRoomResponse) => void;
+  onSaved?: (room: ChatRoom) => void;
 }
 
 // Simple toast helper
@@ -57,7 +57,7 @@ export const RoomSettingsDialog: React.FC<RoomSettingsDialogProps> = ({
   onSaved,
 }) => {
   const isMobile = useIsMobile();
-  const [room, setRoom] = useState<ChatRoomResponse | null>(null);
+  const [room, setRoom] = useState<ChatRoom | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [participants, setParticipants] = useState<UserSummaryResponse[]>([]);
