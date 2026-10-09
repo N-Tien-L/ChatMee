@@ -17,12 +17,37 @@ interface ChatInterfaceProps {
   onToggleSidebar?: () => void;
 }
 
+// Room hooks live in ChatRoomView, so leaving or deleting a room (which removes it from the
+// store) unmounts them and releases the room's STOMP subscriptions.
 const ChatInterface: React.FC<ChatInterfaceProps> = ({
   roomId,
   onToggleSidebar,
 }) => {
+  const roomExists = useChatRoomsStore((state) =>
+    state.rooms.some((room) => room.id === roomId)
+  );
+
+  if (!roomExists)
+    return (
+      <div className="flex items-center justify-center h-full">
+        <div className="text-center text-gray-500">Room not found</div>
+      </div>
+    );
+
+  return <ChatRoomView roomId={roomId} onToggleSidebar={onToggleSidebar} />;
+};
+
+const ChatRoomView: React.FC<ChatInterfaceProps> = ({
+  roomId,
+  onToggleSidebar,
+}) => {
+  const deleteRoom = useChatRoomsStore((state) => state.deleteRoom);
+  const handleRoomDeleted = useCallback(
+    () => deleteRoom(roomId),
+    [deleteRoom, roomId]
+  );
   const { messages, connected, sendMessage, loading, sending } =
-    useRoomMessages(roomId);
+    useRoomMessages(roomId, { onRoomDeleted: handleRoomDeleted });
   const [newMessage, setNewMessage] = useState("");
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -38,13 +63,8 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
   // Get user cache for names
   const { getUserFromCache } = useUsersStore();
 
-  // Get WebSocket functions for typing (use the same instance as useRoomMessages)
-  const {
-    sendTyping,
-    subscribeTyping,
-    unsubscribe,
-    connected: wsConnected,
-  } = useWebSocket();
+  // Typing helpers over the app's single STOMP session
+  const { sendTyping, subscribeTyping, connected: wsConnected } = useWebSocket();
 
   // Get chat store state
   const { onlineUsers, typingUsers } = useChatStore(
@@ -56,11 +76,9 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
 
   // Subscribe to typing events for current room
   useEffect(() => {
-    if (wsConnected && roomId) {
-      subscribeTyping(roomId);
-      return () => unsubscribe(`/topic/typing/${roomId}`);
-    }
-  }, [wsConnected, roomId, subscribeTyping, unsubscribe]);
+    if (!roomId) return;
+    return subscribeTyping(roomId);
+  }, [roomId, subscribeTyping]);
 
   const currentRoom = rooms.find((room) => room.id === roomId);
 

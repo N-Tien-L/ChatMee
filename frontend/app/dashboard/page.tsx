@@ -9,7 +9,6 @@ import ChatRoomsList from "@/components/room/ChatRoomsList";
 import ChatInterface from "@/components/chat/ChatInterface";
 import { useShallow } from "zustand/react/shallow";
 import { CreateRoomModal } from "@/components/room/CreateRoomModal";
-import { useWebSocket } from "@/hooks/useWebSocket";
 import { LogOut } from "lucide-react";
 
 const DashboardContent = () => {
@@ -36,7 +35,6 @@ const DashboardContent = () => {
   const roomId = searchParams.get("roomId");
   const [hasCheckedAuth, setHasCheckedAuth] = useState(false);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
-  useWebSocket();
 
   useEffect(() => {
     const fetchAuthStatus = async () => {

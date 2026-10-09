@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { addIsOwnToMessages, deduplicateMessages, updateSessionCache } from './messageUtils';
+import { addIsOwnToMessages, deduplicateMessages, mergeResyncedMessages, updateSessionCache } from './messageUtils';
+import { Message } from '@/lib/types';
 import { MessageResponse } from '@/lib/types';
 import { MessageType } from '@/lib/types/entities/chat/enums';
 
@@ -79,5 +80,40 @@ describe('messageUtils', () => {
             updateSessionCache(cache, 'r1', [{ id: '1' }]);
             expect(cache.has('r1')).toBe(false);
         });
+    });
+});
+
+describe('mergeResyncedMessages', () => {
+    const at = (minute: number) => `2026-10-09T10:${String(minute).padStart(2, '0')}:00Z`;
+    const server = (id: string, minute: number, content = id): MessageResponse =>
+        ({ ...baseMsg, id, senderId: 'u2', content, createdAt: at(minute), updatedAt: at(minute) });
+
+    it('dedupes by id, keeps older confirmed messages and orders by createdAt', () => {
+        const current: Message[] = [
+            { ...server('old', 1), status: 'sent', isOwn: false },
+            { ...server('m2', 3, 'stale copy'), status: 'sent', isOwn: false },
+        ];
+        const latest = [server('m2', 3, 'server copy'), server('missed', 4), server('missed', 4), server('m1', 2)];
+
+        const merged = mergeResyncedMessages(current, latest, 'u1');
+
+        expect(merged.map(m => m.id)).toEqual(['old', 'm1', 'm2', 'missed']);
+        expect(merged.find(m => m.id === 'm2')?.content).toBe('server copy');
+        expect(merged.every(m => m.status === 'sent' && m.isOwn === false)).toBe(true);
+    });
+
+    it('keeps pending and failed optimistic messages at the end', () => {
+        const pending: Message = {
+            ...server('optimistic-t1', 9), tempId: 't1', senderId: 'u1',
+            isOptimistic: true, isOwn: true, status: 'sending',
+        };
+        const failed: Message = { ...pending, id: 'optimistic-t2', tempId: 't2', status: 'failed', errorMessage: 'x' };
+        const current: Message[] = [pending, { ...server('m1', 1), status: 'sent' }, failed];
+
+        const merged = mergeResyncedMessages(current, [server('m1', 1), server('m3', 5)], 'u1');
+
+        expect(merged.map(m => m.id)).toEqual(['m1', 'm3', 'optimistic-t1', 'optimistic-t2']);
+        expect(merged[2]).toBe(pending);
+        expect(merged[3]).toBe(failed);
     });
 });
