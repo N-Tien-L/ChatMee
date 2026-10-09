@@ -14,9 +14,6 @@ import org.springframework.web.bind.annotation.RestController;
 
 import com.lnt.chatmee.dto.response.ApiResponse;
 import com.lnt.chatmee.dto.response.ChatMessageResponse;
-import com.lnt.chatmee.exception.UserNotFoundException;
-import com.lnt.chatmee.model.User;
-import com.lnt.chatmee.repository.UserRepository;
 import com.lnt.chatmee.service.MessageService;
 
 import lombok.RequiredArgsConstructor;
@@ -29,7 +26,6 @@ public class MessageController {
 
 
     private final MessageService messageService;
-    private final UserRepository userRepository;
 
     @Operation(summary = "Get recent messages of a room the caller belongs to")
     @GetMapping("/room/{roomId}")

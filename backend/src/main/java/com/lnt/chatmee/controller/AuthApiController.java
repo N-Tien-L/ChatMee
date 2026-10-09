@@ -2,7 +2,6 @@ package com.lnt.chatmee.controller;
 
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
-import com.lnt.chatmee.exception.UserNotFoundException;
 
 import org.springframework.http.CacheControl;
 import org.springframework.http.ResponseEntity;
@@ -17,8 +16,7 @@ import com.lnt.chatmee.dto.response.ApiResponse;
 import com.lnt.chatmee.dto.response.AuthResponse;
 import com.lnt.chatmee.dto.response.UserResponse;
 import com.lnt.chatmee.dto.response.WsTokenResponse;
-import com.lnt.chatmee.model.User;
-import com.lnt.chatmee.repository.UserRepository;
+import com.lnt.chatmee.service.UserService;
 import com.lnt.chatmee.security.WsTokenService;
 
 import lombok.RequiredArgsConstructor;
@@ -29,7 +27,7 @@ import lombok.RequiredArgsConstructor;
 @RequiredArgsConstructor
 public class AuthApiController {
 
-    private final UserRepository userRepository;
+    private final UserService userService;
     private final WsTokenService wsTokenService;
 
     @Operation(summary = "Issue a single-use, 60-second token for the STOMP CONNECT header")
@@ -42,33 +40,10 @@ public class AuthApiController {
     @Operation(summary = "Get the authenticated user and session status")
     @GetMapping("/me")
     public ResponseEntity<ApiResponse<AuthResponse>> getCurrentUser(@CurrentUser UserPrincipal user) {
-        if (user == null) {
-            throw new org.springframework.security.authentication.AuthenticationCredentialsNotFoundException("Authentication required");
-        }
-
-
-        User profile = userRepository.findById(user.userId())
-                .orElse(null);
-
-        if (profile != null) {
-            UserResponse userResponse = UserResponse.builder()
-                    .id(profile.getId())
-                    .name(profile.getName())
-                    .email(profile.getEmail())
-                    .avatarUrl(profile.getAvatarUrl())
-                    .provider(profile.getProvider())
-                    .build();
-
-            AuthResponse authResponse = AuthResponse.builder()
-                    .authenticated(true)
-                    .user(userResponse)
-                    .message("User authenticated successfully")
-                    .build();
-
-            return ResponseEntity.ok(ApiResponse.success(authResponse));
-        } else {
-            throw new UserNotFoundException("User not found in database");
-        }
+        AuthResponse authResponse = AuthResponse.builder()
+                .authenticated(true).user(userService.getUserProfile(user.userId()))
+                .message("User authenticated successfully").build();
+        return ResponseEntity.ok(ApiResponse.success(authResponse));
     }
 
     @Operation(summary = "Check whether the session is authenticated")
@@ -81,26 +56,6 @@ public class AuthApiController {
     @Operation(summary = "Get the authenticated user profile")
     @GetMapping("/user")
     public ResponseEntity<ApiResponse<UserResponse>> getUserInfo(@CurrentUser UserPrincipal user) {
-        if (user == null) {
-            throw new org.springframework.security.authentication.AuthenticationCredentialsNotFoundException("Authentication required");
-        }
-
-
-        User profile = userRepository.findById(user.userId())
-                .orElse(null);
-
-        if (profile != null) {
-            UserResponse userResponse = UserResponse.builder()
-                    .id(profile.getId())
-                    .name(profile.getName())
-                    .email(profile.getEmail())
-                    .avatarUrl(profile.getAvatarUrl())
-                    .provider(profile.getProvider())
-                    .build();
-
-            return ResponseEntity.ok(ApiResponse.success(userResponse));
-        } else {
-            throw new UserNotFoundException("User not found in database");
-        }
+        return ResponseEntity.ok(ApiResponse.success(userService.getUserProfile(user.userId())));
     }
 }

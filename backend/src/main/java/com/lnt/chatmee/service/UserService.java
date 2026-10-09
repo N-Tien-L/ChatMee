@@ -6,6 +6,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 
 import com.lnt.chatmee.dto.response.UserSummaryResponse;
+import com.lnt.chatmee.dto.response.UserResponse;
 import com.lnt.chatmee.exception.UserNotFoundException;
 import com.lnt.chatmee.model.User;
 import com.lnt.chatmee.repository.UserRepository;
@@ -20,6 +21,13 @@ public class UserService {
     static final int MAX_PAGE_SIZE = 50;
 
     private final UserRepository userRepository;
+
+    public UserResponse getUserProfile(String userId) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new UserNotFoundException("User not found in database"));
+        return UserResponse.builder().id(user.getId()).name(user.getName()).email(user.getEmail())
+                .avatarUrl(user.getAvatarUrl()).provider(user.getProvider()).build();
+    }
 
     /** Page is clamped to >= 0 and size to 1..MAX_PAGE_SIZE (non-positive size falls back to the default). */
     public Page<UserSummaryResponse> searchUsers(String query, String currentUserId, int page, int size) {

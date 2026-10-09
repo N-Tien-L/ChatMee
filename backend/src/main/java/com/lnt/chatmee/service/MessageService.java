@@ -1,6 +1,10 @@
 package com.lnt.chatmee.service;
 
 import java.util.List;
+import java.util.UUID;
+import java.time.Instant;
+import com.lnt.chatmee.dto.request.ChatMessageRequest;
+import com.lnt.chatmee.exception.UserNotFoundException;
 import java.util.stream.Collectors;
 
 import org.springframework.dao.DataAccessException;
@@ -28,6 +32,69 @@ public class MessageService {
     private final ParticipantRepository participantRepository;
     private final MessageRepository messageRepository;
     private final UserRepository userRepository;
+
+    public ChatMessageResponse sendMessage(ChatMessageRequest request, String userId) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new UserNotFoundException("Authenticated user not found"));
+        if (!participantRepository.existsByChatRoomIdAndUserId(request.getRoomId(), userId)) {
+            throw new ForbiddenActionException("Room membership required");
+        }
+            // Create message object
+            Message message = Message.builder()
+                .id(UUID.randomUUID().toString())
+                .chatRoomId(request.getRoomId())
+                .senderId(userId)
+                .type(request.getMessageType())
+                .content(request.getContent())
+                .createdAt(Instant.now())
+                .updatedAt(Instant.now())
+                .isUpdated(false)
+                .isDeleted(false)
+                .build();
+
+            // Only a successfully persisted message can be acknowledged to the room.
+            message = persistMessage(message);
+
+            // Create response
+            ChatMessageResponse response = ChatMessageResponse.builder()
+                .id(message.getId())
+                .tempId(request.getTempId())
+                .chatRoomId(message.getChatRoomId())
+                .senderId(message.getSenderId())
+                .senderName(user.getName())
+                .content(message.getContent())
+                .type(message.getType())
+                .createdAt(message.getCreatedAt())
+                .updatedAt(message.getUpdatedAt())
+                .isUpdated(message.isUpdated())
+                .isDeleted(message.isDeleted())
+                .build();
+
+        return response;
+    }
+
+    public ChatMessageResponse addUser(ChatMessageRequest request, String userId) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new UserNotFoundException("Authenticated user not found"));
+        if (!participantRepository.existsByChatRoomIdAndUserId(request.getRoomId(), userId)) {
+            throw new ForbiddenActionException("Room membership required");
+        }
+            // Create join message
+            ChatMessageResponse response = ChatMessageResponse.builder()
+                .id(UUID.randomUUID().toString())
+                .chatRoomId(request.getRoomId())
+                .senderId(userId)
+                .senderName(user.getName())
+                .content(user.getName() + " joined the chat")
+                .type(Message.MessageType.SYSTEM)
+                .createdAt(Instant.now())
+                .updatedAt(Instant.now())
+                .isUpdated(false)
+                .isDeleted(false)
+                .build();
+
+        return response;
+    }
 
     public List<ChatMessageResponse> getRecentMessages(String roomId, String userId) {
         if(!chatRoomRepository.existsById(roomId)) {
