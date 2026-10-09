@@ -8,6 +8,9 @@ const API_BASE_URL = "";
 export const apiClient = axios.create({
     baseURL: API_BASE_URL,
     withCredentials: true, // include cookies for authentication
+    xsrfCookieName: "XSRF-TOKEN",
+    xsrfHeaderName: "X-XSRF-TOKEN",
+    withXSRFToken: true,
     headers: {
         "Content-Type": "application/json"
     }

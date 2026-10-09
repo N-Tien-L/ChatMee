@@ -21,6 +21,9 @@ import com.lnt.chatmee.service.CustomOAuth2UserService;
 
 import lombok.RequiredArgsConstructor;
 
+import org.springframework.security.web.csrf.CookieCsrfTokenRepository;
+import org.springframework.security.web.csrf.CsrfFilter;
+
 @Configuration
 @EnableWebSecurity
 @RequiredArgsConstructor
@@ -39,7 +42,12 @@ public class SecurityConfig {
     public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
         http
                 .cors(cors -> cors.configurationSource(corsConfigurationSource))
-                .csrf(csrf -> csrf.disable())
+                .csrf(csrf -> csrf
+                        // SockJS transports are cross-site and authenticated by the single-use STOMP token, not cookies.
+                        .ignoringRequestMatchers("/ws/**")
+                        .csrfTokenRepository(CookieCsrfTokenRepository.withHttpOnlyFalse())
+                        .csrfTokenRequestHandler(new SpaCsrfTokenRequestHandler()))
+                .addFilterAfter(new CsrfCookieFilter(), CsrfFilter.class)
                 .addFilterBefore(rateLimitingFilter, UsernamePasswordAuthenticationFilter.class)
                 .authorizeHttpRequests(authz -> authz
                         // Cross-site SockJS handshakes are public; STOMP CONNECT authenticates with a single-use token.
@@ -67,7 +75,8 @@ public class SecurityConfig {
                 .logout(logout -> logout
                         .logoutSuccessUrl(clientUrl)
                         .invalidateHttpSession(true)
-                        .clearAuthentication(true));
+                        .clearAuthentication(true)
+                        .deleteCookies("JSESSIONID"));
 
         return http.build();
     }

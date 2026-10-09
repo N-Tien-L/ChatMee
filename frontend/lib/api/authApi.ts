@@ -54,7 +54,8 @@ export const authApi = {
     logout: async () => {
         try {
             // Logout from application
-            window.location.href = `/logout`
+            await apiClient.post("/logout")
+            window.location.href = "/login"
         } catch (error) {
             console.error("Error during logout: ", error)
             throw error

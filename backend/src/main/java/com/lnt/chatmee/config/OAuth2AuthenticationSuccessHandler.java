@@ -10,7 +10,6 @@ import org.springframework.stereotype.Component;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
-import jakarta.servlet.http.HttpSession;
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
@@ -25,16 +24,11 @@ public class OAuth2AuthenticationSuccessHandler extends SimpleUrlAuthenticationS
             Authentication authentication) throws IOException, ServletException {
         
         // Ensure session is created
-        HttpSession session = request.getSession(true);
-        
-        // Get the session ID
-        String sessionId = session.getId();
+        request.getSession(true);
         
         // Log for debugging
-        log.info("=== OAuth2 Success Handler ===");
-        log.info("Session ID: {}", sessionId);
-        log.info("Authenticated User: {}", authentication.getName());
-        log.info("Redirecting to: {}/dashboard", clientUrl);
+        log.debug("=== OAuth2 Success Handler ===");
+        log.debug("Redirecting to: {}/dashboard", clientUrl);
         
         // Simple redirect to dashboard
         // Since we're using Vercel proxy, this will be same-origin

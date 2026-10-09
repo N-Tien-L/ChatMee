@@ -3,6 +3,7 @@ package com.lnt.chatmee.security;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.oauth2Login;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
@@ -132,7 +133,7 @@ class WsTokenServiceTest {
 
         @Test
         void getWsToken_unauthenticatedSession_doesNotIssueToken() throws Exception {
-            mvc.perform(post("/api/v1/auth/ws-token"))
+            mvc.perform(post("/api/v1/auth/ws-token").with(csrf().asHeader()))
                     .andExpect(status().isUnauthorized());
             verifyNoInteractions(endpointTokens);
         }
@@ -140,7 +141,7 @@ class WsTokenServiceTest {
         @Test
         void getWsToken_authenticatedSession_returnsUncachedToken() throws Exception {
             when(endpointTokens.issueToken(any(OAuth2User.class))).thenReturn("issued-token");
-            mvc.perform(post("/api/v1/auth/ws-token").with(oauth2Login()))
+            mvc.perform(post("/api/v1/auth/ws-token").with(oauth2Login()).with(csrf().asHeader()))
                     .andExpect(status().isOk())
                     .andExpect(header().string("Cache-Control", "no-store"))
                     .andExpect(jsonPath("$.token").value("issued-token"));
