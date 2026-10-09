@@ -56,4 +56,21 @@ class PresenceServiceTest {
         generated.userDisconnected("user", "tab");
         assertThat(generated.getOnlineUsers()).isEmpty();
     }
+    @Test
+    void sweep_noLocalSessions_usesAtomicIdleCheck() {
+        service.sweep();
+        verify(redis).execute(any(RedisScript.class), eq(List.of("presence:{test}:online", "presence:{test}:pending")),
+                eq("presence:{test}:"), eq("idle-sweep"), eq("instance"), eq("30000"), eq("10000"));
+        verifyNoMoreInteractions(redis);
+    }
+
+    @Test
+    void sweep_localSession_keepsFullSweep() {
+        service.userConnected("user", "tab");
+        clearInvocations(redis);
+        service.sweep();
+        verify(redis).execute(any(RedisScript.class), anyList(),
+                eq("presence:{test}:"), eq("sweep"), eq("instance"), eq("30000"), eq("10000"));
+    }
+
 }

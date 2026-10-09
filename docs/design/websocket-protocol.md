@@ -238,8 +238,11 @@ CM-053 regression coverage:
 An authenticated session is registered by instance ID and STOMP session ID. A user
 stays online while any session on any instance is alive. Closing the last session
 starts a 10 s Redis grace deadline; reconnect cancels it, avoiding reload flicker.
-Instance leases refresh every 10 s and expire after 30 s; expired owners are pruned
-by a 1 s sweep and on GET. Only state transitions are published to `presence-channel`
+Instance leases refresh every 15 s and expire after 45 s; expired owners are pruned
+by snapshot refresh, a 15 s sweep, and on GET. The last-tab offline event arrives
+10-25 s after closure because the 10 s grace deadline is checked periodically.
+Idle sweeps check pending once inside the script and skip full work when empty;
+refresh still detects crashed peers even without local sessions. Only state transitions are published to `presence-channel`
 and each Redis subscriber forwards the same `{userId, online}` shape to its local
 `/topic/presence`. Subscriber delivery never writes back into the registry.
 

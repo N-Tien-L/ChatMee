@@ -39,7 +39,7 @@ public class PresenceService {
     public PresenceService(StringRedisTemplate redis,
             @Value("${presence.instance-id:}") String instanceId,
             @Value("${presence.registry-prefix:presence:{registry}:}") String prefix,
-            @Value("${presence.instance-ttl-ms:30000}") long instanceTtlMs,
+            @Value("${presence.instance-ttl-ms:45000}") long instanceTtlMs,
             @Value("${presence.grace-ms:10000}") long graceMs) {
         this.redis = redis;
         this.instanceId = instanceId.isBlank() ? UUID.randomUUID().toString() : instanceId;
@@ -70,7 +70,7 @@ public class PresenceService {
         if (sessions != null && sessions.contains(sessionId)) refresh();
     }
 
-    @Scheduled(fixedDelayString = "${presence.refresh-ms:10000}")
+    @Scheduled(fixedDelayString = "${presence.refresh-ms:15000}")
     public synchronized void refresh() {
         List<String> sessions = new ArrayList<>();
         localSessions.forEach((user, ids) -> ids.forEach(id -> {
@@ -80,9 +80,9 @@ public class PresenceService {
         execute("refresh", sessions.toArray(String[]::new));
     }
 
-    @Scheduled(fixedDelayString = "${presence.sweep-ms:1000}")
+    @Scheduled(fixedDelayString = "${presence.sweep-ms:15000}")
     public synchronized void sweep() {
-        execute("sweep");
+        execute(localSessions.isEmpty() ? "idle-sweep" : "sweep");
     }
 
     public synchronized Set<String> getOnlineUsers() {

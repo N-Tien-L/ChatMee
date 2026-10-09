@@ -116,4 +116,23 @@ class PresenceRegistryIT {
         } finally { executor.shutdownNow(); }
     }
 
+    @Test
+    void sweep_idleNoPending_skipsWorkWhileRefreshStillPrunesCrashedPeer() {
+        String prefix = "presence:{" + UUID.randomUUID() + "}:";
+        PresenceService crashed = new PresenceService(redis, "A", prefix, 100, 100);
+        PresenceService idle = new PresenceService(redis, "B", prefix, 2000, 100);
+        idle.refresh();
+        idle.sweep();
+        assertThat(redis.hasKey(prefix + "alive:B")).isFalse();
+        crashed.userConnected("crashed", "tab");
+        idle.sweep(); // no pending deadline: no full sweep and no lease renewal
+        assertThat(redis.opsForSet().members(prefix + "online")).containsExactly("crashed");
+        await().atMost(Duration.ofSeconds(2)).untilAsserted(() -> {
+            idle.refresh(); // detects expired peer even with no local sessions/pending
+            idle.sweep();
+            assertThat(redis.opsForSet().members(prefix + "online")).isEmpty();
+        });
+        assertThat(redis.hasKey(prefix + "sessions:crashed")).isFalse();
+    }
+
 }

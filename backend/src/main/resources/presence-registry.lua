@@ -6,6 +6,15 @@ local ttl = tonumber(ARGV[4])
 local grace = tonumber(ARGV[5])
 local user = ARGV[6]
 local session = ARGV[7]
+-- Idle sweeps check pending in this same EVALSHA, without a separate round trip.
+if operation == 'idle-sweep' then
+    if redis.call('ZCARD', KEYS[2]) == 0 then return {} end
+    operation = 'sweep'
+end
+-- No local sessions and no shared online state: no lease or reconciliation needed.
+if operation == 'refresh' and #ARGV == 5 and redis.call('EXISTS', KEYS[1]) == 0 then
+    return {}
+end
 local time = redis.call('TIME')
 local now = tonumber(time[1]) * 1000 + math.floor(tonumber(time[2]) / 1000)
 local online = KEYS[1]
@@ -48,7 +57,8 @@ elseif operation == 'remove' then
     end
 end
 -- Sweep on reads as well as the periodic timer. Duplicate sweeps cannot publish twice.
-if operation == 'sweep' or operation == 'read' then
+-- Refresh also prunes crashes when idle sweeps have no pending deadline yet.
+if operation == 'sweep' or operation == 'read' or operation == 'refresh' then
     for _,id in ipairs(redis.call('SMEMBERS', online)) do
         local key = prefix .. 'sessions:' .. id
         local sessions = redis.call('HGETALL', key)
