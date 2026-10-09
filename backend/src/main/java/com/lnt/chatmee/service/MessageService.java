@@ -18,7 +18,6 @@ import com.lnt.chatmee.model.Message;
 import com.lnt.chatmee.model.User;
 import com.lnt.chatmee.repository.ChatRoomRepository;
 import com.lnt.chatmee.repository.MessageRepository;
-import com.lnt.chatmee.repository.ParticipantRepository;
 import com.lnt.chatmee.repository.UserRepository;
 
 import lombok.RequiredArgsConstructor;
@@ -29,14 +28,14 @@ public class MessageService {
 
 
     private final ChatRoomRepository chatRoomRepository;
-    private final ParticipantRepository participantRepository;
+    private final ParticipantService participantService;
     private final MessageRepository messageRepository;
     private final UserRepository userRepository;
 
     public ChatMessageResponse sendMessage(ChatMessageRequest request, String userId) {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new UserNotFoundException("Authenticated user not found"));
-        if (!participantRepository.existsByChatRoomIdAndUserId(request.getRoomId(), userId)) {
+        if (!participantService.isUserParticipant(request.getRoomId(), userId)) {
             throw new ForbiddenActionException("Room membership required");
         }
         Message message = Message.builder()
@@ -59,7 +58,7 @@ public class MessageService {
             throw new ChatRoomNotFoundException("Chat room not found: " + roomId);
         }
 
-        if(!participantRepository.existsByChatRoomIdAndUserId(roomId, userId)) {
+        if(!participantService.isUserParticipant(roomId, userId)) {
             throw new ForbiddenActionException("You are not a participant of this room");
         }
 

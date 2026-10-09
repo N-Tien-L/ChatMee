@@ -29,6 +29,8 @@ import com.lnt.chatmee.repository.ParticipantRepository;
 import com.lnt.chatmee.repository.UserRepository;
 import com.lnt.chatmee.util.ValidationUtil;
 
+import com.lnt.chatmee.service.policy.RoomTypePolicyRegistry;
+
 import lombok.RequiredArgsConstructor;
 
 @Service
@@ -40,6 +42,7 @@ public class ParticipantService {
     private final ParticipantRepository participantRepository;
     private final UserRepository userRepository;
     private final ChatRoomRepository chatRoomRepository;
+    private final RoomTypePolicyRegistry policies;
 
     public void createParticipant(String chatRoomId, String userId, Role role) {
         // Validate inputs
@@ -73,9 +76,7 @@ public class ParticipantService {
         ValidationUtil.validateId(roomId, "Room ID");
         ChatRoom room = chatRoomRepository.findByIdAndIsActiveTrue(roomId)
             .orElseThrow(() -> new ChatRoomNotFoundException("Can't find chat room with id: " + roomId));
-        if (room.getType() != ChatRoom.RoomType.PUBLIC) {
-            throw new ForbiddenActionException("Only PUBLIC rooms can be joined");
-        }
+        policies.get(room.getType()).checkJoin();
         addParticipant(roomId, user.getId(), Role.MEMBER);
     }
 
@@ -112,9 +113,9 @@ public class ParticipantService {
         ValidationUtil.validateId(roomId, "Room ID");
         ValidationUtil.validateId(userId, "User ID");
 
-        if (chatRoomRepository.findByIdAndIsActiveTrue(roomId).isEmpty()) {
-            throw new ChatRoomNotFoundException("Can't find chat room with id: " + roomId);
-        }
+        ChatRoom room = chatRoomRepository.findByIdAndIsActiveTrue(roomId)
+            .orElseThrow(() -> new ChatRoomNotFoundException("Can't find chat room with id: " + roomId));
+        policies.get(room.getType()).checkAddParticipant();
 
         if(userRepository.findById(userId).isEmpty()) {
             throw new UserNotFoundException("Participant not found");
@@ -178,7 +179,9 @@ public class ParticipantService {
             .toList();
     }
 
+    /** Shared access guard: a late membership insert must not authorize a soft-deleted room. */
     public boolean isUserParticipant(String roomId, String userId) {
-        return participantRepository.existsByChatRoomIdAndUserId(roomId, userId);
+        return chatRoomRepository.findByIdAndIsActiveTrue(roomId).isPresent()
+            && participantRepository.existsByChatRoomIdAndUserId(roomId, userId);
     }
 }

@@ -27,11 +27,13 @@ import com.lnt.chatmee.repository.ParticipantRepository;
 import com.lnt.chatmee.repository.UserRepository;
 import com.lnt.chatmee.service.ChatRoomService;
 import com.lnt.chatmee.service.ParticipantService;
+import com.lnt.chatmee.service.policy.*;
 
 @WebMvcTest(ChatRoomController.class)
 @ActiveProfiles("actuator-test")
 @ContextConfiguration(classes = {com.lnt.chatmee.config.CurrentUserWebMvcConfig.class, com.lnt.chatmee.security.CurrentUserArgumentResolver.class, ChatRoomController.class, GlobalExceptionHandler.class})
-@Import(ParticipantService.class)
+@Import({ParticipantService.class, RoomTypePolicyRegistry.class, PublicRoomPolicy.class,
+        PrivateRoomPolicy.class, DirectRoomPolicy.class})
 class ChatRoomControllerAuthorizationTest {
     @Autowired MockMvc mvc;
     @MockitoBean ChatRoomService chatRooms;
@@ -65,6 +67,20 @@ class ChatRoomControllerAuthorizationTest {
         add("ADMIN", 403);
         verify(participants, never()).save(any());
         verify(rooms, never()).save(any());
+    }
+
+    @Test
+    void addParticipant_directRoom_returnsForbiddenAction() throws Exception {
+        actor(Role.OWNER);
+        when(rooms.findByIdAndIsActiveTrue("room")).thenReturn(Optional.of(ChatRoom.builder()
+                .id("room").type(RoomType.DIRECT_MESSAGE).isActive(true).build()));
+        mvc.perform(post("/api/v1/chatrooms/room/add-participant")
+                .with(oauth2Login().oauth2User(com.lnt.chatmee.support.TestUsers.principal("actor"))).with(csrf())
+                .contentType(MediaType.APPLICATION_JSON).content("{\"userId\":\"target\",\"role\":\"MEMBER\"}"))
+                .andExpect(status().isForbidden())
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath("$.code").value("FORBIDDEN_ACTION"));
+        verify(participants, never()).save(any());
+        verify(rooms, never()).reserveSeat(any(), any());
     }
 
     @Test

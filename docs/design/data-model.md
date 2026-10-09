@@ -50,8 +50,8 @@ nearly full room may answer `ROOM_FULL` instead of `ALREADY_PARTICIPANT` for a d
 ## Soft delete
 
 `DELETE /api/v1/chatrooms/{roomId}` (creator only) calls `softDelete`, removes every
-participant row of the room (which revokes REST and STOMP access through the normal
-membership checks), and broadcasts a SYSTEM message to `/topic/public/{roomId}`
+participant row of the room (blocking new REST and STOMP access through the normal
+membership checks; existing broker subscriptions await CM-058), and broadcasts a SYSTEM message to `/topic/public/{roomId}`
 (`docs/design/websocket-protocol.md`). Inactive rooms are invisible to every read and
 cannot be joined. Messages of deleted rooms are kept.
 
@@ -77,3 +77,23 @@ production access and is an owner task.
   seat back; capacity edits below `memberCount` are rejected; soft delete blocks joins.
 - `ParticipantServiceTest`, `ChatRoomServiceTest`: seat reservation/compensation,
   soft delete clean-up and broadcast, membership reads from the participants collection.
+
+## Room type policies (CM-041)
+
+`RoomTypePolicy` in `service/policy` owns type rules and the `create` factory method.
+`RoomTypePolicyRegistry` injects all policies into an `EnumMap`; missing or duplicate
+policies fail startup. Services persist the constructed room and its initial memberships;
+role assignment checks and atomic capacity reservation/compensation remain in
+`ParticipantService` (CM-008, CM-028, ADR-0005). DTO validation groups remain unchanged.
+
+| Type / policy | Create | Join | Add participant | Update | Leave |
+|---|---|---|---|---|---|
+| PUBLIC / PublicRoomPolicy | Configurable group, one OWNER, default unlimited capacity | Allowed | CM-008 role rules | Editable fields, atomic capacity check | Members may leave; creator denied (403) |
+| PRIVATE / PrivateRoomPolicy | Configurable group, one OWNER, default unlimited capacity | Denied (403) | CM-008 role rules | Editable fields, atomic capacity check | Members may leave; creator denied (403) |
+| DIRECT_MESSAGE / DirectRoomPolicy | Existing other user, OWNER + MEMBER, fixed capacity 2; self DM denied (400) | Denied (403) | Denied (403 FORBIDDEN_ACTION) | Capacity changes denied (400); other fields allowed | Denied (403) |
+
+`ParticipantService.isUserParticipant` requires both an active room and a membership
+row. STOMP room SUBSCRIBE/SEND authorization, typing, message sending,
+and REST message history all use this guard. A join that inserts after soft-delete
+cleanup may still leave an orphan row, but it cannot grant access to the inactive room.
+Already established broker subscriptions are not revoked by this check (F6, CM-058).

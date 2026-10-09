@@ -22,6 +22,8 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
+import org.mockito.Spy;
+import com.lnt.chatmee.service.policy.*;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
@@ -53,6 +55,8 @@ class ChatRoomServiceTest {
     @Mock
     private SimpMessagingTemplate messagingTemplate;
 
+    @Spy RoomTypePolicyRegistry policies = new RoomTypePolicyRegistry(List.of(
+        new PublicRoomPolicy(), new PrivateRoomPolicy(), new DirectRoomPolicy()));
     @InjectMocks
     private ChatRoomService chatRoomService;
 
