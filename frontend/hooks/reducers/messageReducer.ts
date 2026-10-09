@@ -15,7 +15,9 @@ export type MessageAction =
     | { type: "FETCH_ERROR"; payload: string }
     | { type: "ADD_OPTIMISTIC_MESSAGE"; payload: Message }
     | { type: "CONFIRM_SENT_MESSAGE"; payload: Message }
-    | { type: "FAIL_SENT_MESSAGE"; payload: { tempId: string; error: string } }
+    | { type: "FAIL_SENT_MESSAGE"; payload: { tempId: string; error: string; code?: string } }
+    | { type: "RESEND_MESSAGE"; payload: { tempId: string; message: Message } }
+    | { type: "DISCARD_MESSAGE"; payload: { tempId: string } }
     | { type: "RECEIVE_WEBSOCKET_MESSAGE"; payload: { message: Message; userId?: string } }
     | { type: "RESYNC"; payload: { messages: MessageResponse[]; userId?: string } };
 
@@ -51,14 +53,22 @@ export function messageReducer(state: MessageState, action: MessageAction): Mess
                 messages: [...state.messages, action.payload],
             };
 
-        case "CONFIRM_SENT_MESSAGE":
+        case "CONFIRM_SENT_MESSAGE": {
+            const confirmed: Message = { ...action.payload, isOwn: true, isOptimistic: false, status: "sent" };
+            const pending = state.messages.some((m) => m.isOptimistic && m.tempId === action.payload.tempId);
+            if (!pending) {
+                // Discarded or sent from another tab: the server saved it, so show it once.
+                if (state.messages.some((m) => m.id === action.payload.id)) return state;
+                return { ...state, sending: false, messages: [...state.messages, confirmed] };
+            }
             return {
                 ...state,
                 sending: false,
                 messages: state.messages.map((m) =>
-                    m.isOptimistic && m.tempId === action.payload.tempId ? { ...action.payload, isOwn: true, isOptimistic: false, status: "sent" } : m
+                    m.isOptimistic && m.tempId === action.payload.tempId ? confirmed : m
                 ),
             };
+        }
 
         case "FAIL_SENT_MESSAGE":
             return {
@@ -66,8 +76,26 @@ export function messageReducer(state: MessageState, action: MessageAction): Mess
                 sending: false,
                 messages: state.messages.map((m) =>
                     m.isOptimistic && m.tempId === action.payload.tempId
-                        ? { ...m, status: "failed", errorMessage: action.payload.error }
+                        ? { ...m, status: "failed", errorMessage: action.payload.error, errorCode: action.payload.code }
                         : m
+                ),
+            };
+
+        case "RESEND_MESSAGE":
+            // The failed copy is replaced by the new attempt (new tempId), never duplicated.
+            return {
+                ...state,
+                messages: [
+                    ...state.messages.filter((m) => !(m.isOptimistic && m.tempId === action.payload.tempId)),
+                    action.payload.message,
+                ],
+            };
+
+        case "DISCARD_MESSAGE":
+            return {
+                ...state,
+                messages: state.messages.filter(
+                    (m) => !(m.isOptimistic && m.status === "failed" && m.tempId === action.payload.tempId)
                 ),
             };
 

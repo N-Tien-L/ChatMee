@@ -46,12 +46,27 @@ const ChatRoomView: React.FC<ChatInterfaceProps> = ({
     () => deleteRoom(roomId),
     [deleteRoom, roomId]
   );
-  const { messages, connected, sendMessage, loading, sending } =
-    useRoomMessages(roomId, { onRoomDeleted: handleRoomDeleted });
+  const {
+    messages,
+    connected,
+    sendMessage,
+    resendMessage,
+    discardMessage,
+    reload,
+    loading,
+    error,
+    sending,
+  } = useRoomMessages(roomId, { onRoomDeleted: handleRoomDeleted });
   const [newMessage, setNewMessage] = useState("");
   const messagesEndRef = useRef<HTMLDivElement>(null);
-  const inputRef = useRef<HTMLInputElement>(null);
+  const inputRef = useRef<HTMLTextAreaElement>(null);
   const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  useEffect(
+    () => () => {
+      if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
+    },
+    []
+  );
 
   // Get rooms
   const { rooms } = useChatRoomsStore(
@@ -99,7 +114,7 @@ const ChatRoomView: React.FC<ChatInterfaceProps> = ({
   );
 
   // Input change event handler
-  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleInputChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     const value = e.target.value;
     setNewMessage(value);
 
@@ -170,6 +185,12 @@ const ChatRoomView: React.FC<ChatInterfaceProps> = ({
           formatDate={formatDate}
           formatTime={formatTime}
           messagesEndRef={messagesEndRef}
+          loading={loading}
+          error={error}
+          onRetryLoad={reload}
+          onResend={resendMessage}
+          onDiscard={discardMessage}
+          canResend={connected}
         />
       </div>
 

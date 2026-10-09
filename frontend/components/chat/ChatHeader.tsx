@@ -27,7 +27,7 @@ const ChatHeader: React.FC<ChatHeaderProps> = ({
           className="md:hidden text-gray-700 p-2 hover:bg-gray-100 rounded-md mr-2 flex-shrink-0"
           aria-label="Open sidebar"
         >
-          ☰
+          <span aria-hidden="true">☰</span>
         </button>
       )}
 
@@ -38,9 +38,9 @@ const ChatHeader: React.FC<ChatHeaderProps> = ({
           </div>
           <div className="min-w-0 flex-1">
             <div className="flex items-center space-x-2">
-              <h1 className="text-base sm:text-lg font-semibold text-gray-900 truncate">
+              <h2 className="text-base sm:text-lg font-semibold text-gray-900 truncate">
                 {room.displayName || room.roomName}
-              </h1>
+              </h2>
             </div>
             <div className="flex items-center space-x-1 sm:space-x-2 text-xs sm:text-sm">
               <p className="text-gray-500 truncate">
@@ -56,17 +56,17 @@ const ChatHeader: React.FC<ChatHeaderProps> = ({
       </div>
 
       <div className="flex items-center space-x-1 flex-shrink-0">
-        <Button variant="ghost" size="sm" className="p-2 hidden sm:flex">
-          <Phone size={18} />
+        <Button variant="ghost" size="sm" className="p-2 hidden sm:flex" aria-label="Voice call">
+          <Phone size={18} aria-hidden="true" />
         </Button>
-        <Button variant="ghost" size="sm" className="p-2 hidden md:flex">
-          <Video size={18} />
+        <Button variant="ghost" size="sm" className="p-2 hidden md:flex" aria-label="Video call">
+          <Video size={18} aria-hidden="true" />
         </Button>
-        <Button variant="ghost" size="sm" className="p-2 hidden lg:flex">
-          <Info size={18} />
+        <Button variant="ghost" size="sm" className="p-2 hidden lg:flex" aria-label="Room info">
+          <Info size={18} aria-hidden="true" />
         </Button>
-        <Button variant="ghost" size="sm" className="p-2">
-          <MoreVertical size={18} />
+        <Button variant="ghost" size="sm" className="p-2" aria-label="More options">
+          <MoreVertical size={18} aria-hidden="true" />
         </Button>
       </div>
     </div>

@@ -2,7 +2,8 @@
 
 import { useAuthStore } from "@/lib/stores/authStore";
 import { useChatRoomsStore } from "@/lib/stores/chatRoomsStore";
-import { useEffect, useState, Suspense } from "react";
+import { useEffect, useRef, useState, Suspense } from "react";
+import { useIsMobile } from "@/hooks/use-mobile";
 import { useRouter, useSearchParams } from "next/navigation";
 import React from "react";
 import ChatRoomsList from "@/components/room/ChatRoomsList";
@@ -35,6 +36,26 @@ const DashboardContent = () => {
   const roomId = searchParams.get("roomId");
   const [hasCheckedAuth, setHasCheckedAuth] = useState(false);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const isMobile = useIsMobile();
+  const sidebarRef = useRef<HTMLElement>(null);
+
+  // Mobile drawer: move focus into it, close on Escape, give focus back to the opener on close.
+  useEffect(() => {
+    if (!isSidebarOpen) return;
+    const opener =
+      document.activeElement instanceof HTMLElement
+        ? document.activeElement
+        : null;
+    sidebarRef.current?.focus();
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setIsSidebarOpen(false);
+    };
+    document.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.removeEventListener("keydown", handleKeyDown);
+      if (opener && opener.isConnected) opener.focus();
+    };
+  }, [isSidebarOpen]);
 
   useEffect(() => {
     const fetchAuthStatus = async () => {
@@ -97,15 +118,16 @@ const DashboardContent = () => {
           </span>
           <img
             src={user?.avatarUrl || "/default-avatar.png"}
-            alt="Profile"
+            alt={user?.name ? `${user.name}'s avatar` : "Profile"}
             className="w-8 h-8 rounded-full"
           />
           <button
             onClick={() => logout()}
             className="p-2 hover:bg-gray-100 rounded-full text-gray-600 hover:text-red-600 transition-colors"
             title="Logout"
+            aria-label="Logout"
           >
-            <LogOut className="w-5 h-5" />
+            <LogOut className="w-5 h-5" aria-hidden="true" />
           </button>
         </div>
       </header>
@@ -115,7 +137,12 @@ const DashboardContent = () => {
         <div className="h-full flex flex-row">
           {/* Sidebar - Hidden on mobile */}
           <aside
-            className={`fixed md:static inset-y-0 left-0 z-30 top-16 md:top-0
+            ref={sidebarRef}
+            aria-label="Chat rooms"
+            tabIndex={-1}
+            // Off-screen on mobile when closed: keep it out of the tab order and accessibility tree.
+            inert={isMobile && !isSidebarOpen ? true : undefined}
+            className={`fixed md:static inset-y-0 left-0 z-30 top-16 md:top-0 outline-none
     bg-white border-r transform md:translate-x-0 transition-transform duration-300
     w-full sm:w-80 md:w-80 lg:w-96
     ${isSidebarOpen ? "translate-x-0" : "-translate-x-full"}`}
@@ -149,15 +176,17 @@ const DashboardContent = () => {
                     className="text-gray-700 p-2 hover:bg-gray-100 rounded-md"
                     aria-label="Open sidebar"
                   >
-                    ☰
+                    <span aria-hidden="true">☰</span>
                   </button>
-                  <h1 className="font-semibold text-gray-800">ChatMee</h1>
-                  <div className="w-10" /> {/* Spacer for centering */}
+                  <span className="font-semibold text-gray-800">ChatMee</span>
+                  <div className="w-10" aria-hidden="true" /> {/* Spacer for centering */}
                 </div>
 
                 <div className="flex-1 flex items-center justify-center">
                   <div className="text-center px-4">
-                    <div className="text-6xl mb-4">💬</div>
+                    <div className="text-6xl mb-4" aria-hidden="true">
+                      💬
+                    </div>
                     <h2 className="text-2xl font-semibold text-gray-700 mb-2">
                       Select a chat room
                     </h2>

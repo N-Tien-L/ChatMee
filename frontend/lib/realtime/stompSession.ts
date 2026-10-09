@@ -18,6 +18,8 @@ export type ConnectionStatus = "idle" | "connecting" | "connected" | "reconnecti
 
 export interface StompError {
     tempId?: string;
+    /** ErrorCode name from the server (e.g. RATE_LIMITED, VALIDATION_FAILED). */
+    code?: string;
     message: string;
 }
 

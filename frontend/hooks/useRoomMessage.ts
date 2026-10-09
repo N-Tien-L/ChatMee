@@ -1,11 +1,14 @@
-import { useCallback, useEffect, useReducer, useRef } from "react";
+import { useCallback, useEffect, useReducer, useRef, useState } from "react";
 import { StompError, useWebSocket } from "./useWebSocket";
 import { messageApi } from "@/lib/api/messageApi";
 import { useAuthStore } from "@/lib/stores/authStore";
 import { Message, MessageResponse, MessageType } from "@/lib/types";
 import {
     deduplicateMessages,
+    matchResyncedPending,
     mergeResyncedMessages,
+    NOT_SENT_ERROR_CODE,
+    TIMEOUT_ERROR_CODE,
     updateSessionCache,
 } from "@/lib/utils/messageUtils";
 import { initialState, messageReducer } from "./reducers/messageReducer";
@@ -34,6 +37,12 @@ export const useRoomMessages = (roomId: string, options: RoomMessagesOptions = {
     const [state, dispatch] = useReducer(messageReducer, initialState)
     const { user } = useAuthStore();
     const pendingTimers = useRef(new Map<string, ReturnType<typeof setTimeout>>());
+    // Latest messages for callbacks (resend, resync) without re-creating them on every message.
+    const messagesRef = useRef(state.messages);
+    useEffect(() => {
+        messagesRef.current = state.messages;
+    }, [state.messages]);
+    const [reloadCount, setReloadCount] = useState(0);
     const onRoomDeletedRef = useRef(options.onRoomDeleted);
     useEffect(() => {
         onRoomDeletedRef.current = options.onRoomDeleted;
@@ -63,6 +72,7 @@ export const useRoomMessages = (roomId: string, options: RoomMessagesOptions = {
 
     // Effect for loading 50 most recent messages (from cache or API)
     useEffect(() => {
+        let active = true;
         const loadMessages = async () => {
             if (!roomId) return;
 
@@ -76,8 +86,10 @@ export const useRoomMessages = (roomId: string, options: RoomMessagesOptions = {
                 return;
             }
 
+            dispatch({ type: "FETCH_START" });
             try {
                 const res = await messageApi.get50RecentMessages(roomId);
+                if (!active) return;
                 if (!res.success) throw new Error(res.message || "Failed to load messages");
 
                 const data = Array.isArray(res.data) ? res.data : [];
@@ -86,6 +98,7 @@ export const useRoomMessages = (roomId: string, options: RoomMessagesOptions = {
                 dispatch({ type: "FETCH_SUCCESS", payload: { messages: unique, hasMore, userId: user?.id } });
                 sessionCache.set(roomId, { messages: unique, hasMoreMessages: hasMore, lastLoaded: Date.now() });
             } catch (err: unknown) {
+                if (!active) return;
                 let msg = "Failed to load messages";
                 if (isApiError(err)) {
                     msg = err?.response?.data?.detail || err.message || "Failed to load messages";
@@ -95,7 +108,13 @@ export const useRoomMessages = (roomId: string, options: RoomMessagesOptions = {
         };
 
         loadMessages();
-    }, [roomId, user?.id, getLastReconnectAt]);
+        return () => {
+            active = false;
+        };
+    }, [roomId, user?.id, getLastReconnectAt, reloadCount]);
+
+    /** Retries the initial history load after a failure. */
+    const reload = useCallback(() => setReloadCount((count) => count + 1), []);
 
     // Resync after a reconnect: refetch the latest page and merge it by message id.
     useEffect(() => {
@@ -107,6 +126,9 @@ export const useRoomMessages = (roomId: string, options: RoomMessagesOptions = {
                     const res = await messageApi.get50RecentMessages(roomId);
                     if (!active || !res.success || !Array.isArray(res.data)) return;
                     const latest = deduplicateMessages(res.data).reverse();
+                    // Pending messages saved while the confirmation was lost are confirmed, not failed.
+                    matchResyncedPending(messagesRef.current, latest, user?.id)
+                        .forEach((_, tempId) => clearPendingTimer(tempId));
                     dispatch({ type: "RESYNC", payload: { messages: latest, userId: user?.id } });
                     const cached = sessionCache.get(roomId);
                     sessionCache.set(roomId, {
@@ -123,7 +145,7 @@ export const useRoomMessages = (roomId: string, options: RoomMessagesOptions = {
             active = false;
             removeListener();
         };
-    }, [roomId, user?.id, onReconnect]);
+    }, [roomId, user?.id, onReconnect, clearPendingTimer]);
 
     // Effect for room and error subscriptions; the session keeps them across reconnects.
     useEffect(() => {
@@ -149,7 +171,10 @@ export const useRoomMessages = (roomId: string, options: RoomMessagesOptions = {
         const handleError = (error: StompError) => {
             if (error.tempId) {
                 clearPendingTimer(error.tempId);
-                dispatch({ type: "FAIL_SENT_MESSAGE", payload: { tempId: error.tempId, error: error.message } });
+                dispatch({
+                    type: "FAIL_SENT_MESSAGE",
+                    payload: { tempId: error.tempId, error: error.message, code: error.code },
+                });
             }
         };
         const removeErrorHandler = subscribeErrors(handleError);
@@ -160,51 +185,88 @@ export const useRoomMessages = (roomId: string, options: RoomMessagesOptions = {
         };
     }, [roomId, subscribeRoom, user?.id, subscribeErrors, clearPendingTimer]);
 
-    // Action for sending a message
-    const sendMessage = useCallback(async (content: string) => {
-        if (!connected || !content.trim() || !user) return;
-
+    const createOptimisticMessage = useCallback((content: string): Message | null => {
+        if (!user) return null;
         const tempId = `temp-${Date.now()}-${Math.random()}`;
-        const optimisticMessage: Message = {
+        const now = new Date().toISOString();
+        return {
             id: `optimistic-${tempId}`,
             tempId,
             chatRoomId: roomId,
             senderId: user.id,
             senderName: user.name,
-            content: content.trim(),
+            content,
             type: MessageType.TEXT,
-            createdAt: new Date().toISOString(),
-            updatedAt: new Date().toISOString(),
+            createdAt: now,
+            updatedAt: now,
             isOwn: true,
             status: "sending",
             isOptimistic: true,
             isDeleted: false,
             isUpdated: false,
         };
+    }, [roomId, user]);
 
-        dispatch({ type: "ADD_OPTIMISTIC_MESSAGE", payload: optimisticMessage });
-
+    // Publishes an optimistic message that is already in state and arms its confirmation timeout.
+    const deliver = useCallback((message: Message) => {
+        const tempId = message.tempId as string;
         pendingTimers.current.set(tempId, setTimeout(() => {
             pendingTimers.current.delete(tempId);
-            dispatch({ type: "FAIL_SENT_MESSAGE", payload: { tempId, error: "Message confirmation timed out" } });
+            dispatch({
+                type: "FAIL_SENT_MESSAGE",
+                payload: { tempId, error: "Message confirmation timed out", code: TIMEOUT_ERROR_CODE },
+            });
         }, 10_000));
 
         let published: boolean;
         try {
-            published = sendWebSocketMessage(roomId, content.trim(), tempId);
+            published = sendWebSocketMessage(roomId, message.content, tempId);
         } catch {
             published = false;
         }
         if (published === false) {
             clearPendingTimer(tempId);
-            dispatch({ type: "FAIL_SENT_MESSAGE", payload: { tempId, error: "Failed to send" } });
+            dispatch({
+                type: "FAIL_SENT_MESSAGE",
+                payload: { tempId, error: "Failed to send", code: NOT_SENT_ERROR_CODE },
+            });
         }
-    }, [connected, roomId, user, sendWebSocketMessage, clearPendingTimer]);
+    }, [roomId, sendWebSocketMessage, clearPendingTimer]);
+
+    // Action for sending a message
+    const sendMessage = useCallback(async (content: string) => {
+        if (!connected || !content.trim()) return;
+        const optimisticMessage = createOptimisticMessage(content.trim());
+        if (!optimisticMessage) return;
+        dispatch({ type: "ADD_OPTIMISTIC_MESSAGE", payload: optimisticMessage });
+        deliver(optimisticMessage);
+    }, [connected, createOptimisticMessage, deliver]);
+
+    /** Sends a failed message again as a new attempt that replaces the failed copy. */
+    const resendMessage = useCallback((tempId: string) => {
+        if (!connected) return;
+        const failed = messagesRef.current.find(
+            (m) => m.isOptimistic && m.tempId === tempId && m.status === "failed"
+        );
+        if (!failed) return;
+        const retry = createOptimisticMessage(failed.content);
+        if (!retry) return;
+        dispatch({ type: "RESEND_MESSAGE", payload: { tempId, message: retry } });
+        deliver(retry);
+    }, [connected, createOptimisticMessage, deliver]);
+
+    /** Removes a failed message from the list. */
+    const discardMessage = useCallback((tempId: string) => {
+        dispatch({ type: "DISCARD_MESSAGE", payload: { tempId } });
+    }, []);
 
     return {
         ...state,
         connected,
         connecting,
         sendMessage,
+        resendMessage,
+        discardMessage,
+        reload,
     };
 };
