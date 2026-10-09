@@ -43,7 +43,23 @@ class RateLimitingServiceTest {
         assertThat(decision.allowed()).isTrue();
         assertThat(decision.limit()).isEqualTo(RateLimitingService.MAX_REQUESTS_PER_MINUTE_PUBLIC);
         assertThat(decision.remaining()).isEqualTo(RateLimitingService.MAX_REQUESTS_PER_MINUTE_PUBLIC - 1);
-        verify(redisTemplate).expire(anyString(), eq(1L), eq(TimeUnit.MINUTES));
+        verify(redisTemplate).expire(anyString(), eq(60L), eq(TimeUnit.SECONDS));
+    }
+
+    @Test
+    void check_customWindowOverLimit_deniesWithinThatWindow() {
+        when(valueOperations.increment(anyString())).thenReturn(1L, 11L);
+
+        RateLimitingService.Decision first = rateLimitingService.check("ws:user1:/app/chat.sendMessage", 10, 5);
+        RateLimitingService.Decision eleventh = rateLimitingService.check("ws:user1:/app/chat.sendMessage", 10, 5);
+
+        assertThat(first.allowed()).isTrue();
+        assertThat(first.remaining()).isEqualTo(9);
+        verify(redisTemplate).expire(org.mockito.ArgumentMatchers.startsWith("rate_limit:ws:user1:/app/chat.sendMessage:"),
+                eq(5L), eq(TimeUnit.SECONDS));
+        assertThat(eleventh.allowed()).isFalse();
+        assertThat(eleventh.limit()).isEqualTo(10);
+        assertThat(eleventh.retryAfterSeconds()).isBetween(1L, 5L);
     }
 
     @Test

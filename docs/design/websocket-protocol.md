@@ -23,14 +23,13 @@ All payloads below are JSON. Directions are relative to the client.
 
 | Destination | Direction / command | Payload | Authorization | Error behavior |
 |---|---|---|---|---|
-| `/app/chat.sendMessage` | Client to server / SEND | `{roomId, content, messageType, tempId?}` | Authenticated Principal; member of payload room | Validation, membership, and synchronous processing errors go to the Principal's `/user/queue/errors`; validation/membership rejection prevents publication and persistence |
-| `/app/chat.addUser` | Client to server / SEND | `{roomId, content, messageType, tempId?}` | Authenticated Principal; existing member of payload room; this announces a join and does not grant membership | Validation, membership, and synchronous processing errors go to the Principal's `/user/queue/errors` |
+| `/app/chat.sendMessage` | Client to server / SEND | `{roomId, content, messageType: "TEXT", tempId?}` | Authenticated Principal; member of payload room; at most 10 frames per 5 s per user; only `TEXT` is accepted (SYSTEM messages are server-generated) | Validation, membership, and synchronous processing errors go to the Principal's `/user/queue/errors`; validation/membership rejection prevents publication and persistence |
 | `/app/typing` | Client to server / SEND | `{roomId, typing}`; legacy `userId` is ignored | Authenticated Principal; member of payload room | Nonmembers and missing/blank room IDs are dropped without a broadcast |
 | `/app/presence` | Client to server / SEND | `{online}`; legacy `userId` is ignored | Any authenticated Principal; only its own presence changes | Missing Principal is rejected by the interceptor; no other user's presence can be changed |
 | `/topic/public/{roomId}` | Server to client / SUBSCRIBE | `ChatMessageResponse`: server message ID, optional tempId, chatRoomId, senderId, senderName, content, type, timestamps, update/delete flags | Member of the exact room | Unauthorized SUBSCRIBE receives STOMP ERROR and connection closure |
 | `/topic/typing/{roomId}` | Server to client / SUBSCRIBE | `{roomId, userId, typing}`; server supplies userId | Member of the exact room | Unauthorized SUBSCRIBE receives STOMP ERROR and connection closure |
 | `/topic/presence` | Server to client / SUBSCRIBE | `{userId, online}`; server supplies userId | Any authenticated Principal | Missing Principal receives STOMP ERROR and connection closure |
-| `/user/queue/errors` | Server to client / SUBSCRIBE | `{tempId?, message}` (`StompError`) | Any authenticated Principal, for its own user destination | Application errors are private to that Principal; never sent to a room topic |
+| `/user/queue/errors` | Server to client / SUBSCRIBE | `{tempId?, code, message}` (`StompError`; `code` is an `ErrorCode` name such as `VALIDATION_FAILED`, `FORBIDDEN_ACTION`, `RATE_LIMITED`, `INTERNAL_ERROR`) | Any authenticated Principal, for its own user destination | Application errors are private to that Principal; never sent to a room topic |
 
 ## Message delivery (CM-029)
 
@@ -119,8 +118,8 @@ room helpers. No component creates its own client.
   on logout/unmount. The `beforeunload` report was removed; the server derives
   offline from the session disconnect.
 - Sends: `/app/chat.sendMessage` always uses `messageType: "TEXT"`. The client no
-  longer sends `/app/chat.addUser` (server-side removal and TEXT-only validation
-  are CM-056).
+  longer sends `/app/chat.addUser`; CM-056 removed that destination on the server
+  and rejects any other message type with a private `VALIDATION_FAILED` error.
 
 ## Authorization rules
 
@@ -151,6 +150,21 @@ room helpers. No component creates its own client.
 - Interceptor authentication/authorization failures are protocol errors and close
   the connection. They are distinct from controller errors delivered to the user
   queue. Clients reconnect with a fresh token after protocol rejection.
+
+## Inbound rate limits (CM-056)
+
+HTTP rate limiting never sees frames on an open socket, so `WsRateLimitInterceptor`
+(registered on the clientInboundChannel by `WsRateLimitConfig`) counts SEND frames per
+user and destination in Redis, using the same fixed-window `RateLimitingService`:
+
+| Destination | Limit | Over the limit |
+|---|---|---|
+| `/app/chat.sendMessage` | 10 per 5 s | Frame dropped; private `{tempId, code: "RATE_LIMITED", message}` error |
+| `/app/typing` | 10 per 5 s | Frame dropped silently |
+| `/app/presence` | 20 per 60 s | Frame dropped silently |
+
+Frames are dropped, not rejected with an exception, because an exception would close
+the whole STOMP connection. Like the HTTP limiter, it fails open when Redis is down.
 
 ## REST presence and limits
 

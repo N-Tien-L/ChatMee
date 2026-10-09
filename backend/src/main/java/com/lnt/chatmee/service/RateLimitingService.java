@@ -27,14 +27,19 @@ public class RateLimitingService {
 
     public Decision check(String key, boolean isAuthenticated) {
         int limit = isAuthenticated ? MAX_REQUESTS_PER_MINUTE_AUTHENTICATED : MAX_REQUESTS_PER_MINUTE_PUBLIC;
+        return check(key, limit, WINDOW_SECONDS);
+    }
+
+    /** Counts one hit for {@code key} in a fixed window of {@code windowSeconds} and allows up to {@code limit}. */
+    public Decision check(String key, int limit, long windowSeconds) {
         long now = Instant.now().getEpochSecond();
-        String redisKey = "rate_limit:" + key + ":" + now / WINDOW_SECONDS;
+        String redisKey = "rate_limit:" + key + ":" + now / windowSeconds;
 
         Long count;
         try {
             count = redisTemplate.opsForValue().increment(redisKey);
             if (count != null && count == 1) {
-                redisTemplate.expire(redisKey, 1, TimeUnit.MINUTES);
+                redisTemplate.expire(redisKey, windowSeconds, TimeUnit.SECONDS);
             }
         } catch (DataAccessException ex) {
             log.warn("Rate limiter unavailable, allowing request: {}", ex.getClass().getSimpleName());
@@ -46,7 +51,7 @@ public class RateLimitingService {
         }
 
         long remaining = Math.max(0, limit - count);
-        long retryAfter = WINDOW_SECONDS - now % WINDOW_SECONDS;
+        long retryAfter = windowSeconds - now % windowSeconds;
         return new Decision(count <= limit, limit, remaining, retryAfter);
     }
 }
