@@ -80,13 +80,10 @@ class GlobalExceptionHandlerTest {
 
     @Test
     void createRoom_invalidName_returns400Problem() throws Exception {
-        when(rooms.createRoom(any(), isNull(), isNull())).thenAnswer(invocation -> {
-            com.lnt.chatmee.dto.request.CreateChatRoomRequest request = invocation.getArgument(0);
-            com.lnt.chatmee.util.ValidationUtil.validateRoomName(request.getRoomName(), true);
-            return null;
-        });
         check(mvc.perform(post("/api/v1/chatrooms/create").contentType(MediaType.APPLICATION_JSON)
-                .content("{\"roomType\":\"PUBLIC\",\"roomName\":\"bad!\"}")), 400, "INVALID_ARGUMENT");
+                .content("{\"roomType\":\"PUBLIC\",\"roomName\":\"bad!\"}")), 400, "VALIDATION_FAILED")
+                .andExpect(jsonPath("$.errors[?(@.field == 'roomName')]").isNotEmpty());
+        verifyNoInteractions(rooms);
     }
 
     @Test

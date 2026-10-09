@@ -51,6 +51,29 @@ class ChatRoomControllerValidationTest {
     }
 
     @Test
+    void createRoom_nameWithForbiddenCharacters_returnsBadRequest() throws Exception {
+        reject("PUBLIC", "bad!", 2);
+    }
+
+    @Test
+    void createRoom_publicRoomWithoutName_returnsBadRequest() throws Exception {
+        rejectJson("{\"roomType\":\"PUBLIC\",\"maxUsers\":2}");
+    }
+
+    @Test
+    void createRoom_directMessageWithoutParticipant_returnsBadRequest() throws Exception {
+        rejectJson("{\"roomType\":\"DIRECT_MESSAGE\"}");
+    }
+
+    @Test
+    void createRoom_directMessageWithParticipantAndNoName_returnsCreated() throws Exception {
+        mvc.perform(post("/api/v1/chatrooms/create").with(oauth2Login()).with(csrf())
+                .contentType(MediaType.APPLICATION_JSON).content("{\"roomType\":\"DIRECT_MESSAGE\",\"participantId\":\"user-2\"}"))
+                .andExpect(status().isCreated());
+        verify(rooms).createRoom(any(), any(), any());
+    }
+
+    @Test
     void createRoom_validBoundaryRequest_returnsCreated() throws Exception {
         mvc.perform(post("/api/v1/chatrooms/create").with(oauth2Login()).with(csrf())
                 .contentType(MediaType.APPLICATION_JSON).content(body("PUBLIC", "x".repeat(100), 2)))
@@ -59,8 +82,12 @@ class ChatRoomControllerValidationTest {
     }
 
     private void reject(String type, String name, int maxUsers) throws Exception {
+        rejectJson(body(type, name, maxUsers));
+    }
+
+    private void rejectJson(String json) throws Exception {
         mvc.perform(post("/api/v1/chatrooms/create").with(oauth2Login()).with(csrf())
-                .contentType(MediaType.APPLICATION_JSON).content(body(type, name, maxUsers)))
+                .contentType(MediaType.APPLICATION_JSON).content(json))
                 .andExpect(status().isBadRequest());
         verifyNoInteractions(rooms, participants, users, participantRepository, oauth);
     }

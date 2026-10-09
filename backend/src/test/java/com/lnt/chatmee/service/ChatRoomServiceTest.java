@@ -53,18 +53,6 @@ class ChatRoomServiceTest {
     private ChatRoomService chatRoomService;
 
     @Test
-    void createRoom_invalidName_throwsInvalidRequest() {
-        when(userRepository.findByProviderAndProviderId("local", "localId"))
-                .thenReturn(Optional.of(User.builder().id("user1").build()));
-        CreateChatRoomRequest request = new CreateChatRoomRequest();
-        request.setRoomType(ChatRoom.RoomType.PUBLIC);
-        request.setRoomName("bad!");
-        assertThatThrownBy(() -> chatRoomService.createRoom(request, "local", "localId"))
-                .isInstanceOf(InvalidRequestException.class);
-        verifyNoInteractions(chatRoomRepository, participantService);
-    }
-
-    @Test
     void createRoom_directRoom_createsSuccessfully() {
         User creator = User.builder().id("user1").build();
         User participant = User.builder().id("user2").build();
