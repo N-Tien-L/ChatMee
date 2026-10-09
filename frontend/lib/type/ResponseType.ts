@@ -8,6 +8,20 @@ export interface UserResponse {
     provider: string
 }
 
+export interface UserSummaryResponse {
+    id: string;
+    name: string;
+    avatarUrl: string;
+}
+
+export interface PagedResponse<T> {
+    content: T[];
+    page: number;
+    size: number;
+    totalElements: number;
+    totalPages: number;
+}
+
 export interface AuthResponse {
     authenticated: string
     user?: UserResponse

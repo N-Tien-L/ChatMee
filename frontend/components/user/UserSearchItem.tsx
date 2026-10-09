@@ -1,12 +1,11 @@
-import { UserResponse } from "@/lib/type/ResponseType";
+import { UserSummaryResponse } from "@/lib/type/ResponseType";
 import React from "react";
-import { Github } from "../ui/icon/OAuthIcons";
-import { Check, Mail, Plus, User } from "lucide-react";
+import { Check, Plus, User } from "lucide-react";
 import { Card, CardContent } from "../ui/card";
 import { Button } from "../ui/button";
 
 export interface UserSearchItemProps {
-  user: UserResponse;
+  user: UserSummaryResponse;
   onAdd: () => void;
   isAdded: boolean;
 }
@@ -43,17 +42,6 @@ const UserSearchItem = ({ user, onAdd, isAdded }: UserSearchItemProps) => {
     );
   };
 
-  const getProviderIcon = () => {
-    switch (user.provider?.toLowerCase()) {
-      case "github":
-        return <Github className="w-4 h-4 text-gray-500" />;
-      case "google":
-        return <Mail className="w-4 h-4 text-gray-500" />;
-      default:
-        return <User className="w-4 h-4 text-gray-500" />;
-    }
-  };
-
   return (
     <Card className="hover:shadow-md transition-all duration-200 border-gray-200">
       <CardContent className="p-3">
@@ -67,16 +55,7 @@ const UserSearchItem = ({ user, onAdd, isAdded }: UserSearchItemProps) => {
               <h4 className="font-medium text-gray-900 truncate">
                 {user.name}
               </h4>
-              {getProviderIcon()}
             </div>
-
-            <p className="text-sm text-gray-600 truncate mb-1">{user.email}</p>
-
-            {user.provider && (
-              <p className="text-xs text-gray-400 capitalize">
-                via {user.provider}
-              </p>
-            )}
           </div>
 
           {/* Add Button */}
