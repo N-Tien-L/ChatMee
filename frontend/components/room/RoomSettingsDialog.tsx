@@ -344,9 +344,6 @@ export const RoomSettingsDialog: React.FC<RoomSettingsDialogProps> = ({
                         <p className="text-sm font-medium truncate">
                           {participant.name || "Unknown User"}
                         </p>
-                        <p className="text-xs text-gray-500 truncate">
-                          {participant.email || "No email"}
-                        </p>
                       </div>
                     </div>
                   ))
@@ -373,7 +370,7 @@ export const RoomSettingsDialog: React.FC<RoomSettingsDialogProps> = ({
                     {availableUsers.length > 0 ? (
                       availableUsers.map((user) => (
                         <SelectItem key={user.id} value={user.id}>
-                          {user.name} ({user.email})
+                          {user.name}
                         </SelectItem>
                       ))
                     ) : (

@@ -263,9 +263,6 @@ export const RoomInfoDialog: React.FC<RoomInfoDialogProps> = ({
                           </span>
                         )}
                       </p>
-                      <p className="text-xs text-gray-500 truncate">
-                        {participant.email || "No email"}
-                      </p>
                     </div>
                     {participant.id === room.createdBy && (
                       <Shield className="w-4 h-4 text-yellow-500" />
