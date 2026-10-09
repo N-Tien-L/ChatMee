@@ -19,7 +19,7 @@ ChatMee is a full-stack, OAuth2-secured chat platform that combines a Spring Boo
 | Layer | Technologies |
 | --- | --- |
 | Backend | Java 17, Spring Boot 3.5.5, Spring Data MongoDB, Spring Security + OAuth2 (Google/GitHub), Spring WebSocket/STOMP, Redis Pub/Sub, Actuator, Lombok |
-| Frontend | Next.js 15.5.2 (App Router), React 19, TypeScript 5, Tailwind CSS 4 + shadcn/ui, Zustand, Axios, react-hot-toast, react-resizable-panels, Fuse.js, @stomp/stompjs + SockJS |
+| Frontend | Next.js 15.5.2 (App Router), React 19, TypeScript 5, Tailwind CSS 4 + shadcn/ui, Zustand, Axios, react-hot-toast, react-resizable-panels, Fuse.js, @stomp/stompjs (plain WebSocket) |
 | Tooling & Ops | Maven Wrapper, Docker (multi-stage backend image), Vercel rewrites, Render-hosted backend, GitHub Actions placeholders |
 
 ## Project Architecture
@@ -115,7 +115,7 @@ With the `dev` or `local` profile, the backend serves the OpenAPI document at [h
 
 ## Key Features
 - **OAuth2 authentication** with Google (and optional GitHub) handled by `SecurityConfig` and `CustomOAuth2UserService`.
-- **Real-time messaging** via STOMP over SockJS; `WebSocketConfig` and `useWebSocket` manage bidirectional connections, retries, and subscriptions per room.
+- **Real-time messaging** via STOMP over plain WebSocket; `WebSocketConfig` and `useWebSocket` manage bidirectional connections, retries, and subscriptions per room.
 - **Presence + typing indicators** backed by Redis pub/sub (`RedisPresencePublisher`, `RedisPresenseSubcriber`) and rendered through Zustand stores.
 - **Flexible chat rooms** supporting public, private, and direct messages with per-room settings (`ChatRoom.RoomSettings`).
 - **Optimistic UI updates & caching** through `useRoomMessages`, session caches, and `messageReducer` to keep local state responsive.

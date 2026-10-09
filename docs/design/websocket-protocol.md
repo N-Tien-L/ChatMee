@@ -1,8 +1,24 @@
 # WebSocket protocol and authorization
 
-Implemented by CM-003 (authentication) and CM-004 (authorization). The SockJS
+Implemented by CM-003 (authentication) and CM-004 (authorization). The STOMP
 endpoint is `/ws`; application messages use `/app`, broker messages use `/topic`
 and `/queue`, and user destinations use `/user`.
+
+## Transport and origin (CM-053)
+
+`/ws` is a plain WebSocket endpoint (no SockJS, see the ADR-0003 amendment). The
+client connects with `@stomp/stompjs` `brokerURL`, derived from
+`NEXT_PUBLIC_WS_URL` by `frontend/lib/realtime/stompClient.ts`: `http://` becomes
+`ws://`, `https://` becomes `wss://`, and `ws(s)://` values are used as is. The
+browser connects directly to the backend; Vercel rewrites do not proxy `/ws`.
+
+The handshake accepts only the `app.client.url` origin. The endpoint enforces this
+itself (`setAllowedOrigins(clientUrl)`, no origin patterns), independent of the
+Spring Security CORS filter; a foreign `Origin` gets 403. A handshake without an
+`Origin` header (non-browser clients) is treated as same-origin and still needs a
+ws-token at CONNECT. `/ws/**` stays CSRF-ignored and `permitAll`: the handshake
+carries no cookie-based authority, and STOMP CONNECT authenticates with the
+single-use token below.
 
 ## Authentication
 
@@ -191,3 +207,12 @@ CM-029 regression coverage:
 - `messageReducer.test.ts`: pending sends stay enabled; fake-timer hook tests cover
   the 10-second deadline, concurrent sends, confirmations, late confirmation,
   private errors, local failure, room changes, and unmount cleanup.
+
+CM-053 regression coverage:
+- `StompMessagingIT`: the full stack (Security filters included) rejects a handshake
+  from a foreign `Origin` with 403 and accepts `app.client.url` through STOMP CONNECT;
+  all scenarios use the plain WebSocket transport.
+- `AuthChannelInterceptorTest.WireConnect`: without Spring Security filters, the
+  endpoint's own origin check still rejects a foreign `Origin` with 403.
+- `stompClient.test.ts`: `NEXT_PUBLIC_WS_URL` derivation (http to ws, https to wss,
+  ws/wss unchanged).
