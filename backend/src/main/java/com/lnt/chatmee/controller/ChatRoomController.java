@@ -3,7 +3,6 @@ package com.lnt.chatmee.controller;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import java.util.List;
-import java.util.stream.Collectors;
 
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -56,10 +55,7 @@ public class ChatRoomController {
     public ResponseEntity<ApiResponse<List<ChatRoomResponse>>> getChatRoomList(@AuthenticationPrincipal OAuth2User principal) {
         String provider = oAuthUtil.determineProvider(principal);
         String providerId = oAuthUtil.getProviderId(principal, provider);
-        List<ChatRoom> chatRoomList = chatRoomService.getList(provider, providerId);
-        List<ChatRoomResponse> responseBody = chatRoomList.stream()
-            .map(this::convertToChatRoomResponse)
-            .collect(Collectors.toList());
+        List<ChatRoomResponse> responseBody = chatRoomService.toResponses(chatRoomService.getList(provider, providerId));
         return ResponseEntity.ok(ApiResponse.success(responseBody));
     }
 
@@ -69,7 +65,7 @@ public class ChatRoomController {
         String provider = oAuthUtil.determineProvider(principal);
         String providerId = oAuthUtil.getProviderId(principal, provider);
         ChatRoom room = chatRoomService.getChatRoomById(provider, providerId, roomId);
-        ChatRoomResponse responseBody = convertToChatRoomResponse(room);
+        ChatRoomResponse responseBody = chatRoomService.toResponse(room);
         return ResponseEntity.ok(ApiResponse.success(responseBody));
     }
 
@@ -79,7 +75,7 @@ public class ChatRoomController {
         String provider = oAuthUtil.determineProvider(principal);
         String providerId = oAuthUtil.getProviderId(principal, provider);
         ChatRoom room = chatRoomService.updateChatRoomById(provider, providerId, roomId, request);
-        ChatRoomResponse responseBody = convertToChatRoomResponse(room);
+        ChatRoomResponse responseBody = chatRoomService.toResponse(room);
         return ResponseEntity.ok(ApiResponse.success("Chat room updated successfully", responseBody));
     }
 
@@ -131,20 +127,4 @@ public class ChatRoomController {
 
         return ResponseEntity.ok(ApiResponse.success("User successfully left the room"));
     }
-
-    private ChatRoomResponse convertToChatRoomResponse(ChatRoom chatRoom) {
-        return ChatRoomResponse.builder()
-            .id(chatRoom.getId())
-            .roomName(chatRoom.getName())
-            .description(chatRoom.getDescription())
-            .roomType(chatRoom.getType())
-            .createdBy(chatRoom.getCreatedBy())
-            .createdAt(chatRoom.getCreatedAt())
-            .updatedAt(chatRoom.getLastActivity())
-            .maxUsers(chatRoom.getMaxParticipants())
-            .settings(chatRoom.getSettings())
-            .participants(chatRoom.getParticipants())
-            .build();
-    }
-
 }

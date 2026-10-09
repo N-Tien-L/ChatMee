@@ -3,15 +3,19 @@ package com.lnt.chatmee.service;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
-import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import com.lnt.chatmee.exception.ChatRoomNotFoundException;
 import com.lnt.chatmee.exception.ForbiddenActionException;
+import com.lnt.chatmee.exception.RoomCapacityExceededException;
 import com.lnt.chatmee.exception.UserAlreadyInRoomException;
 import com.lnt.chatmee.model.ChatRoom;
 import com.lnt.chatmee.model.ChatRoom.RoomType;
@@ -32,8 +36,8 @@ class ParticipantServiceTest {
 
     @BeforeEach
     void setUp() {
-        room = ChatRoom.builder().id("room").type(RoomType.PUBLIC)
-                .participants(new HashSet<>()).maxParticipants(10).build();
+        room = ChatRoom.builder().id("room").type(RoomType.PUBLIC).isActive(true)
+                .maxParticipants(10).build();
     }
 
     @Test
@@ -42,8 +46,93 @@ class ParticipantServiceTest {
         targetAndRoom("actor");
         service.joinRoom("room", "google", "subject");
         verify(participants).save(argThat(p -> p.getUserId().equals("actor") && p.getRole() == Role.MEMBER));
-        assertTrue(room.getParticipants().contains("actor"));
-        verify(rooms).save(room);
+        verify(rooms).reserveSeat(eq("room"), any());
+        verify(rooms, never()).save(any());
+    }
+
+    @Test
+    void joinRoom_deletedRoom_throwsNotFound() {
+        joinUser();
+        when(rooms.findByIdAndIsActiveTrue("room")).thenReturn(Optional.empty());
+        assertThrows(ChatRoomNotFoundException.class, () -> service.joinRoom("room", "google", "subject"));
+        verify(participants, never()).save(any());
+    }
+
+    @Test
+    void addParticipant_fullRoom_throwsCapacityExceededWithoutInsert() {
+        when(rooms.findByIdAndIsActiveTrue("room")).thenReturn(Optional.of(room));
+        when(users.findById("target")).thenReturn(Optional.of(User.builder().id("target").build()));
+        when(rooms.reserveSeat(eq("room"), any())).thenReturn(0L);
+
+        assertThrows(RoomCapacityExceededException.class, () -> service.addParticipant("room", "target", Role.MEMBER));
+
+        verify(participants, never()).save(any());
+        verify(rooms, never()).releaseSeat(any(), any());
+    }
+
+    @Test
+    void addParticipant_insertLosesUniqueIndexRace_releasesSeatAndThrowsAlreadyParticipant() {
+        when(rooms.findByIdAndIsActiveTrue("room")).thenReturn(Optional.of(room));
+        when(users.findById("target")).thenReturn(Optional.of(User.builder().id("target").build()));
+        when(rooms.reserveSeat(eq("room"), any())).thenReturn(1L);
+        when(participants.save(any())).thenThrow(new org.springframework.dao.DuplicateKeyException("duplicate"));
+
+        assertThrows(UserAlreadyInRoomException.class, () -> service.addParticipant("room", "target", Role.MEMBER));
+
+        verify(rooms).releaseSeat(eq("room"), any());
+    }
+
+    @Test
+    void removeParticipant_member_deletesRowAndReleasesSeat() {
+        when(participants.deleteByChatRoomIdAndUserId("room", "actor")).thenReturn(1L);
+
+        assertTrue(service.removeParticipant("room", "actor"));
+
+        verify(rooms).releaseSeat(eq("room"), any());
+    }
+
+    @Test
+    void removeParticipant_nonMember_returnsFalseWithoutReleasingSeat() {
+        when(participants.deleteByChatRoomIdAndUserId("room", "actor")).thenReturn(0L);
+
+        assertFalse(service.removeParticipant("room", "actor"));
+
+        verifyNoInteractions(rooms);
+    }
+
+    @Test
+    void getParticipantUserIds_severalRooms_groupsByRoomInOneQuery() {
+        when(participants.findByChatRoomIdIn(List.of("r1", "r2"))).thenReturn(List.of(
+                Participant.builder().chatRoomId("r1").userId("a").build(),
+                Participant.builder().chatRoomId("r1").userId("b").build(),
+                Participant.builder().chatRoomId("r2").userId("a").build()));
+
+        Map<String, Set<String>> members = service.getParticipantUserIds(List.of("r1", "r2"));
+
+        assertEquals(Set.of("a", "b"), members.get("r1"));
+        assertEquals(Set.of("a"), members.get("r2"));
+    }
+
+    @Test
+    void getParticipantUserIds_noRooms_skipsQuery() {
+        assertTrue(service.getParticipantUserIds(List.<String>of()).isEmpty());
+        verifyNoInteractions(participants);
+    }
+
+    @Test
+    void getRoomIdsOfUser_memberships_returnsRoomIds() {
+        when(participants.findByUserId("actor")).thenReturn(List.of(
+                Participant.builder().chatRoomId("r1").userId("actor").build()));
+
+        assertEquals(List.of("r1"), service.getRoomIdsOfUser("actor"));
+    }
+
+    @Test
+    void createParticipant_newMember_leavesIdAndAuditDatesToMongo() {
+        service.createParticipant("room", "actor", Role.MEMBER);
+
+        verify(participants).save(argThat(p -> p.getId() == null && p.getJoinedAt() == null
+                && p.getUpdatedAt() == null && p.getRole() == Role.MEMBER));
     }
 
     @Test
@@ -55,13 +144,14 @@ class ParticipantServiceTest {
     @Test
     void joinRoom_existingPublicMember_throwsAlreadyParticipant() {
         joinUser();
-        targetAndRoom("actor");
+        when(rooms.findByIdAndIsActiveTrue("room")).thenReturn(Optional.of(room));
+        when(users.findById("actor")).thenReturn(Optional.of(User.builder().id("actor").build()));
         when(participants.existsByChatRoomIdAndUserId("room", "actor")).thenReturn(true);
         UserAlreadyInRoomException failure = assertThrows(UserAlreadyInRoomException.class,
                 () -> service.joinRoom("room", "google", "subject"));
         assertEquals("User is already in the room", failure.getMessage());
         verify(participants, never()).save(any());
-        verify(rooms, never()).save(any());
+        verify(rooms, never()).reserveSeat(any(), any());
     }
 
     @Test
@@ -133,8 +223,7 @@ class ParticipantServiceTest {
         targetAndRoom("target");
         service.addParticipant("room", "google", "subject", "target", requestedRole);
         verify(participants).save(argThat(p -> p.getUserId().equals("target") && p.getRole() == expectedRole));
-        assertTrue(room.getParticipants().contains("target"));
-        verify(rooms).save(room);
+        verify(rooms).reserveSeat(eq("room"), any());
     }
 
     private void rejectAssignment(Role actorRole, String requestedRole) {
@@ -148,10 +237,10 @@ class ParticipantServiceTest {
     private void rejectJoin(RoomType type) {
         room.setType(type);
         joinUser();
-        when(rooms.findById("room")).thenReturn(Optional.of(room));
+        when(rooms.findByIdAndIsActiveTrue("room")).thenReturn(Optional.of(room));
         assertThrows(ForbiddenActionException.class, () -> service.joinRoom("room", "google", "subject"));
         verify(participants, never()).save(any());
-        verify(rooms, never()).save(any());
+        verify(rooms, never()).reserveSeat(any(), any());
     }
 
     private void joinUser() {
@@ -160,7 +249,8 @@ class ParticipantServiceTest {
     }
 
     private void targetAndRoom(String userId) {
-        when(rooms.findById("room")).thenReturn(Optional.of(room));
+        when(rooms.findByIdAndIsActiveTrue("room")).thenReturn(Optional.of(room));
         when(users.findById(userId)).thenReturn(Optional.of(User.builder().id(userId).build()));
+        when(rooms.reserveSeat(eq("room"), any())).thenReturn(1L);
     }
 }

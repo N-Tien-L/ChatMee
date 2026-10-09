@@ -69,6 +69,17 @@ finds those strings, migrate them separately only after establishing the origina
 writer's timezone; do not guess UTC or apply a blanket seven-hour adjustment.
 BSON Date retains millisecond precision; JSON Instant can retain nanoseconds.
 
+## Room deleted event (CM-028)
+
+Deleting a room is a soft delete (see `docs/design/data-model.md`). After the room
+is marked inactive and its memberships are removed, the server broadcasts one
+`ChatMessageResponse` to the existing `/topic/public/{roomId}` destination with
+`type = SYSTEM`, no `id`/`tempId`, `senderId` = the deleting creator and
+`content = "This room has been deleted"`. No new destination is introduced.
+Because the memberships are gone, later SUBSCRIBE and SEND frames for that room are
+denied by the normal membership rule; existing subscriptions are not revoked
+(known follow-up for CM-045).
+
 ## Authorization rules
 
 - SUBSCRIBE and SEND require an authenticated Principal with a nonblank name.
