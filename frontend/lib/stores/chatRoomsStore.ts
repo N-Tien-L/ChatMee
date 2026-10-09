@@ -227,6 +227,11 @@ export const useChatRoomsStore = create<chatRoomState>((set, get) => ({
             return room.roomName || "Unknown Room";
         }
 
+        // The server sends the other member with the room (CM-049); older payloads fall back to a lookup.
+        if (room.counterpart?.name) {
+            return room.counterpart.name;
+        }
+
         // Find the other participant
         const otherParticipantId = room.participants.find(
             (id) => id !== currentUser.id

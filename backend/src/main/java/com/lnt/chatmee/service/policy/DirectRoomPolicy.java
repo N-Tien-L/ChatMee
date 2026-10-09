@@ -46,10 +46,28 @@ public class DirectRoomPolicy implements RoomTypePolicy {
             throw new InvalidRequestException("Cannot create direct message with yourself");
         }
         return ChatRoom.builder().type(type()).createdBy(creatorId).lastActivity(LocalDateTime.now())
+            .memberKey(memberKey(creatorId, request.getParticipantId()))
             .maxParticipants(2).memberCount(2).isActive(true)
             .settings(ChatRoom.RoomSettings.builder().allowFileSharing(true).allowGuestUsers(false)
                 .moderationRequired(false).build()).build();
     }
+    @Override
+    public String memberKey(CreateChatRoomRequest request, String creatorId) {
+        return request.getParticipantId() == null ? null : memberKey(creatorId, request.getParticipantId());
+    }
+
+    @Override
+    public boolean showsCounterpart() {
+        return true;
+    }
+
+    /** Order-independent key of a user pair: one active DM per pair. */
+    public static String memberKey(String firstUserId, String secondUserId) {
+        return firstUserId.compareTo(secondUserId) <= 0
+            ? firstUserId + ":" + secondUserId
+            : secondUserId + ":" + firstUserId;
+    }
+
     @Override
     public Map<String, Role> initialMembers(CreateChatRoomRequest request, String creatorId) {
         return Map.of(creatorId, Role.OWNER, request.getParticipantId(), Role.MEMBER);

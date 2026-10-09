@@ -227,4 +227,30 @@ class RoomMembershipIT {
         }
         return successes;
     }
+
+    @Test
+    void save_secondActiveDirectRoomForSamePair_isRejectedByUniqueMemberKey() {
+        chatRoomRepository.save(ChatRoom.builder().type(ChatRoom.RoomType.DIRECT_MESSAGE)
+                .memberKey("user-0:user-1").isActive(true).maxParticipants(2).build());
+
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> chatRoomRepository.save(ChatRoom.builder()
+                        .type(ChatRoom.RoomType.DIRECT_MESSAGE).memberKey("user-0:user-1").isActive(true).maxParticipants(2).build()))
+                .isInstanceOf(org.springframework.dao.DuplicateKeyException.class);
+        // Group rooms have no key and never collide (sparse index).
+        chatRoomRepository.save(ChatRoom.builder().type(ChatRoom.RoomType.PUBLIC).name("a").isActive(true).build());
+        chatRoomRepository.save(ChatRoom.builder().type(ChatRoom.RoomType.PUBLIC).name("b").isActive(true).build());
+    }
+
+    @Test
+    void softDelete_directRoom_releasesMemberKeyForANewDm() {
+        ChatRoom first = chatRoomRepository.save(ChatRoom.builder().type(ChatRoom.RoomType.DIRECT_MESSAGE)
+                .memberKey("user-0:user-1").isActive(true).maxParticipants(2).build());
+
+        chatRoomRepository.softDelete(first.getId(), java.time.LocalDateTime.now());
+
+        org.assertj.core.api.Assertions.assertThat(chatRoomRepository.findById(first.getId()).orElseThrow().getMemberKey()).isNull();
+        org.assertj.core.api.Assertions.assertThat(chatRoomRepository.findByMemberKeyAndIsActiveTrue("user-0:user-1")).isEmpty();
+        chatRoomRepository.save(ChatRoom.builder().type(ChatRoom.RoomType.DIRECT_MESSAGE)
+                .memberKey("user-0:user-1").isActive(true).maxParticipants(2).build());
+    }
 }

@@ -42,6 +42,11 @@ public class ChatRoomController {
     @Operation(summary = "Create a public, private or direct-message room")
     @PostMapping("/create")
     public ResponseEntity<ApiResponse<ChatRoomResponse>> createChatRoom(@Validated @RequestBody CreateChatRoomRequest request, @CurrentUser UserPrincipal user) {
+        // One DM per pair (SPEC-003): asking again returns the existing room with 200.
+        var existing = chatRoomService.findExistingDirectRoom(request, user.userId());
+        if (existing.isPresent()) {
+            return ResponseEntity.ok(ApiResponse.success("Direct message room already exists", existing.get()));
+        }
         ChatRoomResponse responseBody = chatRoomService.createRoom(request, user.userId());
         return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.success("Chat room created successfully", responseBody));
     }
@@ -49,7 +54,7 @@ public class ChatRoomController {
     @Operation(summary = "List the rooms the caller belongs to")
     @GetMapping
     public ResponseEntity<ApiResponse<List<ChatRoomResponse>>> getChatRoomList(@CurrentUser UserPrincipal user) {
-        List<ChatRoomResponse> responseBody = chatRoomService.toResponses(chatRoomService.getList(user.userId()));
+        List<ChatRoomResponse> responseBody = chatRoomService.toResponses(chatRoomService.getList(user.userId()), user.userId());
         return ResponseEntity.ok(ApiResponse.success(responseBody));
     }
 
@@ -57,7 +62,7 @@ public class ChatRoomController {
     @GetMapping("/{roomId}")
     public ResponseEntity<ApiResponse<ChatRoomResponse>> getChatRoomById(@CurrentUser UserPrincipal user, @PathVariable String roomId) {
         ChatRoom room = chatRoomService.getChatRoomById(user.userId(), roomId);
-        ChatRoomResponse responseBody = chatRoomService.toResponse(room);
+        ChatRoomResponse responseBody = chatRoomService.toResponse(room, user.userId());
         return ResponseEntity.ok(ApiResponse.success(responseBody));
     }
 
@@ -65,7 +70,7 @@ public class ChatRoomController {
     @PutMapping("/{roomId}")
     public ResponseEntity<ApiResponse<ChatRoomResponse>> updateChatRoom(@CurrentUser UserPrincipal user, @PathVariable String roomId, @Validated @RequestBody UpdateChatRoomRequest request) {
         ChatRoom room = chatRoomService.updateChatRoomById(user.userId(), roomId, request);
-        ChatRoomResponse responseBody = chatRoomService.toResponse(room);
+        ChatRoomResponse responseBody = chatRoomService.toResponse(room, user.userId());
         return ResponseEntity.ok(ApiResponse.success("Chat room updated successfully", responseBody));
     }
 

@@ -37,7 +37,7 @@ Updated by master. Status: todo | in-progress | review | changes-requested | mer
 | CM-046 | Frontend UI state and a11y (+ resync duplicate follow-up) | 2 | claude-w | feat/CM-046-ui-states-a11y | in-progress | | |
 | CM-047 | Server-side user search | 2 | agy + master | feat/CM-047-user-search | merged | paged server search, no emails, provider endpoint removed; UserServiceTest 10, UserApiControllerTest 4, UserRepositoryIT 4 (regex literal), usersStore tests 3; verify green 172 unit + 16 IT; FE 35 tests | 9ec729a |
 | CM-048 | PUBLIC room discovery | 2 | agy | | todo | | |
-| CM-049 | DM unique member keys | 2 | agy | | todo | | |
+| CM-049 | DM unique member keys | 2 | master | fix/CM-049-unique-direct-messages | merged (memberKey backfill for existing DMs: owner) | sorted-pair memberKey, unique sparse index, unset on soft delete; existing DM returns 200, concurrent duplicate returns the winner; counterpart {id,name,avatarUrl} via one batched query; verify 312 unit + 47 IT, FE 56 vitest/lint/tsc/build OK | cd3f71f |
 | CM-050 | Professional README rewrite | 2 | agy | | todo | | |
 | CM-051 | Dockerfile improvements | 2 | agy2 (a), master (b) | chore/CM-051-dockerfile, chore/CM-051b-structured-logs | a merged (non-root, layered jar, actuator healthcheck); b merged (X-Request-Id + requestId/userId MDC for HTTP and STOMP, ECS JSON logs in prod, presence logs at DEBUG) | a: compose full healthy, uid 100; b: verify green 249 unit + 36 IT (RequestCorrelationIT) | 4a68c62, 646486f |
 | CM-052 | Major framework upgrades | 2 | agy | | todo | | |

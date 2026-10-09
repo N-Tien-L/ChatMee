@@ -56,4 +56,10 @@ class DirectRoomPolicyTest {
     private CreateChatRoomRequest request(String participantId) {
         var request = new CreateChatRoomRequest(); request.setParticipantId(participantId); return request;
     }
+
+    @Test
+    void memberKey_eitherOrder_isTheSameSortedPair() {
+        org.assertj.core.api.Assertions.assertThat(DirectRoomPolicy.memberKey("b-user", "a-user")).isEqualTo("a-user:b-user");
+        org.assertj.core.api.Assertions.assertThat(DirectRoomPolicy.memberKey("a-user", "b-user")).isEqualTo("a-user:b-user");
+    }
 }
