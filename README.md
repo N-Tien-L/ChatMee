@@ -88,6 +88,9 @@ npm run dev
 
 `next.config.ts` rewrites `/api`, `/oauth2`, `/login`, `/logout`, and `/ws` to the backend while developing; `vercel.json` performs the same rewrites in production.
 
+### API documentation
+With the `dev` or `local` profile, the backend serves the OpenAPI document at [http://localhost:8080/v3/api-docs](http://localhost:8080/v3/api-docs) and Swagger UI at [http://localhost:8080/swagger-ui.html](http://localhost:8080/swagger-ui.html). Both require a logged-in session, so sign in through the app first. Every endpoint documents the shared `application/problem+json` error schema. Both are disabled in the `prod` profile.
+
 ## Project Structure
 ```
 .

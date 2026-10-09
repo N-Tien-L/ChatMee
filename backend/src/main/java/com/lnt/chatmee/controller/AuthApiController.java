@@ -1,5 +1,7 @@
 package com.lnt.chatmee.controller;
 
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import com.lnt.chatmee.exception.UserNotFoundException;
 
 import org.springframework.http.CacheControl;
@@ -23,6 +25,7 @@ import com.lnt.chatmee.util.OAuthUtil;
 import lombok.RequiredArgsConstructor;
 
 @RestController
+@Tag(name = "Auth", description = "Session and WebSocket token endpoints")
 @RequestMapping("/api/v1/auth")
 @RequiredArgsConstructor
 public class AuthApiController {
@@ -31,12 +34,14 @@ public class AuthApiController {
     private final OAuthUtil oAuthUtil;
     private final WsTokenService wsTokenService;
 
+    @Operation(summary = "Issue a single-use, 60-second token for the STOMP CONNECT header")
     @PostMapping("/ws-token")
     public ResponseEntity<WsTokenResponse> getWsToken(@AuthenticationPrincipal OAuth2User principal) {
         return ResponseEntity.ok().cacheControl(CacheControl.noStore())
                 .body(new WsTokenResponse(wsTokenService.issueToken(principal)));
     }
 
+    @Operation(summary = "Get the authenticated user and session status")
     @GetMapping("/me")
     public ResponseEntity<ApiResponse<AuthResponse>> getCurrentUser(@AuthenticationPrincipal OAuth2User principal) {
         if (principal == null) {
@@ -70,12 +75,14 @@ public class AuthApiController {
         }
     }
 
+    @Operation(summary = "Check whether the session is authenticated")
     @GetMapping("/status")
     public ResponseEntity<ApiResponse<Boolean>> getAuthStatus(@AuthenticationPrincipal OAuth2User principal) {
         boolean isAuthenticated = principal != null;
         return ResponseEntity.ok(ApiResponse.success("Authenticated status retrieved", isAuthenticated));
     }
 
+    @Operation(summary = "Get the authenticated user profile")
     @GetMapping("/user")
     public ResponseEntity<ApiResponse<UserResponse>> getUserInfo(@AuthenticationPrincipal OAuth2User principal) {
         if (principal == null) {

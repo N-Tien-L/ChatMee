@@ -1,5 +1,7 @@
 package com.lnt.chatmee.controller;
 
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -30,6 +32,7 @@ import com.lnt.chatmee.util.OAuthUtil;
 import lombok.RequiredArgsConstructor;
 
 @RestController
+@Tag(name = "Chat rooms", description = "Create, list, update and manage membership of chat rooms")
 @RequestMapping("/api/v1/chatrooms")
 @RequiredArgsConstructor
 public class ChatRoomController {
@@ -39,6 +42,7 @@ public class ChatRoomController {
     private final ParticipantService participantService;
     private final OAuthUtil oAuthUtil;
 
+    @Operation(summary = "Create a public, private or direct-message room")
     @PostMapping("/create")
     public ResponseEntity<ApiResponse<ChatRoomResponse>> createChatRoom(@Validated @RequestBody CreateChatRoomRequest request, @AuthenticationPrincipal OAuth2User principal) {
         String provider = oAuthUtil.determineProvider(principal);
@@ -47,6 +51,7 @@ public class ChatRoomController {
         return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.success("Chat room created successfully", responseBody));
     }
 
+    @Operation(summary = "List the rooms the caller belongs to")
     @GetMapping
     public ResponseEntity<ApiResponse<List<ChatRoomResponse>>> getChatRoomList(@AuthenticationPrincipal OAuth2User principal) {
         String provider = oAuthUtil.determineProvider(principal);
@@ -58,6 +63,7 @@ public class ChatRoomController {
         return ResponseEntity.ok(ApiResponse.success(responseBody));
     }
 
+    @Operation(summary = "Get a room the caller belongs to")
     @GetMapping("/{roomId}")
     public ResponseEntity<ApiResponse<ChatRoomResponse>> getChatRoomById(@AuthenticationPrincipal OAuth2User principal, @PathVariable String roomId) {
         String provider = oAuthUtil.determineProvider(principal);
@@ -67,6 +73,7 @@ public class ChatRoomController {
         return ResponseEntity.ok(ApiResponse.success(responseBody));
     }
 
+    @Operation(summary = "Update a room (creator only)")
     @PutMapping("/{roomId}")
     public ResponseEntity<ApiResponse<ChatRoomResponse>> updateChatRoom(@AuthenticationPrincipal OAuth2User principal, @PathVariable String roomId, @Validated @RequestBody UpdateChatRoomRequest request) {
         String provider = oAuthUtil.determineProvider(principal);
@@ -76,6 +83,7 @@ public class ChatRoomController {
         return ResponseEntity.ok(ApiResponse.success("Chat room updated successfully", responseBody));
     }
 
+    @Operation(summary = "Delete a room (creator only)")
     @DeleteMapping("/{roomId}")
     public ResponseEntity<ApiResponse<String>> deleteChatRoom(@AuthenticationPrincipal OAuth2User principal, @PathVariable String roomId) {
         String provider = oAuthUtil.determineProvider(principal);
@@ -84,6 +92,7 @@ public class ChatRoomController {
         return ResponseEntity.ok(ApiResponse.success("Chat room deleted successfully"));
     }
 
+    @Operation(summary = "Join a public room")
     @PostMapping("/{roomId}/join")
     public ResponseEntity<ApiResponse<String>> joinChatRoom(
             @AuthenticationPrincipal OAuth2User principal,
@@ -97,6 +106,7 @@ public class ChatRoomController {
         return ResponseEntity.ok(ApiResponse.success("Successfully joined the chat room"));
     }
 
+    @Operation(summary = "Add a participant (owner or admin only)")
     @PostMapping("/{roomId}/add-participant")
     public ResponseEntity<ApiResponse<String>> addParticipantToChatRoom(
             @AuthenticationPrincipal OAuth2User principal,
@@ -108,6 +118,7 @@ public class ChatRoomController {
         return ResponseEntity.ok(ApiResponse.success("Participant successfully added to the chat room"));
     }
 
+    @Operation(summary = "Leave a room")
     @PostMapping("/{roomId}/leave")
     public ResponseEntity<ApiResponse<String>> leaveChatRoom(
         @AuthenticationPrincipal OAuth2User principal,
