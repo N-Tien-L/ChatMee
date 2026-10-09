@@ -1,5 +1,8 @@
 # ChatMee
 
+[![Backend CI](https://github.com/N-Tien-L/ChatMee/actions/workflows/backend-ci.yml/badge.svg?branch=develop)](https://github.com/N-Tien-L/ChatMee/actions/workflows/backend-ci.yml)
+[![Frontend CI](https://github.com/N-Tien-L/ChatMee/actions/workflows/frontend-ci.yml/badge.svg?branch=develop)](https://github.com/N-Tien-L/ChatMee/actions/workflows/frontend-ci.yml)
+
 ![Java 17](https://img.shields.io/badge/Java-17-5382a1?logo=openjdk&logoColor=white)
 ![Spring Boot 3.5.5](https://img.shields.io/badge/Spring%20Boot-3.5.5-6DB33F?logo=springboot&logoColor=white)
 ![Next.js 15.5.2](https://img.shields.io/badge/Next.js-15.5.2-000000?logo=nextdotjs&logoColor=white)
