@@ -28,8 +28,8 @@ Updated by master. Status: todo | in-progress | review | changes-requested | mer
 | CM-029 | Async message saving and timestamps | 1 | codex | fix/CM-029-persist-then-broadcast | merged | verify green 158 unit + 12 IT; FE 32 tests; reviewed by master | e645bfd |
 | CM-030 | Rate limiting enhancements | 1 | master | fix/CM-030-rate-limit | merged (verify Render proxy IP: owner) | remote-address key (no XFF parsing) + forward-headers-strategy=native in prod, X-RateLimit-*/Retry-After, fail-open; verify green 177 unit + 16 IT | e086ed8 |
 | CM-031 | Basic frontend tests | 1 | agy | test/CM-031-frontend-tests | merged | 22 vitest tests green, lint/tsc/build OK; reviewed by master | c2f69d6 |
-| CM-040 | UserPrincipal and DTO mappers | 2 | codex | refactor/CM-040-user-principal | in-progress | | |
-| CM-041 | RoomTypePolicy strategy pattern | 2 | codex | | todo | | |
+| CM-040 | UserPrincipal and DTO mappers | 2 | codex | refactor/CM-040-user-principal | merged | UserPrincipal (getName = internal id), @CurrentUser resolver, no repositories/OAuth2User in controllers (ControllerArchitectureTest), response records with static from(); gate verify green 269 unit + 40 IT, service cov 98% | 73a79ef |
+| CM-041 | RoomTypePolicy strategy pattern (+ review F5: active-room membership check) | 2 | codex | refactor/CM-041-room-type-policy | in-progress | | |
 | CM-042 | Resource-based API/WS routes | 2 | agy | | todo | | |
 | CM-043 | Multi-instance presence | 2 | codex | | todo | | |
 | CM-044 | Message pagination with cursor | 2 | codex | | todo | | |
@@ -39,11 +39,14 @@ Updated by master. Status: todo | in-progress | review | changes-requested | mer
 | CM-048 | PUBLIC room discovery | 2 | agy | | todo | | |
 | CM-049 | DM unique member keys | 2 | agy | | todo | | |
 | CM-050 | Professional README rewrite | 2 | agy | | todo | | |
-| CM-051 | Dockerfile improvements | 2 | agy2 (a), master (b) | chore/CM-051-dockerfile, chore/CM-051b-structured-logs | a merged (non-root, layered jar, actuator healthcheck); b (JSON logs/MDC) in-progress | compose full: healthy, uid 100 | 4a68c62 |
+| CM-051 | Dockerfile improvements | 2 | agy2 (a), master (b) | chore/CM-051-dockerfile, chore/CM-051b-structured-logs | a merged (non-root, layered jar, actuator healthcheck); b merged (X-Request-Id + requestId/userId MDC for HTTP and STOMP, ECS JSON logs in prod, presence logs at DEBUG) | a: compose full healthy, uid 100; b: verify green 249 unit + 36 IT (RequestCorrelationIT) | 4a68c62, 646486f |
 | CM-052 | Major framework upgrades | 2 | agy | | todo | | |
 | CM-053 | Replace SockJS with pure WebSocket | 2 | agy | | todo | | |
 | CM-054 | TypeScript types cleanup | 2 | agy | | todo | | |
 | CM-055 | Backfill specs SPEC-001..007 from the audit drafts | 2 | agy (a: 001-004), agy2 (b: 005-007) | docs/CM-055a-specs, docs/CM-055b-specs | todo (waiting for agy/agy2 relaunch) | | |
+| CM-057 | Rate limit: do not count login/health paths (review F2) | 2 | master | fix/CM-057-rate-limit-proxy | merged | health, auth/status, OAuth2 authorization/callback exempt; servlet double registration disabled; RateLimitingIT 4; verify green 259 unit + 40 IT | 75e2cea |
+| CM-056 | WebSocket hardening (review F1, F3, F4, NV-4) | 2 | master | | todo (after CM-045) | | |
+| CM-058 | Server-side STOMP subscription revocation on leave/delete (review F6) | 2 | | | todo (after CM-042) | | |
 
 ## Notes
 - CM-011 is folded into CM-003. CM-006 already aligned the subscriber channel with the publisher ("presence-channel").
@@ -60,3 +63,4 @@ Updated by master. Status: todo | in-progress | review | changes-requested | mer
 - Follow-up from CM-047: frontend room dialogs no longer show emails; `UserResponse` (with email) is still returned by `/auth/me` and `/auth/user` for the caller only.
 - Follow-ups from CM-022: controllers still inject `UserRepository` (MessageController, AuthApiController) - CM-040.
 - 2026-10-09 22:00 (Claude weekly reset): codex restarted without the background daemon ("Run without daemon this time"; the codex update prompt was skipped). agy/agy2 had exited and relaunching them with `--dangerously-skip-permissions` is blocked for master by the auto-mode classifier: the owner relaunches them. claude-w first reviews the merged security work (SEC-REVIEW-claude-w-REPORT.md), then CM-045. CM-055 added: the specs promised by SPEC_DRIVEN_SETUP were never written (docs/specs had only the template).
+- Security review (claude-w, 2026-10-09, SEC-REVIEW-claude-w-REPORT.md): no Critical/High. F1 STOMP SEND not rate limited (CM-056), F2 shared anonymous bucket behind Vercel locked the login flow (fixed in CM-057), F3 `setAllowedOriginPatterns("*")` on /ws (CM-056), F4 clients choose messageType incl. SYSTEM (CM-056 server side, CM-045 client side), F5 orphan membership in a soft-deleted room (folded into CM-041), F6 subscriptions not revoked server-side (CM-058), F7 frontend console.log (CM-054) and presence INFO logs (fixed in CM-051b).
