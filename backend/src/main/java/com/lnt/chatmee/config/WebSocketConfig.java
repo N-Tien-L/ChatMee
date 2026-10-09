@@ -28,10 +28,9 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
 
     @Override
     public void registerStompEndpoints(StompEndpointRegistry registry) {
+        // Plain WebSocket (ADR-0003 amendment); the handshake accepts only the frontend origin.
         registry.addEndpoint("/ws")
-                .setAllowedOriginPatterns("*")  // Allow cross-origin for direct WebSocket
-                .setAllowedOrigins(clientUrl)
-                .withSockJS();
+                .setAllowedOrigins(clientUrl);
     }
 
     @Override

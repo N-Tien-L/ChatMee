@@ -1,6 +1,7 @@
 package com.lnt.chatmee.security;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.lang.reflect.Type;
 import java.util.ArrayList;
@@ -23,6 +24,7 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.server.LocalServerPort;
 import org.springframework.context.annotation.Import;
@@ -39,8 +41,6 @@ import org.springframework.test.context.ActiveProfiles;
 import org.springframework.web.socket.WebSocketHttpHeaders;
 import org.springframework.web.socket.client.standard.StandardWebSocketClient;
 import org.springframework.web.socket.messaging.WebSocketStompClient;
-import org.springframework.web.socket.sockjs.client.SockJsClient;
-import org.springframework.web.socket.sockjs.client.WebSocketTransport;
 
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @Import(ContainersConfig.class)
@@ -52,6 +52,7 @@ class StompMessagingIT {
     @Autowired private WsTokenService tokens;
     @Autowired private SimpMessagingTemplate messaging;
     @Autowired private ObjectMapper mapper;
+    @Value("${app.client.url}") private String clientUrl;
 
     private final List<User> users = new ArrayList<>();
     private final List<String> issuedTokens = new ArrayList<>();
@@ -64,8 +65,7 @@ class StompMessagingIT {
         roomId = UUID.randomUUID().toString();
         mongo.insert(ChatRoom.builder().id(roomId).name("Integration room")
                 .type(ChatRoom.RoomType.PUBLIC).isActive(true).build());
-        client = new WebSocketStompClient(new SockJsClient(
-                List.of(new WebSocketTransport(new StandardWebSocketClient()))));
+        client = new WebSocketStompClient(new StandardWebSocketClient());
         client.setDefaultHeartbeat(new long[]{0, 0});
         client.setMessageConverter(new org.springframework.messaging.converter.CompositeMessageConverter(List.of(
                 new StringMessageConverter(), new org.springframework.messaging.converter.MappingJackson2MessageConverter())));
@@ -87,6 +87,27 @@ class StompMessagingIT {
     @Test
     void connect_missingToken_receivesErrorAndCloses() throws Exception {
         assertRejected(null);
+    }
+
+    @Test
+    void handshake_foreignOrigin_rejectedWith403() {
+        WebSocketHttpHeaders handshake = new WebSocketHttpHeaders();
+        handshake.setOrigin("https://evil.example");
+        CompletableFuture<StompSession> connection = client.connectAsync(
+                url(), handshake, headers(issueToken(seedUser(false))), new ProtocolEvents());
+        assertThatThrownBy(() -> connection.get(10, TimeUnit.SECONDS))
+                .hasStackTraceContaining("[403]");
+    }
+
+    @Test
+    void handshake_clientOrigin_connectsWithToken() throws Exception {
+        WebSocketHttpHeaders handshake = new WebSocketHttpHeaders();
+        handshake.setOrigin(clientUrl);
+        StompSession session = client.connectAsync(
+                url(), handshake, headers(issueToken(seedUser(false))), new ProtocolEvents())
+                .get(10, TimeUnit.SECONDS);
+        sessions.add(session);
+        assertThat(session.isConnected()).isTrue();
     }
 
     @Test
@@ -197,7 +218,7 @@ class StompMessagingIT {
         return headers;
     }
 
-    private String url() { return "http://127.0.0.1:" + port + "/ws"; }
+    private String url() { return "ws://127.0.0.1:" + port + "/ws"; }
 
     private void sendJson(StompSession session, Map<String, Object> payload) {
         StompHeaders headers = new StompHeaders();

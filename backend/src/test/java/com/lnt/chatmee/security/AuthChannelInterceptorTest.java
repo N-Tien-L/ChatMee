@@ -3,10 +3,13 @@ package com.lnt.chatmee.security;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
+import java.io.PrintWriter;
+import java.io.StringWriter;
 import java.lang.reflect.Type;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 
@@ -36,8 +39,6 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.web.socket.WebSocketHttpHeaders;
 import org.springframework.web.socket.client.standard.StandardWebSocketClient;
 import org.springframework.web.socket.messaging.WebSocketStompClient;
-import org.springframework.web.socket.sockjs.client.SockJsClient;
-import org.springframework.web.socket.sockjs.client.WebSocketTransport;
 
 import com.lnt.chatmee.config.WebSocketConfig;
 import com.lnt.chatmee.dto.StompError;
@@ -199,7 +200,7 @@ class AuthChannelInterceptorTest {
         return MessageBuilder.createMessage(new byte[0], headers.getMessageHeaders());
     }
 
-    // Exercises the real registered interceptor, broker and SockJS endpoint on loopback.
+    // Exercises the real registered interceptor, broker and WebSocket endpoint on loopback.
     // Redis is mocked here; the real Redis/Mongo Testcontainers gate belongs to CM-023.
     @Nested
     @SpringBootTest(classes = {WebSocketConfig.class, AuthChannelInterceptor.class},
@@ -369,15 +370,38 @@ class AuthChannelInterceptorTest {
             }
         }
 
+        @Test
+        void handshake_foreignOrigin_rejectedByEndpointWithoutSecurityFilters() {
+            // No Spring Security CORS filter in this context: the endpoint's own origin check must reject.
+            WebSocketHttpHeaders handshake = new WebSocketHttpHeaders();
+            handshake.setOrigin("https://evil.example");
+            WebSocketStompClient client = client();
+            try {
+                CompletableFuture<StompSession> connection = client.connectAsync(
+                        url(), handshake, new StompHeaders(), new StompSessionHandlerAdapter() {});
+                ExecutionException failure = assertThrows(ExecutionException.class,
+                        () -> connection.get(5, TimeUnit.SECONDS));
+                assertTrue(stackTrace(failure).contains("[403]"), stackTrace(failure));
+                verifyNoInteractions(wireTokens);
+            } finally {
+                client.stop();
+            }
+        }
+
+        private String stackTrace(Throwable failure) {
+            StringWriter out = new StringWriter();
+            failure.printStackTrace(new PrintWriter(out));
+            return out.toString();
+        }
+
         private WebSocketStompClient client() {
-            WebSocketStompClient client = new WebSocketStompClient(new SockJsClient(
-                    List.of(new WebSocketTransport(new StandardWebSocketClient()))));
+            WebSocketStompClient client = new WebSocketStompClient(new StandardWebSocketClient());
             client.setDefaultHeartbeat(new long[]{0, 0});
             return client;
         }
 
         private String url() {
-            return "http://127.0.0.1:" + port + "/ws";
+            return "ws://127.0.0.1:" + port + "/ws";
         }
     }
 }
