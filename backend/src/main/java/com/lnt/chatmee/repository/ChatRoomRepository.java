@@ -19,6 +19,8 @@ public interface ChatRoomRepository extends MongoRepository<ChatRoom, String> {
 
     Optional<ChatRoom> findByIdAndIsActiveTrue(String roomId);
 
+    Optional<ChatRoom> findByMemberKeyAndIsActiveTrue(String memberKey);
+
     List<ChatRoom> findByIdInAndIsActiveTrue(Collection<String> roomIds);
 
     List<ChatRoom> findByTypeAndIsActiveTrue(RoomType type);
@@ -55,6 +57,6 @@ public interface ChatRoomRepository extends MongoRepository<ChatRoom, String> {
 
     /** Soft-deletes an active room and resets its member counter. */
     @Query("{ '_id': ?0, 'isActive': true }")
-    @Update("{ '$set': { 'isActive': false, 'memberCount': 0, 'deletedAt': ?1, 'lastActivity': ?1 } }")
+    @Update("{ '$set': { 'isActive': false, 'memberCount': 0, 'deletedAt': ?1, 'lastActivity': ?1 }, '$unset': { 'memberKey': '' } }")
     long softDelete(String roomId, LocalDateTime now);
 }

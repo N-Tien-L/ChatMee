@@ -16,4 +16,14 @@ public interface RoomTypePolicy {
     void checkLeave(ChatRoom room, String userId);
     ChatRoom create(CreateChatRoomRequest request, String creatorId, Predicate<String> userExists);
     Map<String, Role> initialMembers(CreateChatRoomRequest request, String creatorId);
+
+    /** Key that makes a room unique for its members (one DM per pair), or null when rooms of this type may repeat. */
+    default String memberKey(CreateChatRoomRequest request, String creatorId) {
+        return null;
+    }
+
+    /** Whether responses show the other member as the room's counterpart (DMs have no name of their own). */
+    default boolean showsCounterpart() {
+        return false;
+    }
 }

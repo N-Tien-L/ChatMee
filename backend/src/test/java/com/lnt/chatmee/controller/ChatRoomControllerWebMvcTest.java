@@ -96,7 +96,7 @@ class ChatRoomControllerWebMvcTest extends SecuredWebMvcTestSupport {
     void listRooms_authenticated_returnsCallerRooms() throws Exception {
         List<ChatRoom> rooms = List.of(ChatRoom.builder().id("room-1").build());
         when(chatRoomService.getList("u1")).thenReturn(rooms);
-        when(chatRoomService.toResponses(rooms)).thenReturn(List.of(ChatRoomResponse.builder().id("room-1").build()));
+        when(chatRoomService.toResponses(rooms, "u1")).thenReturn(List.of(ChatRoomResponse.builder().id("room-1").build()));
 
         mvc.perform(get("/api/v1/chatrooms").with(oauth2Login().oauth2User(com.lnt.chatmee.support.TestUsers.principal("u1"))))
                 .andExpect(status().isOk())
@@ -168,5 +168,17 @@ class ChatRoomControllerWebMvcTest extends SecuredWebMvcTestSupport {
         mvc.perform(post("/api/v1/chatrooms/room-1/leave").with(oauth2Login().oauth2User(com.lnt.chatmee.support.TestUsers.principal("u1"))).with(csrf().asHeader()))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true));
+    }
+
+    @Test
+    void createRoom_existingDirectMessage_returns200WithExistingRoom() throws Exception {
+        when(chatRoomService.findExistingDirectRoom(any(), eq("u1"))).thenReturn(java.util.Optional.of(
+                ChatRoomResponse.builder().id("dm-1").roomType(RoomType.DIRECT_MESSAGE).participants(Set.of("u1", "u2")).build()));
+
+        mvc.perform(post(CREATE).with(oauth2Login().oauth2User(com.lnt.chatmee.support.TestUsers.principal("u1"))).with(csrf().asHeader())
+                        .contentType(MediaType.APPLICATION_JSON).content("{\"roomType\":\"DIRECT_MESSAGE\",\"participantId\":\"u2\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.id").value("dm-1"));
+        org.mockito.Mockito.verify(chatRoomService, org.mockito.Mockito.never()).createRoom(any(), any());
     }
 }

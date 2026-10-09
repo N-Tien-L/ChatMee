@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { useChatRoomsStore } from './chatRoomsStore';
 import { chatRoomApi } from '../api/chatRoomApi';
+import { userApi } from '../api/userApi';
 import { RoomType, RoomSettings } from "@/lib/types";
 import { ChatRoomResponse } from "@/lib/types";
 
@@ -162,5 +163,21 @@ describe('chatRoomsStore', () => {
         
         useChatRoomsStore.getState().closeCreateRoomModal();
         expect(useChatRoomsStore.getState().isCreateRoomModalOpen).toBe(false);
+    });
+
+    it('names a direct message after the counterpart sent by the server without a user lookup', async () => {
+        const dm: ChatRoomResponse = {
+            ...mockRoom,
+            id: 'dm1',
+            roomName: '',
+            roomType: RoomType.DIRECT_MESSAGE,
+            participants: ['currentUser', 'u2'],
+            counterpart: { id: 'u2', name: 'Bob', avatarUrl: '' },
+        };
+
+        const name = await useChatRoomsStore.getState().getDirectMessageDisplayName(dm);
+
+        expect(name).toBe('Bob');
+        expect(userApi.getUserById).not.toHaveBeenCalled();
     });
 });

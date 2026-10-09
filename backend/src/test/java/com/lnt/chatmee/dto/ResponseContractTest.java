@@ -44,7 +44,7 @@ class ResponseContractTest {
         assertThat(roomJson).isEqualTo(json.readTree("""
                 {"id":"room","roomName":"Room","roomType":"PUBLIC","description":"description",
                  "createdBy":"user","createdAt":"2026-10-09T01:02:03","updatedAt":"2026-10-09T01:02:03",
-                 "maxUsers":10,"settings":null,"participants":["user"]}
+                 "maxUsers":10,"settings":null,"participants":["user"],"counterpart":null}
                 """));
         for (Class<?> type : new Class<?>[]{AuthResponse.class, UserResponse.class,
                 ChatRoomResponse.class, ChatMessageResponse.class}) assertThat(type.isRecord()).isTrue();
