@@ -1,11 +1,21 @@
 import { Client } from "@stomp/stompjs";
-import SockJS from "sockjs-client";
 import type { StompClientFactory } from "./stompSession";
 
-/** A SockJS-backed STOMP client; reconnection is left to the session (reconnectDelay 0). */
-export function createSockJsClientFactory(url: string): StompClientFactory {
+/**
+ * Maps the configured endpoint URL to a WebSocket URL: http -> ws, https -> wss,
+ * ws/wss unchanged. Keeps NEXT_PUBLIC_WS_URL values written for SockJS valid.
+ */
+export function toWebSocketUrl(url: string): string {
+    if (url.startsWith("https://")) return `wss://${url.slice("https://".length)}`;
+    if (url.startsWith("http://")) return `ws://${url.slice("http://".length)}`;
+    return url;
+}
+
+/** A plain WebSocket STOMP client; reconnection is left to the session (reconnectDelay 0). */
+export function createStompClientFactory(url: string): StompClientFactory {
+    const brokerURL = toWebSocketUrl(url);
     return callbacks => new Client({
-        webSocketFactory: () => new SockJS(url),
+        brokerURL,
         reconnectDelay: 0,
         beforeConnect: callbacks.beforeConnect,
         onConnect: callbacks.onConnect,

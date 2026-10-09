@@ -6,7 +6,7 @@ import { authApi } from "@/lib/api/authApi";
 import { useAuthStore } from "@/lib/stores/authStore";
 import { useChatRoomsStore } from "@/lib/stores/chatRoomsStore";
 import { PresenceMessage, useChatStore } from "@/lib/stores/chatStore";
-import { createSockJsClientFactory } from "./sockJsClient";
+import { createStompClientFactory } from "./stompClient";
 import { ConnectionStatus, createStompSession, StompSession } from "./stompSession";
 
 const PRESENCE_TOPIC = "/topic/presence";
@@ -20,7 +20,7 @@ export function StompProvider({ children }: { children: ReactNode }) {
     const isAuthenticated = useAuthStore(state => state.isAuthenticated);
     const userId = useAuthStore(state => state.user?.id);
     const [session] = useState(() => createStompSession({
-        clientFactory: createSockJsClientFactory(process.env.NEXT_PUBLIC_WS_URL || "http://localhost:8080/ws"),
+        clientFactory: createStompClientFactory(process.env.NEXT_PUBLIC_WS_URL || "http://localhost:8080/ws"),
         getToken: authApi.getWsToken,
     }));
 
