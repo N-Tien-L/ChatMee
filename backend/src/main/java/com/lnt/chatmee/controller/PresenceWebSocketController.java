@@ -31,7 +31,7 @@ public class PresenceWebSocketController {
             return;
         }
         message.setUserId(principal.getName());
-        logger.info("Received presence event: userId={}, online={}", message.getUserId(), message.isOnline());
+        logger.debug("Received presence event: userId={}, online={}", message.getUserId(), message.isOnline());
         
         // Update presence service
         if (message.isOnline()) {
@@ -43,6 +43,6 @@ public class PresenceWebSocketController {
         // Broadcast presence update to all subscribers
         messagingTemplate.convertAndSend("/topic/presence", message);
         
-        logger.info("Broadcasted presence update for user: {}", message.getUserId());
+        logger.debug("Broadcasted presence update for user: {}", message.getUserId());
     }
 }
