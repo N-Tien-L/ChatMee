@@ -50,7 +50,7 @@
 | `GET` | `/messages/room/{roomId}` | Get recent messages for a specific room. |
 
 ## WebSocket (`/ws`)
-- **Endpoint**: `/ws` (SockJS/STOMP)
+- **Endpoint**: `/ws` (STOMP over plain WebSocket; origin must be `app.client.url`)
 - **Destinations**:
     - `/topic/public/{roomId}`: Public room messages.
     - `/topic/presence`: User presence updates.

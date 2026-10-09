@@ -54,7 +54,7 @@ public class SecurityConfig {
         http
                 .cors(cors -> cors.configurationSource(corsConfigurationSource))
                 .csrf(csrf -> csrf
-                        // SockJS transports are cross-site and authenticated by the single-use STOMP token, not cookies.
+                        // WebSocket handshakes are cross-site and authenticated by the single-use STOMP token, not cookies.
                         .ignoringRequestMatchers("/ws/**")
                         .csrfTokenRepository(CookieCsrfTokenRepository.withHttpOnlyFalse())
                         .csrfTokenRequestHandler(new SpaCsrfTokenRequestHandler()))
@@ -62,7 +62,7 @@ public class SecurityConfig {
                 .addFilterAfter(new CsrfCookieFilter(), CsrfFilter.class)
                 .addFilterBefore(rateLimitingFilter, UsernamePasswordAuthenticationFilter.class)
                 .authorizeHttpRequests(authz -> authz
-                        // Cross-site SockJS handshakes are public; STOMP CONNECT authenticates with a single-use token.
+                        // Cross-site WebSocket handshakes are public; STOMP CONNECT authenticates with a single-use token.
                         .requestMatchers("/", "/login", "/error", "/actuator/health/**", "/actuator/info", "/api/v1/auth/status", "/ws/**").permitAll()
                         .requestMatchers("/api/v1/**").authenticated()
                         .anyRequest().authenticated())
