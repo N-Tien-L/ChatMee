@@ -17,18 +17,16 @@ import com.lnt.chatmee.repository.ParticipantRepository;
 import com.lnt.chatmee.repository.UserRepository;
 import com.lnt.chatmee.service.ChatRoomService;
 import com.lnt.chatmee.service.ParticipantService;
-import com.lnt.chatmee.util.OAuthUtil;
 
 @WebMvcTest(ChatRoomController.class)
 @ActiveProfiles("actuator-test")
-@org.springframework.test.context.ContextConfiguration(classes = {ChatRoomController.class, com.lnt.chatmee.exception.GlobalExceptionHandler.class})
+@org.springframework.test.context.ContextConfiguration(classes = {com.lnt.chatmee.config.CurrentUserWebMvcConfig.class, com.lnt.chatmee.security.CurrentUserArgumentResolver.class, ChatRoomController.class, com.lnt.chatmee.exception.GlobalExceptionHandler.class})
 class ChatRoomControllerValidationTest {
     @Autowired MockMvc mvc;
     @MockitoBean ChatRoomService rooms;
     @MockitoBean ParticipantService participants;
     @MockitoBean UserRepository users;
     @MockitoBean ParticipantRepository participantRepository;
-    @MockitoBean OAuthUtil oauth;
 
     @Test
     void createRoom_zeroMaxUsers_returnsBadRequest() throws Exception {
@@ -67,18 +65,18 @@ class ChatRoomControllerValidationTest {
 
     @Test
     void createRoom_directMessageWithParticipantAndNoName_returnsCreated() throws Exception {
-        mvc.perform(post("/api/v1/chatrooms/create").with(oauth2Login()).with(csrf())
+        mvc.perform(post("/api/v1/chatrooms/create").with(oauth2Login().oauth2User(com.lnt.chatmee.support.TestUsers.principal("u1"))).with(csrf())
                 .contentType(MediaType.APPLICATION_JSON).content("{\"roomType\":\"DIRECT_MESSAGE\",\"participantId\":\"user-2\"}"))
                 .andExpect(status().isCreated());
-        verify(rooms).createRoom(any(), any(), any());
+        verify(rooms).createRoom(any(), any());
     }
 
     @Test
     void createRoom_validBoundaryRequest_returnsCreated() throws Exception {
-        mvc.perform(post("/api/v1/chatrooms/create").with(oauth2Login()).with(csrf())
+        mvc.perform(post("/api/v1/chatrooms/create").with(oauth2Login().oauth2User(com.lnt.chatmee.support.TestUsers.principal("u1"))).with(csrf())
                 .contentType(MediaType.APPLICATION_JSON).content(body("PUBLIC", "x".repeat(100), 2)))
                 .andExpect(status().isCreated());
-        verify(rooms).createRoom(any(), any(), any());
+        verify(rooms).createRoom(any(), any());
     }
 
     private void reject(String type, String name, int maxUsers) throws Exception {
@@ -86,10 +84,10 @@ class ChatRoomControllerValidationTest {
     }
 
     private void rejectJson(String json) throws Exception {
-        mvc.perform(post("/api/v1/chatrooms/create").with(oauth2Login()).with(csrf())
+        mvc.perform(post("/api/v1/chatrooms/create").with(oauth2Login().oauth2User(com.lnt.chatmee.support.TestUsers.principal("u1"))).with(csrf())
                 .contentType(MediaType.APPLICATION_JSON).content(json))
                 .andExpect(status().isBadRequest());
-        verifyNoInteractions(rooms, participants, users, participantRepository, oauth);
+        verifyNoInteractions(rooms, participants, users, participantRepository);
     }
 
     private String body(String type, String name, int maxUsers) {

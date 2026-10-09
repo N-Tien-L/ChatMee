@@ -4,8 +4,8 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.data.domain.Page;
 import org.springframework.http.ResponseEntity;
-import org.springframework.security.core.annotation.AuthenticationPrincipal;
-import org.springframework.security.oauth2.core.user.OAuth2User;
+import com.lnt.chatmee.security.CurrentUser;
+import com.lnt.chatmee.security.UserPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -33,8 +33,8 @@ public class UserApiController {
             @RequestParam(defaultValue = "") String query,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size,
-            @AuthenticationPrincipal OAuth2User principal) {
-        String currentUserId = userService.getCurrentUserId(principal);
+            @CurrentUser UserPrincipal user) {
+        String currentUserId = user.userId();
         Page<UserSummaryResponse> usersPage = userService.searchUsers(query, currentUserId, page, size);
 
         PagedResponse<UserSummaryResponse> pageData = PagedResponse.<UserSummaryResponse>builder()

@@ -48,9 +48,9 @@ public class ChatRoomService {
     private final ParticipantService participantService;
     private final SimpMessagingTemplate messagingTemplate;
 
-    public ChatRoomResponse createRoom(CreateChatRoomRequest request, String provider, String providerId) {
+    public ChatRoomResponse createRoom(CreateChatRoomRequest request, String userId) {
 
-        User authenticatedUser = userRepository.findByProviderAndProviderId(provider, providerId)
+        User authenticatedUser = userRepository.findById(userId)
             .orElseThrow(() -> new UserNotFoundException("Authenticated user not found"));
 
         ChatRoom room;
@@ -84,18 +84,7 @@ public class ChatRoomService {
     }
 
     private static ChatRoomResponse toResponse(ChatRoom room, Set<String> participantIds) {
-        return ChatRoomResponse.builder()
-            .id(room.getId())
-            .roomType(room.getType())
-            .createdBy(room.getCreatedBy())
-            .createdAt(room.getCreatedAt())
-            .updatedAt(room.getLastActivity())
-            .roomName(room.getName())
-            .description(room.getDescription())
-            .maxUsers(room.getMaxParticipants())
-            .settings(room.getSettings())
-            .participants(participantIds)
-            .build();
+        return ChatRoomResponse.from(room, participantIds);
     }
 
     private ChatRoom createDirectRoom(CreateChatRoomRequest request, String creatorId) {
@@ -174,8 +163,8 @@ public class ChatRoomService {
      * Soft-deletes the room: it is marked inactive, every membership is removed (which also revokes STOMP
      * authorization for the room), and a SYSTEM message is broadcast to the room topic.
      */
-    public void deleteChatRoomById(String provider, String providerId, String roomId) {
-        User authenticatedUser = userRepository.findByProviderAndProviderId(provider, providerId)
+    public void deleteChatRoomById(String userId, String roomId) {
+        User authenticatedUser = userRepository.findById(userId)
         .orElseThrow(() -> new UserNotFoundException("Authenticated user not found"));
 
         // Validate IDs
@@ -193,23 +182,24 @@ public class ChatRoomService {
         long removed = participantService.removeAllParticipants(roomId);
 
         Instant now = Instant.now();
-        messagingTemplate.convertAndSend("/topic/public/" + roomId, ChatMessageResponse.builder()
+        Message deletionMessage = Message.builder()
             .chatRoomId(roomId)
             .senderId(authenticatedUser.getId())
-            .senderName(authenticatedUser.getName())
             .content(ROOM_DELETED_MESSAGE)
             .type(Message.MessageType.SYSTEM)
             .createdAt(now)
             .updatedAt(now)
             .isUpdated(false)
             .isDeleted(false)
-            .build());
+            .build();
+        messagingTemplate.convertAndSend("/topic/public/" + roomId,
+                ChatMessageResponse.from(deletionMessage, authenticatedUser.getName(), null));
 
         logger.info("Room {} soft-deleted by user {}, {} memberships removed", roomId, authenticatedUser.getId(), removed);
     }
 
-    public List<ChatRoom> getList(String provider, String providerId) {
-        User authenticatedUser = userRepository.findByProviderAndProviderId(provider, providerId)
+    public List<ChatRoom> getList(String userId) {
+        User authenticatedUser = userRepository.findById(userId)
             .orElseThrow(() -> new UserNotFoundException("Authenticated user not found"));
 
         List<String> roomIds = participantService.getRoomIdsOfUser(authenticatedUser.getId());
@@ -219,8 +209,8 @@ public class ChatRoomService {
         return chatRoomRepository.findByIdInAndIsActiveTrue(roomIds);
     }
 
-    public ChatRoom getChatRoomById(String provider, String providerId, String roomId) {
-        User authenticatedUser = userRepository.findByProviderAndProviderId(provider, providerId)
+    public ChatRoom getChatRoomById(String userId, String roomId) {
+        User authenticatedUser = userRepository.findById(userId)
             .orElseThrow(() -> new UserNotFoundException("Authenticated user not found"));
 
         return getRoomOfMember(roomId, authenticatedUser.getId());
@@ -235,8 +225,8 @@ public class ChatRoomService {
         return room;
     }
 
-    public ChatRoom updateChatRoomById(String provider, String providerId, String roomId, UpdateChatRoomRequest request) {
-        User authenticatedUser = userRepository.findByProviderAndProviderId(provider, providerId)
+    public ChatRoom updateChatRoomById(String userId, String roomId, UpdateChatRoomRequest request) {
+        User authenticatedUser = userRepository.findById(userId)
             .orElseThrow(() -> new UserNotFoundException("Authenticated user not found"));
 
         ChatRoom room = getRoomOfMember(roomId, authenticatedUser.getId());
@@ -266,8 +256,8 @@ public class ChatRoomService {
         return findById(roomId);
     }
 
-    public void leaveChatRoomById(String provider, String providerId, String roomId) {
-        User authenticatedUser = userRepository.findByProviderAndProviderId(provider, providerId)
+    public void leaveChatRoomById(String userId, String roomId) {
+        User authenticatedUser = userRepository.findById(userId)
             .orElseThrow(() -> new UserNotFoundException("Authenticated user not found"));
 
         ChatRoom room = getRoomOfMember(roomId, authenticatedUser.getId());

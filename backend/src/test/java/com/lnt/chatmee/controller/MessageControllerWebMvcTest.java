@@ -9,7 +9,6 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import java.time.Instant;
 import java.util.List;
-import java.util.Optional;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
@@ -22,7 +21,6 @@ import com.lnt.chatmee.dto.response.ChatMessageResponse;
 import com.lnt.chatmee.exception.ChatRoomNotFoundException;
 import com.lnt.chatmee.exception.ForbiddenActionException;
 import com.lnt.chatmee.model.Message.MessageType;
-import com.lnt.chatmee.model.User;
 import com.lnt.chatmee.repository.UserRepository;
 import com.lnt.chatmee.service.MessageService;
 import com.lnt.chatmee.support.SecuredWebMvcTestSupport;
@@ -39,13 +37,12 @@ class MessageControllerWebMvcTest extends SecuredWebMvcTestSupport {
 
     @Test
     void getRecentMessages_member_returnsMessagesWithIsoTimestamps() throws Exception {
-        caller();
         when(messageService.getRecentMessages("room-1", "u1")).thenReturn(List.of(ChatMessageResponse.builder()
                 .id("m1").chatRoomId("room-1").senderId("u2").content("hi").type(MessageType.TEXT)
                 .createdAt(Instant.parse("2026-10-09T01:02:03Z")).updatedAt(Instant.parse("2026-10-09T01:02:03Z"))
                 .build()));
 
-        mvc.perform(get(HISTORY).with(oauth2Login()))
+        mvc.perform(get(HISTORY).with(oauth2Login().oauth2User(com.lnt.chatmee.support.TestUsers.principal("u1"))))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data[0].id").value("m1"))
                 .andExpect(jsonPath("$.data[0].createdAt").value("2026-10-09T01:02:03Z"))
@@ -54,28 +51,26 @@ class MessageControllerWebMvcTest extends SecuredWebMvcTestSupport {
 
     @Test
     void getRecentMessages_nonMember_returns403Problem() throws Exception {
-        caller();
         when(messageService.getRecentMessages("room-1", "u1"))
                 .thenThrow(new ForbiddenActionException("You are not a participant of this room"));
 
-        expectProblem(mvc.perform(get(HISTORY).with(oauth2Login())), 403, "FORBIDDEN_ACTION");
+        expectProblem(mvc.perform(get(HISTORY).with(oauth2Login().oauth2User(com.lnt.chatmee.support.TestUsers.principal("u1")))), 403, "FORBIDDEN_ACTION");
     }
 
     @Test
     void getRecentMessages_unknownRoom_returns404Problem() throws Exception {
-        caller();
         when(messageService.getRecentMessages("room-1", "u1"))
                 .thenThrow(new ChatRoomNotFoundException("Chat room not found: room-1"));
 
-        expectProblem(mvc.perform(get(HISTORY).with(oauth2Login())), 404, "ROOM_NOT_FOUND");
+        expectProblem(mvc.perform(get(HISTORY).with(oauth2Login().oauth2User(com.lnt.chatmee.support.TestUsers.principal("u1")))), 404, "ROOM_NOT_FOUND");
     }
 
     @Test
     void getRecentMessages_callerWithoutAccount_returns404Problem() throws Exception {
-        when(userRepository.findByProviderAndProviderId(PROVIDER, PROVIDER_ID)).thenReturn(Optional.empty());
+        when(messageService.getRecentMessages("room-1", "u1")).thenThrow(new com.lnt.chatmee.exception.UserNotFoundException("Authenticated user not found"));
 
-        expectProblem(mvc.perform(get(HISTORY).with(oauth2Login())), 404, "USER_NOT_FOUND");
-        verifyNoInteractions(messageService);
+        expectProblem(mvc.perform(get(HISTORY).with(oauth2Login().oauth2User(com.lnt.chatmee.support.TestUsers.principal("u1")))), 404, "USER_NOT_FOUND");
+        org.mockito.Mockito.verify(messageService).getRecentMessages("room-1", "u1");
     }
 
     @Test
@@ -84,8 +79,4 @@ class MessageControllerWebMvcTest extends SecuredWebMvcTestSupport {
         verifyNoInteractions(messageService);
     }
 
-    private void caller() {
-        when(userRepository.findByProviderAndProviderId(PROVIDER, PROVIDER_ID))
-                .thenReturn(Optional.of(User.builder().id("u1").build()));
-    }
 }

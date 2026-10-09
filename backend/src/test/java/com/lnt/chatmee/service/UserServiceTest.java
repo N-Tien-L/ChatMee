@@ -18,13 +18,11 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
-import org.springframework.security.oauth2.core.user.OAuth2User;
 
 import com.lnt.chatmee.dto.response.UserSummaryResponse;
 import com.lnt.chatmee.exception.UserNotFoundException;
 import com.lnt.chatmee.model.User;
 import com.lnt.chatmee.repository.UserRepository;
-import com.lnt.chatmee.util.OAuthUtil;
 
 @ExtendWith(MockitoExtension.class)
 class UserServiceTest {
@@ -32,8 +30,6 @@ class UserServiceTest {
     @Mock
     private UserRepository userRepository;
 
-    @Mock
-    private OAuthUtil oAuthUtil;
 
     @InjectMocks
     private UserService userService;
@@ -116,28 +112,17 @@ class UserServiceTest {
     }
 
     @Test
-    void getCurrentUserId_knownPrincipal_returnsUserId() {
-        OAuth2User principal = mock(OAuth2User.class);
-        when(oAuthUtil.determineProvider(principal)).thenReturn("github");
-        when(oAuthUtil.getProviderId(principal, "github")).thenReturn("42");
-        when(userRepository.findByProviderAndProviderId("github", "42"))
-                .thenReturn(Optional.of(User.builder().id("u-1").build()));
-
-        assertEquals("u-1", userService.getCurrentUserId(principal));
+    void getUserProfile_knownUser_returnsUserId() {
+        when(userRepository.findById("u-1")).thenReturn(Optional.of(User.builder().id("u-1").build()));
+        assertEquals("u-1", userService.getUserProfile("u-1").id());
     }
-
     @Test
-    void getCurrentUserId_unknownPrincipal_throwsUserNotFound() {
-        OAuth2User principal = mock(OAuth2User.class);
-        when(oAuthUtil.determineProvider(principal)).thenReturn("google");
-        when(oAuthUtil.getProviderId(principal, "google")).thenReturn("7");
-        when(userRepository.findByProviderAndProviderId("google", "7")).thenReturn(Optional.empty());
-
-        assertThrows(UserNotFoundException.class, () -> userService.getCurrentUserId(principal));
+    void getUserProfile_unknownUser_throwsUserNotFound() {
+        when(userRepository.findById("missing")).thenReturn(Optional.empty());
+        assertThrows(UserNotFoundException.class, () -> userService.getUserProfile("missing"));
     }
-
     @Test
-    void getCurrentUserId_nullPrincipal_returnsNull() {
-        assertNull(userService.getCurrentUserId(null));
+    void getUserProfile_nullId_throwsUserNotFound() {
+        assertThrows(UserNotFoundException.class, () -> userService.getUserProfile(null));
     }
 }

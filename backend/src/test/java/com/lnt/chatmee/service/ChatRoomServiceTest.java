@@ -61,7 +61,7 @@ class ChatRoomServiceTest {
         User creator = User.builder().id("user1").build();
         User participant = User.builder().id("user2").build();
 
-        when(userRepository.findByProviderAndProviderId("local", "localId"))
+        when(userRepository.findById("user1"))
                 .thenReturn(Optional.of(creator));
         when(userRepository.findById("user2")).thenReturn(Optional.of(participant));
 
@@ -77,10 +77,10 @@ class ChatRoomServiceTest {
         when(chatRoomRepository.save(any(ChatRoom.class))).thenReturn(savedRoom);
         when(participantService.getParticipantUserIds("room1")).thenReturn(Set.of("user1", "user2"));
 
-        ChatRoomResponse response = chatRoomService.createRoom(request, "local", "localId");
+        ChatRoomResponse response = chatRoomService.createRoom(request, "user1");
 
-        assertThat(response.getId()).isEqualTo("room1");
-        assertThat(response.getParticipants()).containsExactlyInAnyOrder("user1", "user2");
+        assertThat(response.id()).isEqualTo("room1");
+        assertThat(response.participants()).containsExactlyInAnyOrder("user1", "user2");
         ArgumentCaptor<ChatRoom> saved = ArgumentCaptor.forClass(ChatRoom.class);
         verify(chatRoomRepository).save(saved.capture());
         assertThat(saved.getValue().getMemberCount()).isEqualTo(2);
@@ -93,7 +93,7 @@ class ChatRoomServiceTest {
     void createRoom_configurableRoom_createsSuccessfully() {
         User creator = User.builder().id("user1").build();
 
-        when(userRepository.findByProviderAndProviderId("local", "localId"))
+        when(userRepository.findById("user1"))
                 .thenReturn(Optional.of(creator));
 
         CreateChatRoomRequest request = new CreateChatRoomRequest();
@@ -107,9 +107,9 @@ class ChatRoomServiceTest {
                 .build();
         when(chatRoomRepository.save(any(ChatRoom.class))).thenReturn(savedRoom);
 
-        ChatRoomResponse response = chatRoomService.createRoom(request, "local", "localId");
+        ChatRoomResponse response = chatRoomService.createRoom(request, "user1");
 
-        assertThat(response.getId()).isEqualTo("room1");
+        assertThat(response.id()).isEqualTo("room1");
         ArgumentCaptor<ChatRoom> saved = ArgumentCaptor.forClass(ChatRoom.class);
         verify(chatRoomRepository).save(saved.capture());
         assertThat(saved.getValue().getMemberCount()).isEqualTo(1);
@@ -122,7 +122,7 @@ class ChatRoomServiceTest {
     void createRoom_configurableRoomWithSettings_createsSuccessfully() {
         User creator = User.builder().id("user1").build();
 
-        when(userRepository.findByProviderAndProviderId("local", "localId"))
+        when(userRepository.findById("user1"))
                 .thenReturn(Optional.of(creator));
 
         CreateChatRoomRequest request = new CreateChatRoomRequest();
@@ -139,9 +139,9 @@ class ChatRoomServiceTest {
                 .build();
         when(chatRoomRepository.save(any(ChatRoom.class))).thenReturn(savedRoom);
 
-        ChatRoomResponse response = chatRoomService.createRoom(request, "local", "localId");
+        ChatRoomResponse response = chatRoomService.createRoom(request, "user1");
 
-        assertThat(response.getId()).isEqualTo("room2");
+        assertThat(response.id()).isEqualTo("room2");
         ArgumentCaptor<ChatRoom> saved = ArgumentCaptor.forClass(ChatRoom.class);
         verify(chatRoomRepository).save(saved.capture());
         assertThat(saved.getValue().getMaxParticipants()).isEqualTo(5);
@@ -151,7 +151,7 @@ class ChatRoomServiceTest {
     @Test
     void getList_returnsUserRooms() {
         User user = User.builder().id("user1").build();
-        when(userRepository.findByProviderAndProviderId("local", "localId"))
+        when(userRepository.findById("user1"))
                 .thenReturn(Optional.of(user));
         when(participantService.getRoomIdsOfUser("user1")).thenReturn(List.of("room1"));
 
@@ -159,7 +159,7 @@ class ChatRoomServiceTest {
         when(chatRoomRepository.findByIdInAndIsActiveTrue(List.of("room1")))
                 .thenReturn(List.of(room));
 
-        List<ChatRoom> rooms = chatRoomService.getList("local", "localId");
+        List<ChatRoom> rooms = chatRoomService.getList("user1");
 
         assertThat(rooms).hasSize(1);
         assertThat(rooms.get(0).getId()).isEqualTo("room1");
@@ -167,11 +167,11 @@ class ChatRoomServiceTest {
 
     @Test
     void getList_noMemberships_returnsEmptyWithoutRoomQuery() {
-        when(userRepository.findByProviderAndProviderId("local", "localId"))
+        when(userRepository.findById("user1"))
                 .thenReturn(Optional.of(User.builder().id("user1").build()));
         when(participantService.getRoomIdsOfUser("user1")).thenReturn(List.of());
 
-        assertThat(chatRoomService.getList("local", "localId")).isEmpty();
+        assertThat(chatRoomService.getList("user1")).isEmpty();
         verifyNoInteractions(chatRoomRepository);
     }
 
@@ -184,22 +184,22 @@ class ChatRoomServiceTest {
 
         List<ChatRoomResponse> responses = chatRoomService.toResponses(List.of(first, second));
 
-        assertThat(responses.get(0).getParticipants()).containsExactly("user1");
-        assertThat(responses.get(1).getParticipants()).isEmpty();
+        assertThat(responses.get(0).participants()).containsExactly("user1");
+        assertThat(responses.get(1).participants()).isEmpty();
         verify(participantService, never()).getParticipantUserIds(anyString());
     }
 
     @Test
     void getChatRoomById_isParticipant_returnsRoom() {
         User user = User.builder().id("user1").build();
-        when(userRepository.findByProviderAndProviderId("local", "localId"))
+        when(userRepository.findById("user1"))
                 .thenReturn(Optional.of(user));
 
         ChatRoom room = ChatRoom.builder().id("room1").build();
         when(chatRoomRepository.findByIdAndIsActiveTrue("room1")).thenReturn(Optional.of(room));
         when(participantService.isUserParticipant("room1", "user1")).thenReturn(true);
 
-        ChatRoom result = chatRoomService.getChatRoomById("local", "localId", "room1");
+        ChatRoom result = chatRoomService.getChatRoomById("user1", "room1");
 
         assertThat(result.getId()).isEqualTo("room1");
     }
@@ -207,31 +207,31 @@ class ChatRoomServiceTest {
     @Test
     void getChatRoomById_nonParticipant_throwsException() {
         User user = User.builder().id("user1").build();
-        when(userRepository.findByProviderAndProviderId("local", "localId"))
+        when(userRepository.findById("user1"))
                 .thenReturn(Optional.of(user));
 
         when(chatRoomRepository.findByIdAndIsActiveTrue("room1"))
                 .thenReturn(Optional.of(ChatRoom.builder().id("room1").build()));
         when(participantService.isUserParticipant("room1", "user1")).thenReturn(false);
 
-        assertThatThrownBy(() -> chatRoomService.getChatRoomById("local", "localId", "room1"))
+        assertThatThrownBy(() -> chatRoomService.getChatRoomById("user1", "room1"))
                 .isInstanceOf(ChatRoomNotFoundException.class);
     }
 
     @Test
     void getChatRoomById_deletedRoom_throwsNotFound() {
-        when(userRepository.findByProviderAndProviderId("local", "localId"))
+        when(userRepository.findById("user1"))
                 .thenReturn(Optional.of(User.builder().id("user1").build()));
         when(chatRoomRepository.findByIdAndIsActiveTrue("room1")).thenReturn(Optional.empty());
 
-        assertThatThrownBy(() -> chatRoomService.getChatRoomById("local", "localId", "room1"))
+        assertThatThrownBy(() -> chatRoomService.getChatRoomById("user1", "room1"))
                 .isInstanceOf(ChatRoomNotFoundException.class);
     }
 
     @Test
     void updateChatRoomById_creator_updatesSuccessfully() {
         User user = User.builder().id("user1").build();
-        when(userRepository.findByProviderAndProviderId("local", "localId"))
+        when(userRepository.findById("user1"))
                 .thenReturn(Optional.of(user));
 
         ChatRoom room = ChatRoom.builder()
@@ -255,7 +255,7 @@ class ChatRoomServiceTest {
         request.setMaxUsers(10);
         request.setSettings(settings);
 
-        ChatRoom result = chatRoomService.updateChatRoomById("local", "localId", "room1", request);
+        ChatRoom result = chatRoomService.updateChatRoomById("user1", "room1", request);
 
         assertThat(result.getName()).isEqualTo("New Name");
         verify(chatRoomRepository, never()).save(any());
@@ -263,7 +263,7 @@ class ChatRoomServiceTest {
 
     @Test
     void updateChatRoomById_emptyRequest_keepsCurrentValues() {
-        when(userRepository.findByProviderAndProviderId("local", "localId"))
+        when(userRepository.findById("user1"))
                 .thenReturn(Optional.of(User.builder().id("user1").build()));
         ChatRoom.RoomSettings settings = ChatRoom.RoomSettings.builder().build();
         ChatRoom room = ChatRoom.builder().id("room1").createdBy("user1").type(ChatRoom.RoomType.PUBLIC)
@@ -273,7 +273,7 @@ class ChatRoomServiceTest {
         when(chatRoomRepository.updateEditableFields(eq("room1"), eq("Name"), eq("Desc"), eq(-1), eq(settings), any()))
                 .thenReturn(1L);
 
-        chatRoomService.updateChatRoomById("local", "localId", "room1", new UpdateChatRoomRequest());
+        chatRoomService.updateChatRoomById("user1", "room1", new UpdateChatRoomRequest());
 
         verify(chatRoomRepository).updateEditableFields(eq("room1"), eq("Name"), eq("Desc"), eq(-1), eq(settings), any());
     }
@@ -281,7 +281,7 @@ class ChatRoomServiceTest {
     @Test
     void updateChatRoomById_nonCreator_throwsException() {
         User user = User.builder().id("user2").build();
-        when(userRepository.findByProviderAndProviderId("local", "localId"))
+        when(userRepository.findById("user2"))
                 .thenReturn(Optional.of(user));
 
         ChatRoom room = ChatRoom.builder()
@@ -293,7 +293,7 @@ class ChatRoomServiceTest {
 
         UpdateChatRoomRequest request = new UpdateChatRoomRequest();
 
-        assertThatThrownBy(() -> chatRoomService.updateChatRoomById("local", "localId", "room1", request))
+        assertThatThrownBy(() -> chatRoomService.updateChatRoomById("user2", "room1", request))
                 .isInstanceOf(UnauthorizedRoomActionException.class);
         verify(chatRoomRepository, never()).updateEditableFields(any(), any(), any(), anyInt(), any(), any());
     }
@@ -301,7 +301,7 @@ class ChatRoomServiceTest {
     @Test
     void deleteChatRoomById_creator_softDeletesCleansUpAndBroadcasts() {
         User user = User.builder().id("user1").name("Alice").build();
-        when(userRepository.findByProviderAndProviderId("local", "localId"))
+        when(userRepository.findById("user1"))
                 .thenReturn(Optional.of(user));
 
         ChatRoom room = ChatRoom.builder()
@@ -312,26 +312,26 @@ class ChatRoomServiceTest {
         when(chatRoomRepository.softDelete(eq("room1"), any())).thenReturn(1L);
         when(participantService.removeAllParticipants("room1")).thenReturn(3L);
 
-        chatRoomService.deleteChatRoomById("local", "localId", "room1");
+        chatRoomService.deleteChatRoomById("user1", "room1");
 
         verify(chatRoomRepository, never()).delete(any());
         verify(participantService).removeAllParticipants("room1");
         ArgumentCaptor<ChatMessageResponse> event = ArgumentCaptor.forClass(ChatMessageResponse.class);
         verify(messagingTemplate).convertAndSend(eq("/topic/public/room1"), event.capture());
-        assertThat(event.getValue().getType()).isEqualTo(Message.MessageType.SYSTEM);
-        assertThat(event.getValue().getContent()).isEqualTo(ChatRoomService.ROOM_DELETED_MESSAGE);
-        assertThat(event.getValue().getChatRoomId()).isEqualTo("room1");
+        assertThat(event.getValue().type()).isEqualTo(Message.MessageType.SYSTEM);
+        assertThat(event.getValue().content()).isEqualTo(ChatRoomService.ROOM_DELETED_MESSAGE);
+        assertThat(event.getValue().chatRoomId()).isEqualTo("room1");
     }
 
     @Test
     void deleteChatRoomById_concurrentlyDeleted_throwsNotFoundWithoutBroadcast() {
-        when(userRepository.findByProviderAndProviderId("local", "localId"))
+        when(userRepository.findById("user1"))
                 .thenReturn(Optional.of(User.builder().id("user1").build()));
         when(chatRoomRepository.findByIdAndIsActiveTrue("room1"))
                 .thenReturn(Optional.of(ChatRoom.builder().id("room1").createdBy("user1").build()));
         when(chatRoomRepository.softDelete(eq("room1"), any())).thenReturn(0L);
 
-        assertThatThrownBy(() -> chatRoomService.deleteChatRoomById("local", "localId", "room1"))
+        assertThatThrownBy(() -> chatRoomService.deleteChatRoomById("user1", "room1"))
                 .isInstanceOf(ChatRoomNotFoundException.class);
         verifyNoInteractions(messagingTemplate);
         verify(participantService, never()).removeAllParticipants(any());
@@ -340,7 +340,7 @@ class ChatRoomServiceTest {
     @Test
     void deleteChatRoomById_nonCreator_throwsException() {
         User user = User.builder().id("user2").build();
-        when(userRepository.findByProviderAndProviderId("local", "localId"))
+        when(userRepository.findById("user2"))
                 .thenReturn(Optional.of(user));
 
         ChatRoom room = ChatRoom.builder()
@@ -349,7 +349,7 @@ class ChatRoomServiceTest {
                 .build();
         when(chatRoomRepository.findByIdAndIsActiveTrue("room1")).thenReturn(Optional.of(room));
 
-        assertThatThrownBy(() -> chatRoomService.deleteChatRoomById("local", "localId", "room1"))
+        assertThatThrownBy(() -> chatRoomService.deleteChatRoomById("user2", "room1"))
                 .isInstanceOf(UnauthorizedRoomActionException.class);
         verify(chatRoomRepository, never()).softDelete(any(), any());
     }
@@ -357,7 +357,7 @@ class ChatRoomServiceTest {
     @Test
     void leaveChatRoomById_nonCreatorMember_leavesSuccessfully() {
         User user = User.builder().id("user2").build();
-        when(userRepository.findByProviderAndProviderId("local", "localId"))
+        when(userRepository.findById("user2"))
                 .thenReturn(Optional.of(user));
 
         ChatRoom room = ChatRoom.builder()
@@ -369,7 +369,7 @@ class ChatRoomServiceTest {
         when(participantService.isUserParticipant("room1", "user2")).thenReturn(true);
         when(participantService.removeParticipant("room1", "user2")).thenReturn(true);
 
-        chatRoomService.leaveChatRoomById("local", "localId", "room1");
+        chatRoomService.leaveChatRoomById("user2", "room1");
 
         verify(participantService).removeParticipant("room1", "user2");
         verify(chatRoomRepository, never()).save(any());
@@ -378,7 +378,7 @@ class ChatRoomServiceTest {
     @Test
     void leaveChatRoomById_creator_throwsException() {
         User user = User.builder().id("user1").build();
-        when(userRepository.findByProviderAndProviderId("local", "localId"))
+        when(userRepository.findById("user1"))
                 .thenReturn(Optional.of(user));
 
         ChatRoom room = ChatRoom.builder()
@@ -389,26 +389,26 @@ class ChatRoomServiceTest {
         when(chatRoomRepository.findByIdAndIsActiveTrue("room1")).thenReturn(Optional.of(room));
         when(participantService.isUserParticipant("room1", "user1")).thenReturn(true);
 
-        assertThatThrownBy(() -> chatRoomService.leaveChatRoomById("local", "localId", "room1"))
+        assertThatThrownBy(() -> chatRoomService.leaveChatRoomById("user1", "room1"))
                 .isInstanceOf(ForbiddenActionException.class);
         verify(participantService, never()).removeParticipant(any(), any());
     }
 
     @Test
     void createRoom_userNotFound_throwsException() {
-        when(userRepository.findByProviderAndProviderId("local", "localId"))
+        when(userRepository.findById("user1"))
                 .thenReturn(Optional.empty());
 
         CreateChatRoomRequest request = new CreateChatRoomRequest();
 
-        assertThatThrownBy(() -> chatRoomService.createRoom(request, "local", "localId"))
+        assertThatThrownBy(() -> chatRoomService.createRoom(request, "user1"))
                 .isInstanceOf(UserNotFoundException.class);
     }
 
     @Test
     void createRoom_directRoomWithSelf_throwsException() {
         User user = User.builder().id("user1").build();
-        when(userRepository.findByProviderAndProviderId("local", "localId"))
+        when(userRepository.findById("user1"))
                 .thenReturn(Optional.of(user));
         when(userRepository.findById("user1")).thenReturn(Optional.of(user));
 
@@ -416,7 +416,7 @@ class ChatRoomServiceTest {
         request.setRoomType(ChatRoom.RoomType.DIRECT_MESSAGE);
         request.setParticipantId("user1"); // same as creator
 
-        assertThatThrownBy(() -> chatRoomService.createRoom(request, "local", "localId"))
+        assertThatThrownBy(() -> chatRoomService.createRoom(request, "user1"))
                 .isInstanceOf(InvalidRequestException.class)
                 .extracting("errorCode").isEqualTo(ErrorCode.INVALID_ARGUMENT);
     }
@@ -424,7 +424,7 @@ class ChatRoomServiceTest {
     @Test
     void createRoom_directRoomParticipantNotFound_throwsException() {
         User user = User.builder().id("user1").build();
-        when(userRepository.findByProviderAndProviderId("local", "localId"))
+        when(userRepository.findById("user1"))
                 .thenReturn(Optional.of(user));
         when(userRepository.findById("user2")).thenReturn(Optional.empty());
 
@@ -432,7 +432,7 @@ class ChatRoomServiceTest {
         request.setRoomType(ChatRoom.RoomType.DIRECT_MESSAGE);
         request.setParticipantId("user2");
 
-        assertThatThrownBy(() -> chatRoomService.createRoom(request, "local", "localId"))
+        assertThatThrownBy(() -> chatRoomService.createRoom(request, "user1"))
                 .isInstanceOf(UserNotFoundException.class)
                 .extracting("errorCode").isEqualTo(ErrorCode.USER_NOT_FOUND);
     }
@@ -440,7 +440,7 @@ class ChatRoomServiceTest {
     @Test
     void createRoom_databaseError_propagatesDataAccessException() {
         User user = User.builder().id("user1").build();
-        when(userRepository.findByProviderAndProviderId("local", "localId"))
+        when(userRepository.findById("user1"))
                 .thenReturn(Optional.of(user));
 
         CreateChatRoomRequest request = new CreateChatRoomRequest();
@@ -449,7 +449,7 @@ class ChatRoomServiceTest {
 
         when(chatRoomRepository.save(any(ChatRoom.class))).thenThrow(new DataIntegrityViolationException("db error"));
 
-        assertThatThrownBy(() -> chatRoomService.createRoom(request, "local", "localId"))
+        assertThatThrownBy(() -> chatRoomService.createRoom(request, "user1"))
                 .isInstanceOf(DataIntegrityViolationException.class)
                 .hasMessage("db error");
     }
@@ -458,7 +458,7 @@ class ChatRoomServiceTest {
     void createRoom_directRoomDatabaseError_propagatesDataAccessException() {
         User user1 = User.builder().id("user1").build();
         User user2 = User.builder().id("user2").build();
-        when(userRepository.findByProviderAndProviderId("local", "localId")).thenReturn(Optional.of(user1));
+        when(userRepository.findById("user1")).thenReturn(Optional.of(user1));
         when(userRepository.findById("user2")).thenReturn(Optional.of(user2));
 
         CreateChatRoomRequest request = new CreateChatRoomRequest();
@@ -467,17 +467,17 @@ class ChatRoomServiceTest {
 
         when(chatRoomRepository.save(any(ChatRoom.class))).thenThrow(new DataIntegrityViolationException("db error"));
 
-        assertThatThrownBy(() -> chatRoomService.createRoom(request, "local", "localId"))
+        assertThatThrownBy(() -> chatRoomService.createRoom(request, "user1"))
                 .isInstanceOf(DataIntegrityViolationException.class)
                 .hasMessage("db error");
     }
 
     @Test
     void getList_userNotFound_throwsException() {
-        when(userRepository.findByProviderAndProviderId("local", "localId"))
+        when(userRepository.findById("user1"))
                 .thenReturn(Optional.empty());
 
-        assertThatThrownBy(() -> chatRoomService.getList("local", "localId"))
+        assertThatThrownBy(() -> chatRoomService.getList("user1"))
                 .isInstanceOf(UserNotFoundException.class);
     }
 
@@ -492,14 +492,14 @@ class ChatRoomServiceTest {
     @Test
     void deleteChatRoomById_databaseError_propagatesDataAccessException() {
         User user = User.builder().id("user1").build();
-        when(userRepository.findByProviderAndProviderId("local", "localId"))
+        when(userRepository.findById("user1"))
                 .thenReturn(Optional.of(user));
 
         ChatRoom room = ChatRoom.builder().id("room1").createdBy("user1").build();
         when(chatRoomRepository.findByIdAndIsActiveTrue("room1")).thenReturn(Optional.of(room));
         when(chatRoomRepository.softDelete(eq("room1"), any())).thenThrow(new DataIntegrityViolationException("db error"));
 
-        assertThatThrownBy(() -> chatRoomService.deleteChatRoomById("local", "localId", "room1"))
+        assertThatThrownBy(() -> chatRoomService.deleteChatRoomById("user1", "room1"))
                 .isInstanceOf(DataIntegrityViolationException.class)
                 .hasMessage("db error");
     }
@@ -507,7 +507,7 @@ class ChatRoomServiceTest {
     @Test
     void updateChatRoomById_directMessageInvalidUpdate_throwsException() {
         User user = User.builder().id("user1").build();
-        when(userRepository.findByProviderAndProviderId("local", "localId"))
+        when(userRepository.findById("user1"))
                 .thenReturn(Optional.of(user));
 
         ChatRoom room = ChatRoom.builder()
@@ -521,7 +521,7 @@ class ChatRoomServiceTest {
         UpdateChatRoomRequest request = new UpdateChatRoomRequest();
         request.setMaxUsers(5); // invalid for direct message
 
-        assertThatThrownBy(() -> chatRoomService.updateChatRoomById("local", "localId", "room1", request))
+        assertThatThrownBy(() -> chatRoomService.updateChatRoomById("user1", "room1", request))
                 .isInstanceOf(InvalidRequestException.class)
                 .extracting("errorCode").isEqualTo(ErrorCode.INVALID_ARGUMENT);
     }
@@ -529,7 +529,7 @@ class ChatRoomServiceTest {
     @Test
     void updateChatRoomById_configurableRoomInvalidMaxUsers_throwsException() {
         User user = User.builder().id("user1").build();
-        when(userRepository.findByProviderAndProviderId("local", "localId"))
+        when(userRepository.findById("user1"))
                 .thenReturn(Optional.of(user));
 
         ChatRoom room = ChatRoom.builder()
@@ -546,7 +546,7 @@ class ChatRoomServiceTest {
         UpdateChatRoomRequest request = new UpdateChatRoomRequest();
         request.setMaxUsers(2);
 
-        assertThatThrownBy(() -> chatRoomService.updateChatRoomById("local", "localId", "room1", request))
+        assertThatThrownBy(() -> chatRoomService.updateChatRoomById("user1", "room1", request))
                 .isInstanceOf(InvalidRequestException.class)
                 .extracting("errorCode").isEqualTo(ErrorCode.INVALID_ARGUMENT);
     }
@@ -554,7 +554,7 @@ class ChatRoomServiceTest {
     @Test
     void leaveChatRoomById_directMessage_throwsException() {
         User user = User.builder().id("user2").build();
-        when(userRepository.findByProviderAndProviderId("local", "localId"))
+        when(userRepository.findById("user2"))
                 .thenReturn(Optional.of(user));
 
         ChatRoom room = ChatRoom.builder()
@@ -564,14 +564,14 @@ class ChatRoomServiceTest {
         when(chatRoomRepository.findByIdAndIsActiveTrue("room1")).thenReturn(Optional.of(room));
         when(participantService.isUserParticipant("room1", "user2")).thenReturn(true);
 
-        assertThatThrownBy(() -> chatRoomService.leaveChatRoomById("local", "localId", "room1"))
+        assertThatThrownBy(() -> chatRoomService.leaveChatRoomById("user2", "room1"))
                 .isInstanceOf(ForbiddenActionException.class);
     }
 
     @Test
     void leaveChatRoomById_notParticipant_throwsException() {
         User user = User.builder().id("user2").build();
-        when(userRepository.findByProviderAndProviderId("local", "localId"))
+        when(userRepository.findById("user2"))
                 .thenReturn(Optional.of(user));
 
         ChatRoom room = ChatRoom.builder()
@@ -584,14 +584,14 @@ class ChatRoomServiceTest {
         when(participantService.isUserParticipant("room1", "user2")).thenReturn(true);
         when(participantService.removeParticipant("room1", "user2")).thenReturn(false);
 
-        assertThatThrownBy(() -> chatRoomService.leaveChatRoomById("local", "localId", "room1"))
+        assertThatThrownBy(() -> chatRoomService.leaveChatRoomById("user2", "room1"))
                 .isInstanceOf(UnauthorizedRoomActionException.class);
     }
 
     @Test
     void leaveChatRoomById_databaseError_propagatesDataAccessException() {
         User user = User.builder().id("user2").build();
-        when(userRepository.findByProviderAndProviderId("local", "localId"))
+        when(userRepository.findById("user2"))
                 .thenReturn(Optional.of(user));
 
         ChatRoom room = ChatRoom.builder()
@@ -604,7 +604,7 @@ class ChatRoomServiceTest {
         when(participantService.removeParticipant("room1", "user2"))
                 .thenThrow(new DataIntegrityViolationException("db error"));
 
-        assertThatThrownBy(() -> chatRoomService.leaveChatRoomById("local", "localId", "room1"))
+        assertThatThrownBy(() -> chatRoomService.leaveChatRoomById("user2", "room1"))
                 .isInstanceOf(DataIntegrityViolationException.class)
                 .hasMessage("db error");
     }

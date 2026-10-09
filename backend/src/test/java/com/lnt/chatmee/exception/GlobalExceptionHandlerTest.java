@@ -3,7 +3,6 @@ package com.lnt.chatmee.exception;
 import com.lnt.chatmee.controller.ChatRoomController;
 import com.lnt.chatmee.service.ChatRoomService;
 import com.lnt.chatmee.service.ParticipantService;
-import com.lnt.chatmee.util.OAuthUtil;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.MediaType;
@@ -22,13 +21,16 @@ class GlobalExceptionHandlerTest {
 
     @BeforeEach
     void setUp() {
-        mvc = MockMvcBuilders.standaloneSetup(new ChatRoomController(rooms, participants, mock(OAuthUtil.class)))
+        mvc = MockMvcBuilders.standaloneSetup(new ChatRoomController(rooms, participants))
                 .setCustomArgumentResolvers(new org.springframework.security.web.method.annotation.AuthenticationPrincipalArgumentResolver())
-                .setControllerAdvice(new GlobalExceptionHandler()).build();
+                .setCustomArgumentResolvers((new org.springframework.web.method.support.HandlerMethodArgumentResolver() {
+ public boolean supportsParameter(org.springframework.core.MethodParameter p) { return p.hasParameterAnnotation(com.lnt.chatmee.security.CurrentUser.class); }
+ public Object resolveArgument(org.springframework.core.MethodParameter p, org.springframework.web.method.support.ModelAndViewContainer c, org.springframework.web.context.request.NativeWebRequest r, org.springframework.web.bind.support.WebDataBinderFactory f) { return com.lnt.chatmee.support.TestUsers.principal("u1"); }
+ })).setControllerAdvice(new GlobalExceptionHandler()).build();
     }
 
     private ResultActions roomFailure(RuntimeException exception, int status, String code) throws Exception {
-        when(rooms.getChatRoomById(null, null, "room")).thenThrow(exception);
+        when(rooms.getChatRoomById("u1", "room")).thenThrow(exception);
         return check(mvc.perform(get("/api/v1/chatrooms/room")), status, code);
     }
 
@@ -59,13 +61,13 @@ class GlobalExceptionHandlerTest {
     @Test
     void joinRoom_duplicateJoin_returns409Problem() throws Exception {
         doThrow(new UserAlreadyInRoomException("User is already in the room"))
-                .when(participants).joinRoom("room", null, null);
+                .when(participants).joinRoom("room", "u1");
         check(mvc.perform(post("/api/v1/chatrooms/room/join")), 409, "ALREADY_PARTICIPANT");
     }
 
     @Test
     void joinRoom_fullRoom_returns409Problem() throws Exception {
-        doThrow(new RoomCapacityExceededException("Room full")).when(participants).joinRoom("room", null, null);
+        doThrow(new RoomCapacityExceededException("Room full")).when(participants).joinRoom("room", "u1");
         check(mvc.perform(post("/api/v1/chatrooms/room/join")), 409, "ROOM_FULL");
     }
 
@@ -116,11 +118,12 @@ class GlobalExceptionHandlerTest {
 
     @Test
     void getCurrentUser_missingDatabaseUser_returns404Problem() throws Exception {
-        var users = mock(com.lnt.chatmee.repository.UserRepository.class);
-        var principal = mock(org.springframework.security.oauth2.core.user.OAuth2User.class);
+        var users = mock(com.lnt.chatmee.service.UserService.class);
+        when(users.getUserProfile("u1")).thenThrow(new com.lnt.chatmee.exception.UserNotFoundException("Not found"));
+        var principal = com.lnt.chatmee.support.TestUsers.principal("u1");
         var resolver = new org.springframework.web.method.support.HandlerMethodArgumentResolver() {
             public boolean supportsParameter(org.springframework.core.MethodParameter parameter) {
-                return parameter.getParameterType() == org.springframework.security.oauth2.core.user.OAuth2User.class;
+                return parameter.getParameterType() == com.lnt.chatmee.security.UserPrincipal.class;
             }
             public Object resolveArgument(org.springframework.core.MethodParameter parameter,
                     org.springframework.web.method.support.ModelAndViewContainer container,
@@ -130,7 +133,7 @@ class GlobalExceptionHandlerTest {
             }
         };
         var authMvc = MockMvcBuilders.standaloneSetup(new com.lnt.chatmee.controller.AuthApiController(
-                users, mock(OAuthUtil.class), mock(com.lnt.chatmee.security.WsTokenService.class)))
+                users, mock(com.lnt.chatmee.security.WsTokenService.class)))
                 .setCustomArgumentResolvers(resolver).setControllerAdvice(new GlobalExceptionHandler()).build();
         check(authMvc.perform(get("/api/v1/auth/me")), 404, "USER_NOT_FOUND");
         check(authMvc.perform(get("/api/v1/auth/user")), 404, "USER_NOT_FOUND");

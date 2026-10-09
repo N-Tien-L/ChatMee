@@ -35,8 +35,6 @@ import org.springframework.messaging.simp.stomp.StompHeaders;
 import org.springframework.messaging.simp.stomp.StompSession;
 import org.springframework.messaging.simp.stomp.StompSessionHandlerAdapter;
 import org.springframework.messaging.converter.StringMessageConverter;
-import org.springframework.security.core.authority.SimpleGrantedAuthority;
-import org.springframework.security.oauth2.core.user.DefaultOAuth2User;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.web.socket.WebSocketHttpHeaders;
 import org.springframework.web.socket.client.standard.StandardWebSocketClient;
@@ -172,8 +170,7 @@ class StompMessagingIT {
     }
 
     private String issueToken(User user) {
-        String token = tokens.issueToken(new DefaultOAuth2User(
-                List.of(new SimpleGrantedAuthority("ROLE_USER")), Map.of("sub", user.getProviderId()), "sub"));
+        String token = tokens.issueToken(user.getId());
         issuedTokens.add(token);
         return token;
     }

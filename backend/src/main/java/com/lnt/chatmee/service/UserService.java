@@ -3,14 +3,13 @@ package com.lnt.chatmee.service;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
-import org.springframework.security.oauth2.core.user.OAuth2User;
 import org.springframework.stereotype.Service;
 
 import com.lnt.chatmee.dto.response.UserSummaryResponse;
+import com.lnt.chatmee.dto.response.UserResponse;
 import com.lnt.chatmee.exception.UserNotFoundException;
 import com.lnt.chatmee.model.User;
 import com.lnt.chatmee.repository.UserRepository;
-import com.lnt.chatmee.util.OAuthUtil;
 
 import lombok.RequiredArgsConstructor;
 
@@ -22,15 +21,11 @@ public class UserService {
     static final int MAX_PAGE_SIZE = 50;
 
     private final UserRepository userRepository;
-    private final OAuthUtil oAuthUtil;
 
-    public String getCurrentUserId(OAuth2User principal) {
-        if (principal == null) return null;
-        String provider = oAuthUtil.determineProvider(principal);
-        String providerId = oAuthUtil.getProviderId(principal, provider);
-        return userRepository.findByProviderAndProviderId(provider, providerId)
-                .map(User::getId)
-                .orElseThrow(() -> new UserNotFoundException("Current user not found"));
+    public UserResponse getUserProfile(String userId) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new UserNotFoundException("User not found in database"));
+        return UserResponse.from(user);
     }
 
     /** Page is clamped to >= 0 and size to 1..MAX_PAGE_SIZE (non-positive size falls back to the default). */

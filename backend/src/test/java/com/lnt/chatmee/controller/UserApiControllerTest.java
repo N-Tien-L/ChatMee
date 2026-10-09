@@ -29,7 +29,7 @@ import com.lnt.chatmee.service.UserService;
 
 @WebMvcTest(UserApiController.class)
 @ActiveProfiles("actuator-test")
-@ContextConfiguration(classes = {UserApiController.class, GlobalExceptionHandler.class})
+@ContextConfiguration(classes = {com.lnt.chatmee.config.CurrentUserWebMvcConfig.class, com.lnt.chatmee.security.CurrentUserArgumentResolver.class, UserApiController.class, GlobalExceptionHandler.class})
 class UserApiControllerTest {
 
     @Autowired
@@ -45,7 +45,7 @@ class UserApiControllerTest {
 
         mockMvc.perform(get("/api/v1/users")
                 .param("query", "User")
-                .with(oauth2Login())
+                .with(oauth2Login().oauth2User(com.lnt.chatmee.support.TestUsers.principal("u1")))
                 .with(csrf()))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.content[0].id").value("1"))
@@ -62,7 +62,7 @@ class UserApiControllerTest {
     @Test
     void providerEndpoint_returns404() throws Exception {
         mockMvc.perform(get("/api/v1/users/provider/google/id/123")
-                .with(oauth2Login())
+                .with(oauth2Login().oauth2User(com.lnt.chatmee.support.TestUsers.principal("u1")))
                 .with(csrf()))
                 .andExpect(status().isNotFound());
     }
@@ -72,7 +72,7 @@ class UserApiControllerTest {
         when(userService.getUserSummary("99")).thenThrow(new UserNotFoundException("User not found"));
 
         mockMvc.perform(get("/api/v1/users/99")
-                .with(oauth2Login())
+                .with(oauth2Login().oauth2User(com.lnt.chatmee.support.TestUsers.principal("u1")))
                 .with(csrf()))
                 .andExpect(status().isNotFound());
     }

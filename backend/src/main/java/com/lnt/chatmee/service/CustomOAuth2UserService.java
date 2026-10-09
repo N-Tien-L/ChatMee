@@ -1,6 +1,8 @@
 package com.lnt.chatmee.service;
 
 import java.util.UUID;
+import java.util.ArrayList;
+import com.lnt.chatmee.security.UserPrincipal;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -72,6 +74,7 @@ public class CustomOAuth2UserService extends DefaultOAuth2UserService {
         User savedUser = userRepository.save(user);
         logger.debug("User logged in successfully with ID: {}", savedUser.getId());
 
-        return oAuth2User;
+        return new UserPrincipal(savedUser.getId(), provider, providerId, savedUser.getName(),
+                oAuth2User.getAttributes(), new ArrayList<>(oAuth2User.getAuthorities()));
     }
 }

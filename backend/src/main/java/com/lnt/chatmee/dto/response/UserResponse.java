@@ -1,18 +1,16 @@
 package com.lnt.chatmee.dto.response;
 
-import lombok.AllArgsConstructor;
 import lombok.Builder;
-import lombok.Data;
-import lombok.NoArgsConstructor;
 
-@Data
 @Builder
-@NoArgsConstructor
-@AllArgsConstructor
-public class UserResponse {
-    private String id;
-    private String name;
-    private String email;
-    private String avatarUrl;
-    private String provider;
+public record UserResponse(
+    String id,
+    String name,
+    String email,
+    String avatarUrl,
+    String provider
+) {
+    public static UserResponse from(com.lnt.chatmee.model.User user) {
+        return new UserResponse(user.getId(), user.getName(), user.getEmail(), user.getAvatarUrl(), user.getProvider());
+    }
 }

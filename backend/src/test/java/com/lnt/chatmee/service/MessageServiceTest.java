@@ -22,11 +22,14 @@ import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
-import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
 class MessageServiceTest {
+    @org.junit.jupiter.api.BeforeEach
+    void caller() {
+        lenient().when(userRepository.findById("user1")).thenReturn(Optional.of(User.builder().id("user1").build()));
+    }
 
     @Mock
     private ChatRoomRepository chatRoomRepository;
@@ -86,8 +89,8 @@ class MessageServiceTest {
         List<ChatMessageResponse> responses = messageService.getRecentMessages("room1", "user1");
 
         assertThat(responses).hasSize(1);
-        assertThat(responses.get(0).getContent()).isEqualTo("hello");
-        assertThat(responses.get(0).getSenderName()).isEqualTo("Alice");
+        assertThat(responses.get(0).content()).isEqualTo("hello");
+        assertThat(responses.get(0).senderName()).isEqualTo("Alice");
     }
 
     @Test

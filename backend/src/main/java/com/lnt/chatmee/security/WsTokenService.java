@@ -6,11 +6,9 @@ import java.util.Base64;
 
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.security.authentication.BadCredentialsException;
-import org.springframework.security.oauth2.core.user.OAuth2User;
 import org.springframework.stereotype.Service;
 
 import com.lnt.chatmee.repository.UserRepository;
-import com.lnt.chatmee.util.OAuthUtil;
 
 import lombok.RequiredArgsConstructor;
 
@@ -22,17 +20,11 @@ public class WsTokenService {
     private final SecureRandom random = new SecureRandom();
     private final StringRedisTemplate redisTemplate;
     private final UserRepository userRepository;
-    private final OAuthUtil oauthUtil;
 
-    public String issueToken(OAuth2User principal) {
-        if (principal == null) {
-            throw new BadCredentialsException("Authentication required");
+    public String issueToken(String userId) {
+        if (userId == null || userRepository.findById(userId).isEmpty()) {
+            throw new BadCredentialsException("Authenticated user not found");
         }
-        String provider = oauthUtil.determineProvider(principal);
-        String providerId = oauthUtil.getProviderId(principal, provider);
-        String userId = userRepository.findByProviderAndProviderId(provider, providerId)
-                .orElseThrow(() -> new BadCredentialsException("Authenticated user not found"))
-                .getId();
         byte[] bytes = new byte[32];
         random.nextBytes(bytes);
         String token = Base64.getUrlEncoder().withoutPadding().encodeToString(bytes);

@@ -27,7 +27,7 @@ import com.lnt.chatmee.support.SecuredWebMvcTestSupport;
 
 @WebMvcTest(controllers = AuthApiController.class, properties = "app.client.url=http://localhost:3000")
 @ActiveProfiles("actuator-test")
-@Import(SecurityConfig.class)
+@Import({SecurityConfig.class, com.lnt.chatmee.service.UserService.class})
 class AuthControllerWebMvcTest extends SecuredWebMvcTestSupport {
 
     @MockitoBean UserRepository userRepository;
@@ -35,10 +35,10 @@ class AuthControllerWebMvcTest extends SecuredWebMvcTestSupport {
 
     @Test
     void getCurrentUser_knownUser_returnsOwnProfile() throws Exception {
-        when(userRepository.findByProviderAndProviderId(PROVIDER, PROVIDER_ID)).thenReturn(Optional.of(
+        when(userRepository.findById("u1")).thenReturn(Optional.of(
                 User.builder().id("u1").name("Alice").email("alice@example.com").provider(PROVIDER).build()));
 
-        mvc.perform(get("/api/v1/auth/me").with(oauth2Login()))
+        mvc.perform(get("/api/v1/auth/me").with(oauth2Login().oauth2User(com.lnt.chatmee.support.TestUsers.principal("u1"))))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.authenticated").value(true))
                 .andExpect(jsonPath("$.data.user.id").value("u1"))
@@ -47,9 +47,9 @@ class AuthControllerWebMvcTest extends SecuredWebMvcTestSupport {
 
     @Test
     void getCurrentUser_userMissingFromDatabase_returns404Problem() throws Exception {
-        when(userRepository.findByProviderAndProviderId(PROVIDER, PROVIDER_ID)).thenReturn(Optional.empty());
+        when(userRepository.findById("u1")).thenReturn(Optional.empty());
 
-        expectProblem(mvc.perform(get("/api/v1/auth/me").with(oauth2Login())), 404, "USER_NOT_FOUND");
+        expectProblem(mvc.perform(get("/api/v1/auth/me").with(oauth2Login().oauth2User(com.lnt.chatmee.support.TestUsers.principal("u1")))), 404, "USER_NOT_FOUND");
     }
 
     @Test
@@ -67,16 +67,21 @@ class AuthControllerWebMvcTest extends SecuredWebMvcTestSupport {
 
     @Test
     void getAuthStatus_authenticated_returnsTrue() throws Exception {
-        mvc.perform(get("/api/v1/auth/status").with(oauth2Login()))
+        mvc.perform(get("/api/v1/auth/status").with(oauth2Login().oauth2User(com.lnt.chatmee.support.TestUsers.principal("u1"))))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data").value(true));
+    }
+
+    @Test
+    void getAuthStatus_oldSession_returns401Problem() throws Exception {
+        expectProblem(mvc.perform(get("/api/v1/auth/status").with(oauth2Login())), 401, "UNAUTHENTICATED");
     }
 
     @Test
     void getWsToken_authenticatedWithCsrf_returnsUncachedToken() throws Exception {
         when(wsTokenService.issueToken(any())).thenReturn("token-123");
 
-        mvc.perform(post("/api/v1/auth/ws-token").with(oauth2Login()).with(csrf().asHeader()))
+        mvc.perform(post("/api/v1/auth/ws-token").with(oauth2Login().oauth2User(com.lnt.chatmee.support.TestUsers.principal("u1"))).with(csrf().asHeader()))
                 .andExpect(status().isOk())
                 .andExpect(header().string("Cache-Control", "no-store"))
                 .andExpect(jsonPath("$.token").value("token-123"));
@@ -84,7 +89,7 @@ class AuthControllerWebMvcTest extends SecuredWebMvcTestSupport {
 
     @Test
     void getWsToken_missingCsrfToken_returns403Problem() throws Exception {
-        expectProblem(mvc.perform(post("/api/v1/auth/ws-token").with(oauth2Login())), 403, "FORBIDDEN_ACTION");
+        expectProblem(mvc.perform(post("/api/v1/auth/ws-token").with(oauth2Login().oauth2User(com.lnt.chatmee.support.TestUsers.principal("u1")))), 403, "FORBIDDEN_ACTION");
         verifyNoInteractions(wsTokenService);
     }
 
