@@ -25,7 +25,6 @@ import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.redis.core.ValueOperations;
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.oauth2.client.registration.ClientRegistrationRepository;
-import org.springframework.security.oauth2.core.user.OAuth2User;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
@@ -37,7 +36,6 @@ import com.lnt.chatmee.controller.AuthApiController;
 import com.lnt.chatmee.model.User;
 import com.lnt.chatmee.repository.UserRepository;
 import com.lnt.chatmee.service.CustomOAuth2UserService;
-import com.lnt.chatmee.util.OAuthUtil;
 
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletRequest;
@@ -48,9 +46,8 @@ class WsTokenServiceTest {
     @SuppressWarnings("unchecked")
     private final ValueOperations<String, String> values = mock(ValueOperations.class);
     private final UserRepository users = mock(UserRepository.class);
-    private final OAuthUtil oauth = mock(OAuthUtil.class);
-    private final OAuth2User principal = mock(OAuth2User.class);
-    private final WsTokenService tokens = new WsTokenService(redis, users, oauth);
+    private final String principal = "internal-user";
+    private final WsTokenService tokens = new WsTokenService(redis, users);
 
     @BeforeEach
     void setUp() {
@@ -59,9 +56,7 @@ class WsTokenServiceTest {
 
     @Test
     void issueToken_authenticatedUser_storesInternalIdWithSixtySecondTtl() {
-        when(oauth.determineProvider(principal)).thenReturn("google");
-        when(oauth.getProviderId(principal, "google")).thenReturn("provider-id");
-        when(users.findByProviderAndProviderId("google", "provider-id"))
+        when(users.findById(principal))
                 .thenReturn(Optional.of(User.builder().id("internal-user").build()));
         String token = tokens.issueToken(principal);
         assertTrue(Base64.getUrlDecoder().decode(token).length >= 16);
@@ -83,20 +78,18 @@ class WsTokenServiceTest {
     @Test
     void issueToken_missingPrincipal_rejectsWithoutWritingToken() {
         assertThrows(BadCredentialsException.class, () -> tokens.issueToken(null));
-        verifyNoInteractions(values, users, oauth);
+        verifyNoInteractions(values, users);
     }
 
     @Test
     void issueToken_unknownUser_rejectsWithoutWritingToken() {
-        when(oauth.determineProvider(principal)).thenReturn("google");
-        when(oauth.getProviderId(principal, "google")).thenReturn("missing");
-        when(users.findByProviderAndProviderId("google", "missing")).thenReturn(Optional.empty());
+        when(users.findById(principal)).thenReturn(Optional.empty());
         assertThrows(BadCredentialsException.class, () -> tokens.issueToken(principal));
         verifyNoInteractions(values);
     }
 
     @Nested
-    @SpringBootTest(classes = {SecurityConfig.class, AuthApiController.class},
+    @SpringBootTest(classes = {SecurityConfig.class, AuthApiController.class, com.lnt.chatmee.config.CurrentUserWebMvcConfig.class, CurrentUserArgumentResolver.class},
             properties = "app.client.url=http://localhost")
     @ActiveProfiles("actuator-test")
     @AutoConfigureMockMvc
@@ -110,7 +103,7 @@ class WsTokenServiceTest {
         @MockitoBean
         private UserRepository endpointUsers;
         @MockitoBean
-        private OAuthUtil endpointOauth;
+        private com.lnt.chatmee.service.UserService endpointProfiles;
         @MockitoBean
         private CustomOAuth2UserService customOAuth2UserService;
         @MockitoBean(name = "corsConfigurationSource")
@@ -140,13 +133,13 @@ class WsTokenServiceTest {
 
         @Test
         void getWsToken_authenticatedSession_returnsUncachedToken() throws Exception {
-            when(endpointTokens.issueToken(any(OAuth2User.class))).thenReturn("issued-token");
-            mvc.perform(post("/api/v1/auth/ws-token").with(oauth2Login()).with(csrf().asHeader()))
+            when(endpointTokens.issueToken(anyString())).thenReturn("issued-token");
+            mvc.perform(post("/api/v1/auth/ws-token").with(oauth2Login().oauth2User(com.lnt.chatmee.support.TestUsers.principal("u1"))).with(csrf().asHeader()))
                     .andExpect(status().isOk())
                     .andExpect(header().string("Cache-Control", "no-store"))
                     .andExpect(jsonPath("$.token").value("issued-token"));
-            verify(endpointTokens).issueToken(any(OAuth2User.class));
-            verifyNoInteractions(endpointUsers, endpointOauth);
+            verify(endpointTokens).issueToken(anyString());
+            verifyNoInteractions(endpointUsers, endpointProfiles);
         }
     }
 }

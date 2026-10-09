@@ -5,6 +5,8 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.ArrayList;
+import java.util.Objects;
 import java.util.Map;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.oauth2.core.user.OAuth2User;
@@ -16,8 +18,29 @@ public record UserPrincipal(String userId, String provider, String providerId, S
     private static final long serialVersionUID = 1L;
 
     public UserPrincipal {
-        attributes = Collections.unmodifiableMap(new LinkedHashMap<>(attributes));
+        Objects.requireNonNull(userId, "userId");
+        attributes = freezeAttributes(attributes);
         authorities = List.copyOf(authorities);
+    }
+
+    private static Map<String, Object> freezeAttributes(Map<String, Object> source) {
+        Map<String, Object> copy = new LinkedHashMap<>();
+        source.forEach((key, value) -> copy.put(key, freeze(value)));
+        return Collections.unmodifiableMap(copy);
+    }
+
+    private static Object freeze(Object value) {
+        if (value instanceof Map<?, ?> map) {
+            Map<Object, Object> copy = new LinkedHashMap<>();
+            map.forEach((key, nested) -> copy.put(key, freeze(nested)));
+            return Collections.unmodifiableMap(copy);
+        }
+        if (value instanceof Collection<?> collection) {
+            List<Object> copy = new ArrayList<>();
+            collection.forEach(nested -> copy.add(freeze(nested)));
+            return Collections.unmodifiableList(copy);
+        }
+        return value;
     }
 
     @Override public String getName() { return userId; }

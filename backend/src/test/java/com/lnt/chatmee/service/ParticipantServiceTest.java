@@ -44,7 +44,7 @@ class ParticipantServiceTest {
     void joinRoom_publicRoom_addsMember() {
         joinUser();
         targetAndRoom("actor");
-        service.joinRoom("room", "google", "subject");
+        service.joinRoom("room", "actor");
         verify(participants).save(argThat(p -> p.getUserId().equals("actor") && p.getRole() == Role.MEMBER));
         verify(rooms).reserveSeat(eq("room"), any());
         verify(rooms, never()).save(any());
@@ -54,7 +54,7 @@ class ParticipantServiceTest {
     void joinRoom_deletedRoom_throwsNotFound() {
         joinUser();
         when(rooms.findByIdAndIsActiveTrue("room")).thenReturn(Optional.empty());
-        assertThrows(ChatRoomNotFoundException.class, () -> service.joinRoom("room", "google", "subject"));
+        assertThrows(ChatRoomNotFoundException.class, () -> service.joinRoom("room", "actor"));
         verify(participants, never()).save(any());
     }
 
@@ -148,7 +148,7 @@ class ParticipantServiceTest {
         when(users.findById("actor")).thenReturn(Optional.of(User.builder().id("actor").build()));
         when(participants.existsByChatRoomIdAndUserId("room", "actor")).thenReturn(true);
         UserAlreadyInRoomException failure = assertThrows(UserAlreadyInRoomException.class,
-                () -> service.joinRoom("room", "google", "subject"));
+                () -> service.joinRoom("room", "actor"));
         assertEquals("User is already in the room", failure.getMessage());
         verify(participants, never()).save(any());
         verify(rooms, never()).reserveSeat(any(), any());
@@ -182,7 +182,7 @@ class ParticipantServiceTest {
     void addParticipant_nonParticipantCaller_throwsForbidden() {
         joinUser();
         assertThrows(ForbiddenActionException.class,
-                () -> service.addParticipant("room", "google", "subject", "target", "MEMBER"));
+                () -> service.addParticipant("room", "actor", "target", "MEMBER"));
         verifyNoInteractions(rooms);
         verify(participants, never()).save(any());
     }
@@ -191,7 +191,7 @@ class ParticipantServiceTest {
     void addParticipant_invalidRole_throwsBadRequestException() {
         actor(Role.OWNER);
         assertThrows(com.lnt.chatmee.exception.InvalidRequestException.class,
-                () -> service.addParticipant("room", "google", "subject", "target", "INVALID"));
+                () -> service.addParticipant("room", "actor", "target", "INVALID"));
         verifyNoInteractions(rooms);
         verify(participants, never()).save(any());
     }
@@ -221,7 +221,7 @@ class ParticipantServiceTest {
     private void allowAssignment(Role actorRole, String requestedRole, Role expectedRole) {
         actor(actorRole);
         targetAndRoom("target");
-        service.addParticipant("room", "google", "subject", "target", requestedRole);
+        service.addParticipant("room", "actor", "target", requestedRole);
         verify(participants).save(argThat(p -> p.getUserId().equals("target") && p.getRole() == expectedRole));
         verify(rooms).reserveSeat(eq("room"), any());
     }
@@ -229,7 +229,7 @@ class ParticipantServiceTest {
     private void rejectAssignment(Role actorRole, String requestedRole) {
         actor(actorRole);
         assertThrows(ForbiddenActionException.class,
-                () -> service.addParticipant("room", "google", "subject", "target", requestedRole));
+                () -> service.addParticipant("room", "actor", "target", requestedRole));
         verifyNoInteractions(rooms);
         verify(participants, never()).save(any());
     }
@@ -238,13 +238,13 @@ class ParticipantServiceTest {
         room.setType(type);
         joinUser();
         when(rooms.findByIdAndIsActiveTrue("room")).thenReturn(Optional.of(room));
-        assertThrows(ForbiddenActionException.class, () -> service.joinRoom("room", "google", "subject"));
+        assertThrows(ForbiddenActionException.class, () -> service.joinRoom("room", "actor"));
         verify(participants, never()).save(any());
         verify(rooms, never()).reserveSeat(any(), any());
     }
 
     private void joinUser() {
-        when(users.findByProviderAndProviderId("google", "subject"))
+        when(users.findById("actor"))
                 .thenReturn(Optional.of(User.builder().id("actor").build()));
     }
 

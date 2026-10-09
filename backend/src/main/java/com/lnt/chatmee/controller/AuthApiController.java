@@ -4,6 +4,8 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 
 import org.springframework.http.CacheControl;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.authentication.AuthenticationCredentialsNotFoundException;
 import org.springframework.http.ResponseEntity;
 import com.lnt.chatmee.security.CurrentUser;
 import com.lnt.chatmee.security.UserPrincipal;
@@ -40,16 +42,17 @@ public class AuthApiController {
     @Operation(summary = "Get the authenticated user and session status")
     @GetMapping("/me")
     public ResponseEntity<ApiResponse<AuthResponse>> getCurrentUser(@CurrentUser UserPrincipal user) {
-        AuthResponse authResponse = AuthResponse.builder()
-                .authenticated(true).user(userService.getUserProfile(user.userId()))
-                .message("User authenticated successfully").build();
+        AuthResponse authResponse = AuthResponse.from(userService.getUserProfile(user.userId()));
         return ResponseEntity.ok(ApiResponse.success(authResponse));
     }
 
     @Operation(summary = "Check whether the session is authenticated")
     @GetMapping("/status")
-    public ResponseEntity<ApiResponse<Boolean>> getAuthStatus(org.springframework.security.core.Authentication authentication) {
-        boolean isAuthenticated = authentication != null && authentication.getPrincipal() instanceof UserPrincipal;
+    public ResponseEntity<ApiResponse<Boolean>> getAuthStatus(Authentication authentication) {
+        if (authentication != null && !(authentication.getPrincipal() instanceof UserPrincipal)) {
+            throw new AuthenticationCredentialsNotFoundException("Authentication required");
+        }
+        boolean isAuthenticated = authentication != null && authentication.isAuthenticated();
         return ResponseEntity.ok(ApiResponse.success("Authenticated status retrieved", isAuthenticated));
     }
 

@@ -84,18 +84,7 @@ public class ChatRoomService {
     }
 
     private static ChatRoomResponse toResponse(ChatRoom room, Set<String> participantIds) {
-        return ChatRoomResponse.builder()
-            .id(room.getId())
-            .roomType(room.getType())
-            .createdBy(room.getCreatedBy())
-            .createdAt(room.getCreatedAt())
-            .updatedAt(room.getLastActivity())
-            .roomName(room.getName())
-            .description(room.getDescription())
-            .maxUsers(room.getMaxParticipants())
-            .settings(room.getSettings())
-            .participants(participantIds)
-            .build();
+        return ChatRoomResponse.from(room, participantIds);
     }
 
     private ChatRoom createDirectRoom(CreateChatRoomRequest request, String creatorId) {
@@ -193,17 +182,18 @@ public class ChatRoomService {
         long removed = participantService.removeAllParticipants(roomId);
 
         Instant now = Instant.now();
-        messagingTemplate.convertAndSend("/topic/public/" + roomId, ChatMessageResponse.builder()
+        Message deletionMessage = Message.builder()
             .chatRoomId(roomId)
             .senderId(authenticatedUser.getId())
-            .senderName(authenticatedUser.getName())
             .content(ROOM_DELETED_MESSAGE)
             .type(Message.MessageType.SYSTEM)
             .createdAt(now)
             .updatedAt(now)
             .isUpdated(false)
             .isDeleted(false)
-            .build());
+            .build();
+        messagingTemplate.convertAndSend("/topic/public/" + roomId,
+                ChatMessageResponse.from(deletionMessage, authenticatedUser.getName(), null));
 
         logger.info("Room {} soft-deleted by user {}, {} memberships removed", roomId, authenticatedUser.getId(), removed);
     }

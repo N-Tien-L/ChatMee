@@ -25,8 +25,7 @@ public class UserService {
     public UserResponse getUserProfile(String userId) {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new UserNotFoundException("User not found in database"));
-        return UserResponse.builder().id(user.getId()).name(user.getName()).email(user.getEmail())
-                .avatarUrl(user.getAvatarUrl()).provider(user.getProvider()).build();
+        return UserResponse.from(user);
     }
 
     /** Page is clamped to >= 0 and size to 1..MAX_PAGE_SIZE (non-positive size falls back to the default). */

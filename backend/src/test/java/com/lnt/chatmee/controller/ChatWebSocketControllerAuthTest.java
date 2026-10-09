@@ -31,13 +31,12 @@ import com.lnt.chatmee.model.Message;
 import com.lnt.chatmee.model.User;
 import com.lnt.chatmee.repository.UserRepository;
 import com.lnt.chatmee.service.MessageService;
-import com.lnt.chatmee.service.ParticipantService;
 
 class ChatWebSocketControllerAuthTest {
     private final SimpMessagingTemplate messaging = mock(SimpMessagingTemplate.class);
-    private final MessageService messages = mock(MessageService.class);
     private final UserRepository users = mock(UserRepository.class);
-    private final ParticipantService participants = mock(ParticipantService.class);
+    private final com.lnt.chatmee.repository.ParticipantRepository participants = mock(com.lnt.chatmee.repository.ParticipantRepository.class);
+    private final MessageService messages = spy(new MessageService(mock(com.lnt.chatmee.repository.ChatRoomRepository.class), participants, mock(com.lnt.chatmee.repository.MessageRepository.class), users));
     private final StaticApplicationContext context = new StaticApplicationContext();
     private final OptionalValidatorFactoryBean validator = new OptionalValidatorFactoryBean();
     private SimpAnnotationMethodMessageHandler handler;
@@ -45,7 +44,7 @@ class ChatWebSocketControllerAuthTest {
     @BeforeEach
     void setUp() {
         context.getBeanFactory().registerSingleton("chatController",
-                new ChatWebSocketController(messaging, messages, users, participants));
+                new ChatWebSocketController(messaging, messages));
         context.refresh();
         validator.afterPropertiesSet();
         handler = new SimpAnnotationMethodMessageHandler(
@@ -71,8 +70,8 @@ class ChatWebSocketControllerAuthTest {
         verify(messages).persistMessage(saved.capture());
         assertEquals("internal-user", saved.getValue().getSenderId());
         verify(messaging).convertAndSend(eq("/topic/public/room"), argThat((ChatMessageResponse response) ->
-                response.getSenderId().equals("internal-user") && response.getSenderName().equals("Real Name")));
-        verify(participants).isUserParticipant("room", "internal-user");
+                response.senderId().equals("internal-user") && response.senderName().equals("Real Name")));
+        verify(participants).existsByChatRoomIdAndUserId("room", "internal-user");
         verify(users, never()).findById("victim");
     }
 
@@ -81,12 +80,12 @@ class ChatWebSocketControllerAuthTest {
         authenticatedMember();
         dispatch("/app/chat.addUser", () -> "internal-user");
         verify(messaging).convertAndSend(eq("/topic/public/room"), argThat((ChatMessageResponse response) ->
-                response.getSenderId().equals("internal-user")
-                        && response.getSenderName().equals("Real Name")
-                        && response.getContent().equals("Real Name joined the chat")));
-        verify(participants).isUserParticipant("room", "internal-user");
+                response.senderId().equals("internal-user")
+                        && response.senderName().equals("Real Name")
+                        && response.content().equals("Real Name joined the chat")));
+        verify(participants).existsByChatRoomIdAndUserId("room", "internal-user");
         verify(users, never()).findById("victim");
-        verifyNoInteractions(messages);
+        verify(messages, never()).persistMessage(any());
     }
 
     @Test
@@ -94,8 +93,8 @@ class ChatWebSocketControllerAuthTest {
         when(users.findById("internal-user")).thenReturn(Optional.of(
                 User.builder().id("internal-user").name("Real Name").build()));
         dispatch("/app/chat.sendMessage", () -> "internal-user");
-        verify(participants).isUserParticipant("room", "internal-user");
-        verifyNoInteractions(messages);
+        verify(participants).existsByChatRoomIdAndUserId("room", "internal-user");
+        verify(messages, never()).persistMessage(any());
         assertPrivateError();
     }
 
@@ -104,8 +103,8 @@ class ChatWebSocketControllerAuthTest {
         when(users.findById("internal-user")).thenReturn(Optional.of(
                 User.builder().id("internal-user").name("Real Name").build()));
         dispatch("/app/chat.addUser", () -> "internal-user");
-        verify(participants).isUserParticipant("room", "internal-user");
-        verifyNoInteractions(messages);
+        verify(participants).existsByChatRoomIdAndUserId("room", "internal-user");
+        verify(messages, never()).persistMessage(any());
         assertPrivateError();
     }
 
@@ -119,7 +118,7 @@ class ChatWebSocketControllerAuthTest {
     void sendMessage_processingFailure_sendsErrorOnlyToPrincipal() {
         when(users.findById("internal-user")).thenThrow(new IllegalStateException("lookup failed"));
         dispatch("/app/chat.sendMessage", () -> "internal-user");
-        verifyNoInteractions(messages);
+        verify(messages, never()).persistMessage(any());
         assertPrivateError();
     }
 
@@ -127,7 +126,7 @@ class ChatWebSocketControllerAuthTest {
     void addUser_processingFailure_sendsErrorOnlyToPrincipal() {
         when(users.findById("internal-user")).thenThrow(new IllegalStateException("lookup failed"));
         dispatch("/app/chat.addUser", () -> "internal-user");
-        verifyNoInteractions(messages);
+        verify(messages, never()).persistMessage(any());
         assertPrivateError();
     }
 
@@ -135,23 +134,23 @@ class ChatWebSocketControllerAuthTest {
     void sendMessage_validMessage_persistsBeforeBroadcast() {
         authenticatedMember();
         var storedAt = java.time.Instant.parse("2026-10-08T10:00:00Z");
-        when(messages.persistMessage(any(Message.class))).thenAnswer(invocation -> {
+        doAnswer(invocation -> {
             Message saved = invocation.getArgument(0);
             saved.setId("stored-id");
             saved.setCreatedAt(storedAt);
             return saved;
-        });
+        }).when(messages).persistMessage(any(Message.class));
         dispatch("/app/chat.sendMessage", () -> "internal-user");
         var order = inOrder(messages, messaging);
         order.verify(messages).persistMessage(any(Message.class));
         order.verify(messaging).convertAndSend(eq("/topic/public/room"), argThat((ChatMessageResponse response) ->
-                response.getId().equals("stored-id") && response.getCreatedAt().equals(storedAt)));
+                response.id().equals("stored-id") && response.createdAt().equals(storedAt)));
     }
 
     @Test
     void sendMessage_saveFailure_sendsPrivateErrorWithoutBroadcast() {
         authenticatedMember();
-        when(messages.persistMessage(any(Message.class))).thenThrow(new IllegalStateException("save failed"));
+        doThrow(new IllegalStateException("save failed")).when(messages).persistMessage(any(Message.class));
         dispatch("/app/chat.sendMessage", () -> "internal-user");
         assertPrivateError();
     }
@@ -163,13 +162,13 @@ class ChatWebSocketControllerAuthTest {
     }
 
     private void authenticatedMember() {
-        when(messages.persistMessage(any(Message.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        doAnswer(invocation -> invocation.getArgument(0)).when(messages).persistMessage(any());
         when(users.findById("internal-user")).thenReturn(Optional.of(
                 User.builder().id("internal-user").name("Real Name").build()));
-        when(participants.isUserParticipant("room", "internal-user")).thenReturn(true);
+        when(participants.existsByChatRoomIdAndUserId("room", "internal-user")).thenReturn(true);
         when(users.findById("victim")).thenReturn(Optional.of(
                 User.builder().id("victim").name("Victim Name").build()));
-        when(participants.isUserParticipant("room", "victim")).thenReturn(true);
+        when(participants.existsByChatRoomIdAndUserId("room", "victim")).thenReturn(true);
     }
 
     private void dispatch(String destination, Principal principal) {

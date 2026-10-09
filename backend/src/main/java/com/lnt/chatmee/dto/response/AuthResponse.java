@@ -1,16 +1,14 @@
 package com.lnt.chatmee.dto.response;
 
-import lombok.AllArgsConstructor;
 import lombok.Builder;
-import lombok.Data;
-import lombok.NoArgsConstructor;
 
-@Data
 @Builder
-@NoArgsConstructor
-@AllArgsConstructor
-public class AuthResponse {
-    private boolean authenticated;
-    private UserResponse user;
-    private String message;
+public record AuthResponse(
+    boolean authenticated,
+    UserResponse user,
+    String message
+) {
+    public static AuthResponse from(UserResponse user) {
+        return new AuthResponse(true, user, "User authenticated successfully");
+    }
 }

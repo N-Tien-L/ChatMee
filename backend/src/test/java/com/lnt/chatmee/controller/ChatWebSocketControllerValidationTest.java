@@ -27,13 +27,12 @@ import com.lnt.chatmee.dto.response.ChatMessageResponse;
 import com.lnt.chatmee.model.User;
 import com.lnt.chatmee.repository.UserRepository;
 import com.lnt.chatmee.service.MessageService;
-import com.lnt.chatmee.service.ParticipantService;
 
 class ChatWebSocketControllerValidationTest {
     private final SimpMessagingTemplate messaging = mock(SimpMessagingTemplate.class);
-    private final MessageService messages = mock(MessageService.class);
     private final UserRepository users = mock(UserRepository.class);
-    private final ParticipantService participants = mock(ParticipantService.class);
+    private final com.lnt.chatmee.repository.ParticipantRepository participants = mock(com.lnt.chatmee.repository.ParticipantRepository.class);
+    private final MessageService messages = spy(new MessageService(mock(com.lnt.chatmee.repository.ChatRoomRepository.class), participants, mock(com.lnt.chatmee.repository.MessageRepository.class), users));
     private final StaticApplicationContext context = new StaticApplicationContext();
     private final OptionalValidatorFactoryBean validator = new OptionalValidatorFactoryBean();
     private SimpAnnotationMethodMessageHandler handler;
@@ -41,7 +40,7 @@ class ChatWebSocketControllerValidationTest {
     @BeforeEach
     void setUp() {
         context.getBeanFactory().registerSingleton("chatController",
-                new ChatWebSocketController(messaging, messages, users, participants));
+                new ChatWebSocketController(messaging, messages));
         context.refresh();
         validator.afterPropertiesSet();
         handler = new SimpAnnotationMethodMessageHandler(
@@ -74,8 +73,8 @@ class ChatWebSocketControllerValidationTest {
     void sendMessage_contentOf5000Characters_savesAndBroadcasts() {
         when(users.findById("test-user")).thenReturn(Optional.of(
                 User.builder().id("test-user").name("Test User").build()));
-        when(participants.isUserParticipant("test-room", "test-user")).thenReturn(true);
-        when(messages.persistMessage(any())).thenAnswer(invocation -> invocation.getArgument(0));
+        when(participants.existsByChatRoomIdAndUserId("test-room", "test-user")).thenReturn(true);
+        doAnswer(invocation -> invocation.getArgument(0)).when(messages).persistMessage(any());
         dispatch("/app/chat.sendMessage", 5000);
         verify(messages).persistMessage(argThat(message -> message.getContent().length() == 5000));
         verify(messaging).convertAndSend(eq("/topic/public/test-room"), any(ChatMessageResponse.class));

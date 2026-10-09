@@ -8,17 +8,13 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-import java.util.List;
-import java.util.Map;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.context.annotation.Import;
-import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.oauth2.client.authentication.OAuth2AuthenticationToken;
-import org.springframework.security.oauth2.core.user.DefaultOAuth2User;
 import org.springframework.security.oauth2.core.user.OAuth2User;
 import org.springframework.security.oauth2.client.registration.ClientRegistrationRepository;
 import org.springframework.test.context.ActiveProfiles;
@@ -26,10 +22,8 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.web.cors.CorsConfigurationSource;
 
-import com.lnt.chatmee.config.CsrfCookieFilter;
 import com.lnt.chatmee.config.OAuth2AuthenticationSuccessHandler;
 import com.lnt.chatmee.config.SecurityConfig;
-import com.lnt.chatmee.config.SpaCsrfTokenRequestHandler;
 import com.lnt.chatmee.controller.AuthApiController;
 import com.lnt.chatmee.repository.UserRepository;
 import com.lnt.chatmee.service.CustomOAuth2UserService;
@@ -44,7 +38,7 @@ import jakarta.servlet.http.Cookie;
     properties = "app.client.url=http://localhost"
 )
 @ActiveProfiles("actuator-test")
-@Import(SecurityConfig.class)
+@Import({SecurityConfig.class, com.lnt.chatmee.config.CurrentUserWebMvcConfig.class, CurrentUserArgumentResolver.class})
 class CsrfSecurityTest {
 
     @Autowired MockMvc mvc;
@@ -56,7 +50,7 @@ class CsrfSecurityTest {
     @MockitoBean WsTokenService wsTokenService;
     @MockitoBean UserRepository userRepository;
     @MockitoBean ClientRegistrationRepository clientRegistrationRepository;
-    @MockitoBean com.lnt.chatmee.util.OAuthUtil oauthUtil;
+    @MockitoBean com.lnt.chatmee.service.UserService userService;
 
     private OAuth2AuthenticationToken authToken;
 
@@ -70,9 +64,7 @@ class CsrfSecurityTest {
         
         when(wsTokenService.issueToken(any())).thenReturn("mock-token");
 
-        OAuth2User principal = new DefaultOAuth2User(
-                List.of(new SimpleGrantedAuthority("OAUTH2_USER")), 
-                Map.of("sub", "user"), "sub");
+        OAuth2User principal = com.lnt.chatmee.support.TestUsers.principal("u1");
         authToken = new OAuth2AuthenticationToken(principal, principal.getAuthorities(), "github");
     }
 
