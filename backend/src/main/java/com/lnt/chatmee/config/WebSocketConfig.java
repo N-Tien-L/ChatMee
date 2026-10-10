@@ -12,31 +12,39 @@ import org.springframework.web.socket.config.annotation.StompEndpointRegistry;
 import org.springframework.web.socket.config.annotation.WebSocketMessageBrokerConfigurer;
 import org.springframework.web.socket.config.annotation.WebSocketTransportRegistration;
 
+import com.lnt.chatmee.security.AuthChannelInterceptor;
+
+import lombok.RequiredArgsConstructor;
+
 @Configuration
 @EnableWebSocketMessageBroker
+@RequiredArgsConstructor
 public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
+
+    private final AuthChannelInterceptor authChannelInterceptor;
 
     @Value("${app.client.url}")
     private String clientUrl;
 
     @Override
     public void registerStompEndpoints(StompEndpointRegistry registry) {
+        // Plain WebSocket (ADR-0003 amendment); the handshake accepts only the frontend origin.
         registry.addEndpoint("/ws")
-                .setAllowedOriginPatterns("*")  // Allow cross-origin for direct WebSocket
-                .setAllowedOrigins(clientUrl)
-                .withSockJS();
+                .setAllowedOrigins(clientUrl);
     }
 
     @Override
     public void configureMessageBroker(MessageBrokerRegistry registry) {
         registry.setApplicationDestinationPrefixes("/app");
-        registry.enableSimpleBroker("/topic")
+        registry.setUserDestinationPrefix("/user");
+        registry.enableSimpleBroker("/topic", "/queue")
                 .setHeartbeatValue(new long[]{10000, 10000}) // 10s heartbeat
                 .setTaskScheduler(heartbeatScheduler());
     }
 
     @Override
     public void configureClientInboundChannel(ChannelRegistration registration) {
+        registration.interceptors(authChannelInterceptor, new StompMdcInterceptor());
         registration.taskExecutor()
                 .corePoolSize(4)
                 .maxPoolSize(16)

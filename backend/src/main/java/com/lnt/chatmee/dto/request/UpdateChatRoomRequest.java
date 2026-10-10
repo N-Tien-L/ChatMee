@@ -1,16 +1,17 @@
 package com.lnt.chatmee.dto.request;
 
-import javax.validation.constraints.Max;
-import javax.validation.constraints.Min;
-import javax.validation.constraints.Size;
+import jakarta.validation.constraints.Max;
+import jakarta.validation.constraints.Min;
+import jakarta.validation.constraints.Size;
 
+import com.lnt.chatmee.dto.validation.RoomName;
 import com.lnt.chatmee.model.ChatRoom.RoomSettings;
 
 import lombok.Data;
 
 @Data
 public class UpdateChatRoomRequest {
-    @Size(max = 100, message = "Room name must not exceed 100 characters")
+    @RoomName
     private String roomName;
 
     @Size(max = 500, message = "Description must not exceed 500 characters")

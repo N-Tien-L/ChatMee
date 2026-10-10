@@ -1,0 +1,27 @@
+name: Bug report
+description: Report a bug
+labels: [type:bug, status:triage]
+body:
+  - type: textarea
+    id: what
+    attributes: { label: Description }
+    validations: { required: true }
+  - type: textarea
+    id: repro
+    attributes: { label: Steps to reproduce, placeholder: "1. ... 2. ... 3. ..." }
+    validations: { required: true }
+  - type: textarea
+    id: expected
+    attributes: { label: Expected / Actual behavior }
+  - type: input
+    id: version
+    attributes: { label: Commit / Environment (local, prod) }
+  - type: dropdown
+    id: severity
+    attributes: { label: Severity, options: [Critical, High, Medium, Low] }
+  - type: checkboxes
+    id: security
+    attributes:
+      label: Security
+      options:
+        - label: This is a security vulnerability (DO NOT post details publicly; see SECURITY.md)

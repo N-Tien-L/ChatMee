@@ -2,8 +2,8 @@
 
 import { useChatRoomsStore } from "@/lib/stores";
 import { useAuthStore } from "@/lib/stores";
-import { RoomType } from "@/lib/type/CoreModelsAndEnum";
-import { UserResponse } from "@/lib/type/ResponseType";
+import { RoomType } from "@/lib/types";
+import { UserSummaryResponse } from "@/lib/types";
 import {
   Dialog,
   DialogContent,
@@ -24,7 +24,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Checkbox } from "../ui/checkbox";
-import { CreateChatRoomRequest } from "@/lib/type/RequestType";
+import { CreateChatRoomRequest } from "@/lib/types";
 import UserSearchList from "../user/UserSearchList";
 import { X } from "lucide-react";
 
@@ -46,7 +46,7 @@ export const CreateRoomModal = ({ isOpen, onClose }: CreateRoomModalProps) => {
   const [moderationRequired, setModerationRequired] = useState(false);
 
   // Direct Message specific state
-  const [selectedUser, setSelectedUser] = useState<UserResponse | null>(null);
+  const [selectedUser, setSelectedUser] = useState<UserSummaryResponse | null>(null);
   const { user: currentUser } = useAuthStore();
 
   // Sync displayMaxUser with maxUser when maxUser changes from buttons
@@ -71,7 +71,7 @@ export const CreateRoomModal = ({ isOpen, onClose }: CreateRoomModalProps) => {
     setMaxUser(newValue);
   };
 
-  const handleUserAdd = (user: UserResponse) => {
+  const handleUserAdd = (user: UserSummaryResponse) => {
     setSelectedUser(user);
   };
 
@@ -395,9 +395,6 @@ export const CreateRoomModal = ({ isOpen, onClose }: CreateRoomModalProps) => {
                       <div className="flex-1">
                         <p className="font-medium text-sm">
                           {selectedUser.name}
-                        </p>
-                        <p className="text-xs text-gray-600">
-                          {selectedUser.email}
                         </p>
                       </div>
                       <Button

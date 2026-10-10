@@ -1,8 +1,11 @@
 package com.lnt.chatmee.dto.request;
 
-import javax.validation.constraints.NotBlank;
-import javax.validation.constraints.NotNull;
-import javax.validation.constraints.Size;
+import com.fasterxml.jackson.annotation.JsonIgnore;
+
+import jakarta.validation.constraints.AssertTrue;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Size;
 
 import com.lnt.chatmee.model.Message.MessageType;
 
@@ -21,8 +24,12 @@ public class ChatMessageRequest {
     @NotNull(message = "Message type is required")
     private MessageType messageType = MessageType.TEXT; // default to TEXT
 
-    private String senderId;  // User ID sending the message
-    private String senderName;
-
     private String tempId;
+
+    /** SYSTEM (and future media) messages are created by the server only; clients send TEXT. */
+    @JsonIgnore
+    @AssertTrue(message = "Only TEXT messages can be sent")
+    public boolean isTextMessage() {
+        return messageType == null || messageType == MessageType.TEXT;
+    }
 }

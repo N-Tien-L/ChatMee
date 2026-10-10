@@ -1,5 +1,6 @@
 package com.lnt.chatmee.repository;
 
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 
@@ -8,10 +9,13 @@ import org.springframework.stereotype.Repository;
 
 import com.lnt.chatmee.model.Participant;
 
+/** The participants collection is the single source of truth for room membership (ADR-0001, ADR-0005). */
 @Repository
-public interface ParticipantRepository extends MongoRepository<Participant, String>{
+public interface ParticipantRepository extends MongoRepository<Participant, String> {
 
     List<Participant> findByChatRoomId(String chatRoomId);
+
+    List<Participant> findByChatRoomIdIn(Collection<String> chatRoomIds);
 
     List<Participant> findByUserId(String userId);
 
@@ -19,11 +23,10 @@ public interface ParticipantRepository extends MongoRepository<Participant, Stri
 
     boolean existsByChatRoomIdAndUserId(String chatRoomId, String userId);
 
-    // the participant count will not exceed the max value of integer
-    // but count() operations in MongoDB naturally return long
-    // we'll not need lots of counts so the memory usage not too much compare to Int
-    // so it'd be better to keep it Long type for consistency
-    Long countByChatRoomId(String chatRoomId);
+    long countByChatRoomId(String chatRoomId);
 
-    void deleteByChatRoomIdAndUserId(String chatRoomId, String userId);
-} 
+    /** @return the number of deleted rows (0 or 1 thanks to the unique (chatRoomId, userId) index) */
+    long deleteByChatRoomIdAndUserId(String chatRoomId, String userId);
+
+    long deleteByChatRoomId(String chatRoomId);
+}

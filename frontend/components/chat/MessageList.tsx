@@ -97,7 +97,7 @@ const MessageList: React.FC<MessageListProps> = ({
                           <span className="opacity-70">✓</span>
                         )}
                         {(message as Message).status === "failed" && (
-                          <span className="text-red-300">✗</span>
+                          <span className="text-red-300" role="img" aria-label="Failed to send" title={message.errorMessage || "Failed to send"}>✗</span>
                         )}
                       </div>
                     )}

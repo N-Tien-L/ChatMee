@@ -1,6 +1,14 @@
 package com.lnt.chatmee.config;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.lnt.chatmee.exception.GlobalExceptionHandler;
+import com.lnt.chatmee.exception.ErrorCode;
+import org.springframework.security.web.util.matcher.AntPathRequestMatcher;
+import org.springframework.security.web.authentication.LoginUrlAuthenticationEntryPoint;
+import org.springframework.security.web.util.matcher.AnyRequestMatcher;
+
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.boot.web.servlet.FilterRegistrationBean;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
@@ -14,30 +22,63 @@ import com.lnt.chatmee.service.CustomOAuth2UserService;
 
 import lombok.RequiredArgsConstructor;
 
+import org.springframework.security.web.csrf.CookieCsrfTokenRepository;
+import org.springframework.security.web.csrf.CsrfFilter;
+import org.springframework.security.web.context.SecurityContextHolderFilter;
+
 @Configuration
 @EnableWebSecurity
 @RequiredArgsConstructor
 public class SecurityConfig {
 
+    private final ObjectMapper objectMapper;
     private final CustomOAuth2UserService customOAuth2UserService;
     private final CorsConfigurationSource corsConfigurationSource;
     private final OAuth2AuthenticationSuccessHandler successHandler;
     private final RateLimitingFilter rateLimitingFilter;
-    
+
     @Value("${app.client.url}")
     private String clientUrl;
+
+    // RateLimitingFilter is a bean only for injection: it must run inside the security chain (where the
+    // authentication is known), so its automatic servlet-filter registration is switched off.
+    @Bean
+    public FilterRegistrationBean<RateLimitingFilter> rateLimitingFilterRegistration(RateLimitingFilter filter) {
+        FilterRegistrationBean<RateLimitingFilter> registration = new FilterRegistrationBean<>(filter);
+        registration.setEnabled(false);
+        return registration;
+    }
 
     @Bean
     public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
         http
                 .cors(cors -> cors.configurationSource(corsConfigurationSource))
-                .csrf(csrf -> csrf.disable())
+                .csrf(csrf -> csrf
+                        // WebSocket handshakes are cross-site and authenticated by the single-use STOMP token, not cookies.
+                        .ignoringRequestMatchers("/ws/**")
+                        .csrfTokenRepository(CookieCsrfTokenRepository.withHttpOnlyFalse())
+                        .csrfTokenRequestHandler(new SpaCsrfTokenRequestHandler()))
+                .addFilterAfter(new UserMdcFilter(), SecurityContextHolderFilter.class)
+                .addFilterAfter(new CsrfCookieFilter(), CsrfFilter.class)
                 .addFilterBefore(rateLimitingFilter, UsernamePasswordAuthenticationFilter.class)
                 .authorizeHttpRequests(authz -> authz
-                        .requestMatchers("/", "/login", "/error", "/actuator/**", "/api/v1/auth/status", "/ws/**").permitAll()
+                        // Cross-site WebSocket handshakes are public; STOMP CONNECT authenticates with a single-use token.
+                        .requestMatchers("/", "/login", "/error", "/actuator/health/**", "/actuator/info", "/api/v1/auth/status", "/ws/**").permitAll()
                         .requestMatchers("/api/v1/**").authenticated()
                         .anyRequest().authenticated())
 
+                .exceptionHandling(errors -> errors
+                        .defaultAuthenticationEntryPointFor((request, response, exception) ->
+                                GlobalExceptionHandler.writeProblem(objectMapper, request, response,
+                                        ErrorCode.UNAUTHENTICATED, "Authentication required"),
+                                new AntPathRequestMatcher("/api/**"))
+                        .defaultAuthenticationEntryPointFor(
+                                new LoginUrlAuthenticationEntryPoint("/login"),
+                                AnyRequestMatcher.INSTANCE)
+                        .defaultAccessDeniedHandlerFor((request, response, exception) ->
+                                GlobalExceptionHandler.writeProblem(objectMapper, request, response,
+                                        ErrorCode.FORBIDDEN_ACTION, "Access denied"),
+                                new AntPathRequestMatcher("/api/**")))
                 .oauth2Login(oauth2 -> oauth2
                         .userInfoEndpoint(userInfo -> userInfo
                                 .userService(customOAuth2UserService))
@@ -46,7 +87,8 @@ public class SecurityConfig {
                 .logout(logout -> logout
                         .logoutSuccessUrl(clientUrl)
                         .invalidateHttpSession(true)
-                        .clearAuthentication(true));
+                        .clearAuthentication(true)
+                        .deleteCookies("JSESSIONID"));
 
         return http.build();
     }

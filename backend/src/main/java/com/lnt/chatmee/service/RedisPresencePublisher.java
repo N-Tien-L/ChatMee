@@ -10,7 +10,7 @@ import java.util.Map;
 @Service
 public class RedisPresencePublisher {
 
-    private static final String PRESENCE_CHANNEL = "presence-channel";
+    public static final String PRESENCE_CHANNEL = "presence-channel";
     private final StringRedisTemplate redisTemplate;
     private final ObjectMapper objectMapper;
 

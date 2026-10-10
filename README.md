@@ -1,5 +1,8 @@
 # ChatMee
 
+[![Backend CI](https://github.com/N-Tien-L/ChatMee/actions/workflows/backend-ci.yml/badge.svg?branch=develop)](https://github.com/N-Tien-L/ChatMee/actions/workflows/backend-ci.yml)
+[![Frontend CI](https://github.com/N-Tien-L/ChatMee/actions/workflows/frontend-ci.yml/badge.svg?branch=develop)](https://github.com/N-Tien-L/ChatMee/actions/workflows/frontend-ci.yml)
+
 ![Java 17](https://img.shields.io/badge/Java-17-5382a1?logo=openjdk&logoColor=white)
 ![Spring Boot 3.5.5](https://img.shields.io/badge/Spring%20Boot-3.5.5-6DB33F?logo=springboot&logoColor=white)
 ![Next.js 15.5.2](https://img.shields.io/badge/Next.js-15.5.2-000000?logo=nextdotjs&logoColor=white)
@@ -16,7 +19,7 @@ ChatMee is a full-stack, OAuth2-secured chat platform that combines a Spring Boo
 | Layer | Technologies |
 | --- | --- |
 | Backend | Java 17, Spring Boot 3.5.5, Spring Data MongoDB, Spring Security + OAuth2 (Google/GitHub), Spring WebSocket/STOMP, Redis Pub/Sub, Actuator, Lombok |
-| Frontend | Next.js 15.5.2 (App Router), React 19, TypeScript 5, Tailwind CSS 4 + shadcn/ui, Zustand, Axios, react-hot-toast, react-resizable-panels, Fuse.js, @stomp/stompjs + SockJS |
+| Frontend | Next.js 15.5.2 (App Router), React 19, TypeScript 5, Tailwind CSS 4 + shadcn/ui, Zustand, Axios, react-hot-toast, react-resizable-panels, Fuse.js, @stomp/stompjs (plain WebSocket) |
 | Tooling & Ops | Maven Wrapper, Docker (multi-stage backend image), Vercel rewrites, Render-hosted backend, GitHub Actions placeholders |
 
 ## Project Architecture
@@ -47,45 +50,46 @@ flowchart LR
 ### Prerequisites
 - Java 17+ and Maven 3.9 (or use `backend/mvnw`)
 - Node.js 20+ with npm (or pnpm/bun)
-- MongoDB instance (local or Atlas) and Redis (local or Upstash)
+- Docker (for MongoDB and Redis)
 - OAuth2 credentials for Google (GitHub optional)
 
-### Backend (Spring Boot)
+### Running Locally (Infrastructure)
+
+1. Start the databases using Docker Compose:
 ```bash
-cd backend
-cp src/main/resources/application-dev.properties.example .env # (create your secrets file)
-# Required environment variables
-setx MONGO_URI_DEV "mongodb://localhost:27017/chatmee"
-setx GOOGLE_CLIENT_ID "<client-id>"
-setx GOOGLE_CLIENT_SECRET "<client-secret>"
-setx GITHUB_CLIENT_ID "<optional>"
-setx GITHUB_CLIENT_SECRET "<optional>"
-setx REDIS_URL "redis://localhost:6379"
-./mvnw spring-boot:run
+docker compose up -d
 ```
-Useful properties live in `application-dev.properties` and `application-prod.properties`:
-- `app.client.url` to point at the running frontend (`http://localhost:3000` by default)
-- OAuth redirect URIs (match Google/GitHub console settings)
-- `spring.data.mongodb.uri` and `spring.data.redis.*`
+
+2. Configure and run the Backend:
+```bash
+cp backend/.env.example backend/.env
+# Edit backend/.env and fill in your OAuth credentials (dummy values work for starting up)
+cd backend
+./mvnw spring-boot:run -Dspring-boot.run.profiles=local
+```
+(The `local` profile automatically connects to the Docker Compose services.)
 
 To build a production jar or docker image:
 ```bash
-./mvnw clean package -DskipTests
 cd backend
+./mvnw clean package -DskipTests
 docker build -t chatmee-api:latest .
 ```
+Alternatively, run the backend in Docker using the `full` profile: `docker compose --profile full up -d --build`.
 
-### Frontend (Next.js)
+3. Configure and run the Frontend:
 ```bash
+# In a new terminal
 cd frontend
-cp .env.example .env.local  # create if it does not exist
-npm install
-# Minimal env values
-echo "NEXT_PUBLIC_WS_URL=http://localhost:8080/ws" >> .env.local
-echo "NEXT_PUBLIC_API_URL=http://localhost:8080" >> .env.local
+cp .env.example .env.local
+npm ci
 npm run dev
 ```
+
 `next.config.ts` rewrites `/api`, `/oauth2`, `/login`, `/logout`, and `/ws` to the backend while developing; `vercel.json` performs the same rewrites in production.
+
+### API documentation
+With the `dev` or `local` profile, the backend serves the OpenAPI document at [http://localhost:8080/v3/api-docs](http://localhost:8080/v3/api-docs) and Swagger UI at [http://localhost:8080/swagger-ui.html](http://localhost:8080/swagger-ui.html). Both require a logged-in session, so sign in through the app first. Every endpoint documents the shared `application/problem+json` error schema. Both are disabled in the `prod` profile.
 
 ## Project Structure
 ```
@@ -111,7 +115,7 @@ npm run dev
 
 ## Key Features
 - **OAuth2 authentication** with Google (and optional GitHub) handled by `SecurityConfig` and `CustomOAuth2UserService`.
-- **Real-time messaging** via STOMP over SockJS; `WebSocketConfig` and `useWebSocket` manage bidirectional connections, retries, and subscriptions per room.
+- **Real-time messaging** via STOMP over plain WebSocket; `WebSocketConfig` and `useWebSocket` manage bidirectional connections, retries, and subscriptions per room.
 - **Presence + typing indicators** backed by Redis pub/sub (`RedisPresencePublisher`, `RedisPresenseSubcriber`) and rendered through Zustand stores.
 - **Flexible chat rooms** supporting public, private, and direct messages with per-room settings (`ChatRoom.RoomSettings`).
 - **Optimistic UI updates & caching** through `useRoomMessages`, session caches, and `messageReducer` to keep local state responsive.
@@ -122,7 +126,7 @@ npm run dev
 - **Local dev**: run backend (`./mvnw spring-boot:run`) and frontend (`npm run dev`) concurrently; WebSocket + REST traffic is proxied automatically through Next rewrites.
 - **Branching**: adopt feature branches off `main` (e.g., `feature/presence-batching`), then open PRs for review—GitHub Actions workflows (`.github/workflows`) are placeholders ready for CI scripts.
 - **Environments**: Use `dev` profile locally; Docker image defaults to `prod` profile and exposes port `10000`.
-- **Monitoring & Ops**: Actuator endpoints (`/actuator/env`, `/actuator/health`) are exposed for health checks, and the Dockerfile defines an HTTP health probe.
+- **Monitoring & Ops**: Only Actuator endpoints `/actuator/health` and `/actuator/info` are exposed, and the Dockerfile defines an HTTP health probe.
 
 ## Coding Standards
 - **Backend**

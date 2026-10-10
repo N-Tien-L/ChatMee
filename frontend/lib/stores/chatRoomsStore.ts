@@ -3,26 +3,26 @@ import { chatRoomApi } from "../api/chatRoomApi";
 import { userApi } from "../api/userApi";
 import {
     RoomType,
-} from "../type/CoreModelsAndEnum";
-import { ChatRoomResponse, UserResponse } from "../type/ResponseType";
+} from "@/lib/types";
+import { ChatRoom, UserSummaryResponse } from "@/lib/types";
 import { useAuthStore } from "./authStore";
 import toast from "react-hot-toast";
 import Fuse from "fuse.js";
-import { CreateChatRoomRequest } from "../type/RequestType";
+import { CreateChatRoomRequest } from "@/lib/types";
 
 interface chatRoomState {
-    rooms: ChatRoomResponse[];
-    filteredRooms: ChatRoomResponse[];
+    rooms: ChatRoom[];
+    filteredRooms: ChatRoom[];
     searchQuery: string;
     roomTypeFilter: RoomType | "ALL";
     loading: boolean;
     error: string | null;
-    usersCache: Map<string, UserResponse>;
+    usersCache: Map<string, UserSummaryResponse>;
     isCreateRoomModalOpen: boolean;
 
-    setRooms: (rooms: ChatRoomResponse[]) => void;
-    addRoom: (room: ChatRoomResponse) => void;
-    updateRoom: (id: string, updates: Partial<ChatRoomResponse>) => void;
+    setRooms: (rooms: ChatRoom[]) => void;
+    addRoom: (room: ChatRoom) => void;
+    updateRoom: (id: string, updates: Partial<ChatRoom>) => void;
     deleteRoom: (id: string) => void;
     setSearchQuery: (query: string) => void;
     setRoomTypeFilter: (filter: RoomType | "ALL") => void;
@@ -32,7 +32,7 @@ interface chatRoomState {
     deleteRoomById: (roomId: string) => Promise<boolean>;
     applyFilters: () => void;
     createRoom: (request: CreateChatRoomRequest) => Promise<boolean>;
-    getDirectMessageDisplayName: (room: ChatRoomResponse) => Promise<string>;
+    getDirectMessageDisplayName: (room: ChatRoom) => Promise<string>;
     openCreateRoomModal: () => void;
     closeCreateRoomModal: () => void;
 }
@@ -94,7 +94,7 @@ export const useChatRoomsStore = create<chatRoomState>((set, get) => ({
 
             if (response.success) {
                 const roomsWithDisplayNames = await Promise.all(
-                    response.data.map(async (room: ChatRoomResponse) => {
+                    response.data.map(async (room: ChatRoom) => {
                         if (room.roomType === RoomType.DIRECT_MESSAGE) {
                             const displayName = await get().getDirectMessageDisplayName(room);
                             return { ...room, displayName };
@@ -131,7 +131,7 @@ export const useChatRoomsStore = create<chatRoomState>((set, get) => ({
                 toast.error(response.message || "Failed to create room");
                 return false;
             }
-        } catch (error) {
+        } catch {
             toast.error("Failed to create room");
             return false;
         }
@@ -215,7 +215,7 @@ export const useChatRoomsStore = create<chatRoomState>((set, get) => ({
 
     // Helper method for direct message display names
     getDirectMessageDisplayName: async (
-        room: ChatRoomResponse
+        room: ChatRoom
     ): Promise<string> => {
         const currentUser = useAuthStore.getState().user;
 
@@ -225,6 +225,11 @@ export const useChatRoomsStore = create<chatRoomState>((set, get) => ({
             !currentUser
         ) {
             return room.roomName || "Unknown Room";
+        }
+
+        // The server sends the other member with the room (CM-049); older payloads fall back to a lookup.
+        if (room.counterpart?.name) {
+            return room.counterpart.name;
         }
 
         // Find the other participant

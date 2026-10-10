@@ -1,359 +1,239 @@
 package com.lnt.chatmee.service;
 
-import java.time.LocalDateTime;
+import java.util.HashMap;
 import java.util.HashSet;
+import java.util.Optional;
+import org.springframework.dao.DuplicateKeyException;
+import com.lnt.chatmee.dto.response.UserSummaryResponse;
+import java.time.Instant;
+import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
-import java.util.UUID;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.dao.DataAccessException;
+import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.stereotype.Service;
 
 import com.lnt.chatmee.dto.request.CreateChatRoomRequest;
 import com.lnt.chatmee.dto.request.UpdateChatRoomRequest;
+import com.lnt.chatmee.dto.response.ChatMessageResponse;
 import com.lnt.chatmee.dto.response.ChatRoomResponse;
 import com.lnt.chatmee.exception.ChatRoomNotFoundException;
-import com.lnt.chatmee.exception.DatabaseOperationException;
-import com.lnt.chatmee.exception.ForbiddenActionException;
-import com.lnt.chatmee.exception.IllegalArgumentException;
+import com.lnt.chatmee.exception.InvalidRequestException;
 import com.lnt.chatmee.exception.UnauthorizedRoomActionException;
 import com.lnt.chatmee.exception.UserNotFoundException;
 import com.lnt.chatmee.model.ChatRoom;
-import com.lnt.chatmee.model.Participant;
+import com.lnt.chatmee.model.Message;
 import com.lnt.chatmee.model.User;
-import com.lnt.chatmee.model.ChatRoom.RoomType;
+import com.lnt.chatmee.service.policy.RoomTypePolicy;
+import com.lnt.chatmee.service.policy.RoomTypePolicyRegistry;
 import com.lnt.chatmee.repository.ChatRoomRepository;
-import com.lnt.chatmee.repository.ParticipantRepository;
 import com.lnt.chatmee.repository.UserRepository;
 import com.lnt.chatmee.util.ValidationUtil;
 
-import org.springframework.transaction.annotation.Transactional;
 import lombok.RequiredArgsConstructor;
 
+/**
+ * Room use cases. Membership lives only in the participants collection (ADR-0005); writes that touch the
+ * member counter go through the atomic updates in {@link ChatRoomRepository}, never through a full save.
+ */
 @Service
 @RequiredArgsConstructor
 public class ChatRoomService {
 
+    static final String ROOM_DELETED_MESSAGE = "This room has been deleted";
+
     private static final Logger logger = LoggerFactory.getLogger(ChatRoomService.class);
-    
+
     private final ChatRoomRepository chatRoomRepository;
     private final UserRepository userRepository;
     private final ParticipantService participantService;
-    private final ParticipantRepository participantRepository;
+    private final SimpMessagingTemplate messagingTemplate;
+    private final RoomTypePolicyRegistry policies;
 
-    public ChatRoomResponse createRoom(CreateChatRoomRequest request, String provider, String providerId) {
+    public ChatRoomResponse createRoom(CreateChatRoomRequest request, String userId) {
 
-        User AuthenticatedUser = userRepository.findByProviderAndProviderId(provider, providerId)
+        User authenticatedUser = userRepository.findById(userId)
             .orElseThrow(() -> new UserNotFoundException("Authenticated user not found"));
 
+        RoomTypePolicy policy = policies.get(request.getRoomType());
+        ChatRoom candidate = policy.create(request, authenticatedUser.getId(),
+            id -> userRepository.findById(id).isPresent());
         ChatRoom room;
-        switch (request.getRoomType()) {
-            case DIRECT_MESSAGE:
-                room = createDirectRoom(request, AuthenticatedUser.getId());
-                break;
-            case PRIVATE:
-            case PUBLIC:
-                room = createConfigurableRoom(request, AuthenticatedUser.getId());
-                break;
-            default:
-                throw new IllegalArgumentException("Invalid room type: " + request.getRoomType());
+        try {
+            room = chatRoomRepository.save(candidate);
+        } catch (DuplicateKeyException ex) {
+            // A concurrent request created the same DM first: return that room instead of a duplicate.
+            return findActiveDirectRoom(candidate.getMemberKey(), authenticatedUser.getId()).orElseThrow(() -> ex);
         }
+        policy.initialMembers(request, authenticatedUser.getId()).forEach((id, role) ->
+            participantService.createParticipant(room.getId(), id, role));
+        logger.info("Created {} room: {} with creator: {}", room.getType(), room.getId(), authenticatedUser.getId());
 
-        return ChatRoomResponse.builder()
-            .id(room.getId())
-            .roomType(room.getType())
-            .createdBy(room.getCreatedBy())
-            .createdAt(room.getCreatedAt())
-            .updatedAt(room.getLastActivity())
-            .roomName(room.getName())
-            .description(room.getDescription())
-            .maxUsers(room.getMaxParticipants())
-            .settings(room.getSettings())
-            .participants(room.getParticipants())
-            .build();
+        return toResponse(room, authenticatedUser.getId());
     }
 
-    private ChatRoom createDirectRoom(CreateChatRoomRequest request, String creatorId) {
-        try {
-            // Validate participant ID
-            ValidationUtil.validateId(request.getParticipantId(), "Participant ID");
-            if(userRepository.findById(request.getParticipantId()).isEmpty()) {
-                throw new UserNotFoundException("Participant not found");
-            }
-            if(creatorId.equals(request.getParticipantId())) {
-                throw new IllegalArgumentException("Cannot create direct message with yourself");
-            }
-
-            Set<String> participants = new HashSet<>();
-            participants.add(creatorId);
-            participants.add(request.getParticipantId());
-            
-            String roomId = UUID.randomUUID().toString();
-
-            ChatRoom chatRoom = ChatRoom.builder()
-                .id(roomId)
-                .type(RoomType.DIRECT_MESSAGE)
-                .createdBy(creatorId)
-                .participants(participants)
-                .createdAt(LocalDateTime.now())
-                .lastActivity(LocalDateTime.now())
-                .maxParticipants(2)
-                .isActive(true)
-                .settings(ChatRoom.RoomSettings.builder()
-                    .allowFileSharing(true)
-                    .allowGuestUsers(false)
-                    .moderationRequired(false)
-                    .build())
-                .build();
-
-            ChatRoom savedRoom = chatRoomRepository.save(chatRoom);
-            
-            // Create participant instances for direct message
-            participantService.createParticipant(savedRoom.getId(), creatorId, Participant.Role.OWNER);
-            participantService.createParticipant(savedRoom.getId(), request.getParticipantId(), Participant.Role.MEMBER);
-            
-            logger.info("Created direct chat room: {} between {} and {}", savedRoom.getId(), savedRoom.getCreatedBy(), request.getParticipantId());
-
-            return savedRoom;
-        } catch (IllegalArgumentException e) {
-            throw e;
-        } catch (DataAccessException e) {
-            logger.error("Database error while creating room", e);
-            throw new DatabaseOperationException("Failed to create room in database", e);
-        } catch (Exception e) {
-            logger.error("Unexpected error while creating room", e);
-            throw new DatabaseOperationException("Unexpected error during room creation", e);
+    /** The caller's active DM with the request's participant, if one exists (one DM per pair, SPEC-003). */
+    public Optional<ChatRoomResponse> findExistingDirectRoom(CreateChatRoomRequest request, String userId) {
+        if (request.getRoomType() == null) {
+            return Optional.empty();
         }
+        return findActiveDirectRoom(policies.get(request.getRoomType()).memberKey(request, userId), userId);
     }
 
-    private ChatRoom createConfigurableRoom(CreateChatRoomRequest request, String creatorId) {
-        try {
-            // Validate room name for private/public rooms
-            boolean isRoomNameRequired = (request.getRoomType() == RoomType.PRIVATE || request.getRoomType() == RoomType.PUBLIC);
-            ValidationUtil.validateRoomName(request.getRoomName(), isRoomNameRequired);
-            
-            Set<String> participants = new HashSet<>();
-            participants.add(creatorId);
-            String roomId = UUID.randomUUID().toString();
-
-            logger.info("SETTINGS: {}", request.getSettings());
-
-            ChatRoom chatRoom;
-            if (request.getSettings() != null) {
-                logger.info("CREATING ROOM WITH SETTINGS");
-                chatRoom = ChatRoom.builder()
-                    .id(roomId)
-                    .name(request.getRoomName())
-                    .description(request.getDescription())
-                    .type(request.getRoomType())
-                    .createdBy(creatorId)
-                    .createdAt(LocalDateTime.now())
-                    .lastActivity(LocalDateTime.now())
-                    .participants(participants)
-                    .maxParticipants(request.getMaxUsers() != null ? request.getMaxUsers() : -1)
-                    .admins(java.util.Collections.singleton(creatorId))
-                    .isActive(true)
-                    .settings(request.getSettings())
-                    .build();
-            } else {
-                logger.info("CREATING ROOM WITHOUT SETTINGS");
-                chatRoom = ChatRoom.builder()
-                    .id(roomId)
-                    .name(request.getRoomName())
-                    .description(request.getDescription())
-                    .type(request.getRoomType())
-                    .createdBy(creatorId)
-                    .createdAt(LocalDateTime.now())
-                    .lastActivity(LocalDateTime.now())
-                    .participants(participants)
-                    .maxParticipants(request.getMaxUsers() != null ? request.getMaxUsers() : -1)
-                    .admins(java.util.Collections.singleton(creatorId))
-                    .isActive(true)
-                    .settings(ChatRoom.RoomSettings.builder()
-                        .allowFileSharing(false)
-                        .allowGuestUsers(false)
-                        .moderationRequired(false)
-                        .welcomeMessage("")
-                        .build())
-                    .build();
-            }
-
-            ChatRoom savedRoom = chatRoomRepository.save(chatRoom);
-            
-            // Create participant instance for room creator
-            participantService.createParticipant(savedRoom.getId(), creatorId, Participant.Role.OWNER);
-            
-            logger.info("Created {} room: {} - {} with creator: {}", request.getRoomType(), savedRoom.getId(), request.getRoomName(), creatorId);
-
-            return savedRoom;
-        } catch (DataAccessException e) {
-            logger.error("Database error while creating room", e);
-            throw new DatabaseOperationException("Failed to create room in database", e);
-        } catch (Exception e) {
-            logger.error("Unexpected error while creating room", e);
-            throw new DatabaseOperationException("Unexpected error during room creation", e);
+    private Optional<ChatRoomResponse> findActiveDirectRoom(String memberKey, String userId) {
+        if (memberKey == null) {
+            return Optional.empty();
         }
+        return chatRoomRepository.findByMemberKeyAndIsActiveTrue(memberKey).map(room -> toResponse(room, userId));
+    }
+
+    /** Maps a room to the caller's view of it, reading the member ids from the participants collection. */
+    public ChatRoomResponse toResponse(ChatRoom room, String callerId) {
+        return toResponses(List.of(room), callerId).get(0);
+    }
+
+    /**
+     * Maps several rooms with one participants query and one user query; DM rooms carry the other member
+     * as {@code counterpart} so the client needs no per-room lookup.
+     */
+    public List<ChatRoomResponse> toResponses(List<ChatRoom> rooms, String callerId) {
+        Map<String, Set<String>> members = participantService.getParticipantUserIds(
+            rooms.stream().map(ChatRoom::getId).toList());
+        Map<String, String> counterpartIds = new HashMap<>();
+        for (ChatRoom room : rooms) {
+            if (room.getType() != null && policies.get(room.getType()).showsCounterpart()) {
+                members.getOrDefault(room.getId(), Set.of()).stream()
+                    .filter(id -> !id.equals(callerId))
+                    .findFirst()
+                    .ifPresent(id -> counterpartIds.put(room.getId(), id));
+            }
+        }
+        Map<String, UserSummaryResponse> summaries = new HashMap<>();
+        if (!counterpartIds.isEmpty()) {
+            userRepository.findAllById(new HashSet<>(counterpartIds.values())).forEach(user ->
+                summaries.put(user.getId(), new UserSummaryResponse(user.getId(), user.getName(), user.getAvatarUrl())));
+        }
+        return rooms.stream()
+            .map(room -> ChatRoomResponse.from(room, members.getOrDefault(room.getId(), Set.of()),
+                summaries.get(counterpartIds.get(room.getId()))))
+            .toList();
     }
 
     public ChatRoom findById(String roomId) {
-        return chatRoomRepository.findById(roomId)
+        return chatRoomRepository.findByIdAndIsActiveTrue(roomId)
             .orElseThrow(() -> new ChatRoomNotFoundException("Can't find chat room with id: " + roomId));
     }
 
-    @Transactional
-    public void deleteChatRoomById(String provider, String providerId, String roomId) {
-        try {
-            User authenticatedUser = userRepository.findByProviderAndProviderId(provider, providerId)
-            .orElseThrow(() -> new UserNotFoundException("Authenticated user not found"));
+    /**
+     * Soft-deletes the room: it is marked inactive, every membership is removed (blocking new STOMP
+     * authorization for the room; existing subscriptions await CM-058), and a SYSTEM message is broadcast to the room topic.
+     */
+    public void deleteChatRoomById(String userId, String roomId) {
+        User authenticatedUser = userRepository.findById(userId)
+        .orElseThrow(() -> new UserNotFoundException("Authenticated user not found"));
 
-            // Validate IDs
-            ValidationUtil.validateId(roomId, "Room ID");
-            
-            ChatRoom room = findById(roomId);
+        // Validate IDs
+        ValidationUtil.validateId(roomId, "Room ID");
 
-            if (!room.getCreatedBy().equals(authenticatedUser.getId())) {
-                throw new UnauthorizedRoomActionException("Only room creator can delete the room");
-            }
+        ChatRoom room = findById(roomId);
 
-            chatRoomRepository.delete(room);
-            logger.info("Room {} deleted by user {}", roomId, authenticatedUser.getId());
-            
-        } catch (ChatRoomNotFoundException | UnauthorizedRoomActionException e) {
-            throw e;
-        } catch (Exception e) {
-            logger.error("Unexpected error while deleting room", e);
-            throw new DatabaseOperationException("Failed to delete room", e);
+        if (!room.getCreatedBy().equals(authenticatedUser.getId())) {
+            throw new UnauthorizedRoomActionException("Only room creator can delete the room");
         }
+
+        if (chatRoomRepository.softDelete(roomId, LocalDateTime.now()) == 0) {
+            throw new ChatRoomNotFoundException("Can't find chat room with id: " + roomId);
+        }
+        long removed = participantService.removeAllParticipants(roomId);
+
+        Instant now = Instant.now();
+        Message deletionMessage = Message.builder()
+            .chatRoomId(roomId)
+            .senderId(authenticatedUser.getId())
+            .content(ROOM_DELETED_MESSAGE)
+            .type(Message.MessageType.SYSTEM)
+            .createdAt(now)
+            .updatedAt(now)
+            .isUpdated(false)
+            .isDeleted(false)
+            .build();
+        messagingTemplate.convertAndSend("/topic/public/" + roomId,
+                ChatMessageResponse.from(deletionMessage, authenticatedUser.getName(), null));
+
+        logger.info("Room {} soft-deleted by user {}, {} memberships removed", roomId, authenticatedUser.getId(), removed);
     }
 
-    @Transactional(readOnly = true)
-    public List<ChatRoom> getList(String provider, String providerId) {
-        User authenticatedUser = userRepository.findByProviderAndProviderId(provider, providerId)
+    public List<ChatRoom> getList(String userId) {
+        User authenticatedUser = userRepository.findById(userId)
             .orElseThrow(() -> new UserNotFoundException("Authenticated user not found"));
-        
-        List<ChatRoom> chatRoomList = chatRoomRepository.findByParticipantsContainingAndIsActiveTrue(authenticatedUser.getId());
-        return chatRoomList;
+
+        List<String> roomIds = participantService.getRoomIdsOfUser(authenticatedUser.getId());
+        if (roomIds.isEmpty()) {
+            return List.of();
+        }
+        return chatRoomRepository.findByIdInAndIsActiveTrue(roomIds);
     }
 
-    @Transactional
-    public ChatRoom getChatRoomById(String provider, String providerId, String roomId) {
-        User authenticatedUser = userRepository.findByProviderAndProviderId(provider, providerId)
+    public ChatRoom getChatRoomById(String userId, String roomId) {
+        User authenticatedUser = userRepository.findById(userId)
             .orElseThrow(() -> new UserNotFoundException("Authenticated user not found"));
 
-        ChatRoom room = chatRoomRepository.findByIdAndParticipantsContaining(roomId, authenticatedUser.getId())
+        return getRoomOfMember(roomId, authenticatedUser.getId());
+    }
+
+    private ChatRoom getRoomOfMember(String roomId, String userId) {
+        ChatRoom room = chatRoomRepository.findByIdAndIsActiveTrue(roomId)
             .orElseThrow(() -> new ChatRoomNotFoundException("Can't find chat room with id: " + roomId + " or user is not a participant"));
-
+        if (!participantService.isUserParticipant(roomId, userId)) {
+            throw new ChatRoomNotFoundException("Can't find chat room with id: " + roomId + " or user is not a participant");
+        }
         return room;
     }
 
-    @Transactional
-    public ChatRoom updateChatRoomById(String provider, String providerId, String roomId, UpdateChatRoomRequest request) {
-        ChatRoom room = getChatRoomById(provider, providerId, roomId);
-
-        User authenticatedUser = userRepository.findByProviderAndProviderId(provider, providerId)
+    public ChatRoom updateChatRoomById(String userId, String roomId, UpdateChatRoomRequest request) {
+        User authenticatedUser = userRepository.findById(userId)
             .orElseThrow(() -> new UserNotFoundException("Authenticated user not found"));
+
+        ChatRoom room = getRoomOfMember(roomId, authenticatedUser.getId());
 
         if(!room.getCreatedBy().equals(authenticatedUser.getId())) {
             throw new UnauthorizedRoomActionException("Only room creator can update the room");
         }
 
-        switch(room.getType()) {
-            case DIRECT_MESSAGE:
-                validateDirectMessageUpdate(request);
-                break;
-            case PRIVATE:
-            case PUBLIC:
-                validateConfigurableRoomUpdate(room, request);
-                break;
+        policies.get(room.getType()).checkUpdate(request);
+
+        String name = request.getRoomName() != null && !request.getRoomName().trim().isEmpty()
+            ? request.getRoomName().trim()
+            : room.getName();
+        String description = request.getDescription() != null ? request.getDescription().trim() : room.getDescription();
+        int maxParticipants = request.getMaxUsers() != null ? request.getMaxUsers() : room.getMaxParticipants();
+        ChatRoom.RoomSettings settings = request.getSettings() != null ? request.getSettings() : room.getSettings();
+
+        // A targeted $set keeps concurrent joins/leaves intact and re-checks capacity against the live counter
+        long updated = chatRoomRepository.updateEditableFields(roomId, name, description, maxParticipants,
+            settings, LocalDateTime.now());
+        if (updated == 0) {
+            throw new InvalidRequestException("Max users cannot be less than current participants");
         }
 
-        // Update room fields if provided in request
-        if (request.getRoomName() != null && !request.getRoomName().trim().isEmpty()) {
-            room.setName(request.getRoomName().trim());
-        }
-        
-        if (request.getDescription() != null) {
-            room.setDescription(request.getDescription().trim());
-        }
-        
-        if (request.getMaxUsers() != null) {
-            room.setMaxParticipants(request.getMaxUsers());
-        }
-        
-        if (request.getSettings() != null) {
-            room.setSettings(request.getSettings());
-        }
-
-        // Update the last activity timestamp
-        room.setLastActivity(LocalDateTime.now());
-
-        // Save the updated room to database
-        return chatRoomRepository.save(room);
+        return findById(roomId);
     }
 
-    @Transactional
-    public void leaveChatRoomById(String provider, String providerId, String roomId) {
-        try {
-            User authenticatedUser = userRepository.findByProviderAndProviderId(provider, providerId)
-                .orElseThrow(() -> new UserNotFoundException("Authenticated user not found"));
+    public void leaveChatRoomById(String userId, String roomId) {
+        User authenticatedUser = userRepository.findById(userId)
+            .orElseThrow(() -> new UserNotFoundException("Authenticated user not found"));
 
-            ChatRoom room = getChatRoomById(provider, providerId, roomId);
+        ChatRoom room = getRoomOfMember(roomId, authenticatedUser.getId());
 
-            // Prevent leaving direct message rooms
-            if(room.getType() == RoomType.DIRECT_MESSAGE) {
-                throw new ForbiddenActionException("Cannot leave direct message rooms. Please delete the room instead.");
-            }
+        policies.get(room.getType()).checkLeave(room, authenticatedUser.getId());
 
-            // Check if user is actually a participant
-            if(!room.getParticipants().contains(authenticatedUser.getId())) {
-                throw new UnauthorizedRoomActionException("User is not a participant of this room");
-            }
-
-            // Prevent room creator from leaving - they must delete the room or transfer ownership first
-            if(room.getCreatedBy().equals(authenticatedUser.getId())) {
-                throw new ForbiddenActionException("Room creator cannot leave the room. Please delete the room or transfer ownership first.");
-            }
-
-            // Remove user from participants set
-            Set<String> roomParticipants = room.getParticipants();
-            roomParticipants.remove(authenticatedUser.getId());
-            room.setParticipants(roomParticipants);
-            room.setLastActivity(LocalDateTime.now());
-
-            // Delete participant record
-            participantRepository.deleteByChatRoomIdAndUserId(roomId, authenticatedUser.getId());
-
-            // Save updated room to database
-            chatRoomRepository.save(room);
-            
-            logger.info("User {} successfully left room {}", authenticatedUser.getId(), roomId);
-            
-        } catch (UserNotFoundException | ChatRoomNotFoundException | ForbiddenActionException | UnauthorizedRoomActionException e) {
-            // Re-throw business logic exceptions as-is
-            throw e;
-        } catch (DataAccessException e) {
-            logger.error("Database error while leaving room: ", e);
-            throw new DatabaseOperationException("Failed to leave room due to database error", e);
-        } catch (Exception e) {
-            logger.error("Unexpected error while leaving room: ", e);
-            throw new DatabaseOperationException("Failed to leave room", e);
+        if (!participantService.removeParticipant(roomId, authenticatedUser.getId())) {
+            throw new UnauthorizedRoomActionException("User is not a participant of this room");
         }
-    }
 
-    private void validateDirectMessageUpdate(UpdateChatRoomRequest request) {
-        if(request.getMaxUsers() != null) {
-            throw new IllegalArgumentException("Cannot change max users for direct message rooms");
-        }
-    }
-    
-    private void validateConfigurableRoomUpdate(ChatRoom room, UpdateChatRoomRequest request) {
-        if(request.getMaxUsers() != null) {
-            Long currentParticipantsCount = (long) room.getParticipants().size();
-            if(request.getMaxUsers() < currentParticipantsCount) {
-                throw new IllegalArgumentException("Max users cannot be less than current participants");
-            }
-        }
+        logger.info("User {} successfully left room {}", authenticatedUser.getId(), roomId);
     }
 }

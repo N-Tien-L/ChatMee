@@ -1,0 +1,67 @@
+# ChatMee ticket board
+Updated by master. Status: todo | in-progress | review | changes-requested | merged | blocked.
+
+| Ticket | Title | Phase | Owner | Branch | Status | Verification | Merge commit |
+|---|---|---|---|---|---|---|---|
+| CM-001 | Close actuator/env and rotate secrets | 0 | codex | fix/CM-001-close-actuator-env | merged (secret rotation pending: owner) | ActuatorSecurityTest 5/5, package OK | 5594152 |
+| CM-002 | Patch CVE dependencies | 0 | agy2 | build/CM-002-dependency-patches | merged (2 rounds) | Boot 3.5.16, next 15.5.27, axios 1.20.0; audit prod 0 critical (1 high postcss via next, needs Next 16 / CM-052); BE tests + FE gates OK | 7cacd0e |
+| CM-003 | WS token authentication (+ CM-011) | 0 | codex | feat/CM-003-ws-token-auth | merged (claude-w review pending after quota reset) | 32 WS/auth/presence tests green, package OK, FE lint/tsc/build OK | 7204e72 |
+| CM-004 | WS subscribe/send authorization | 0 | codex | feat/CM-004-ws-authorization | merged (claude-w review pending after quota reset) | WS/auth/presence/typing tests green, package OK, FE lint/tsc/build OK | 39fe07f |
+| CM-005 | Agent rules, templates, ADRs (a) + junk cleanup (b) | 0 | agy | docs/CM-005-agent-rules, chore/CM-005-junk-cleanup | merged | a: reviewed; b: test-compile + build OK | 765979b, 79ef0c2 |
+| CM-006 | Fix typos and names | 0 | agy | refactor/CM-006-fix-typos | merged | grep 0 hits, test-compile OK, tsc OK; reviewed by master (rename-only, codex review skipped) | f010b8d |
+| CM-007 | Enable Bean Validation | 0 | codex | fix/CM-007-bean-validation | merged (2 rounds) | validation tests + actuator test green, package OK | 6e820d5 |
+| CM-008 | Restrict join/role rules | 0 | codex | fix/CM-008-join-role-rules | merged | mvnw verify green (ParticipantServiceTest 17, ChatRoomControllerAuthorizationTest 7) | 66d63b5 |
+| CM-009 | Local environment setup (compose, .env) | 0 | agy2 | chore/CM-009-local-compose | merged (2 rounds) | compose healthy, local profile + full profile start; reviewed by master | 57bd232 |
+| CM-010 | Remove sensitive logs and fix CSRF | 0 | agy2 + master | fix/CM-010-logs-csrf | merged | mvnw verify green (152 unit + 12 IT); SPA cookie CSRF, logout POST, sensitive logs removed; FE gates OK | 380be49 |
+| CM-011 | Fix presence Redis channel (minimal) | 0 | codex | feat/CM-003-ws-token-auth | merged (folded into CM-003) | PresenceEventListenerTest | 7204e72 |
+| CM-012 | Fix frontend linting | 0 | agy | fix/CM-012-frontend-lint | merged | lint 0 errors/11 warnings, tsc OK, build OK; reviewed by master | 570636d |
+| CM-013 | Fix frontend room switch leakage | 0 | agy | fix/CM-013-room-switch | merged (manual GIF test pending: owner) | lint/tsc/build OK; reviewed by master | 56b1be3 |
+| CM-020 | Setup testing infrastructure | 1 | agy | test/CM-020-test-infra | merged | mvnw verify green (40 unit + 1 IT, contextLoads green), JaCoCo 28% lines; npm test/lint/tsc/build OK | b6fb35d |
+| CM-021 | Service layer unit tests | 1 | agy | test/CM-021-service-tests, test/CM-021b-service-coverage | merged (service coverage 83.0%, JaCoCo check >=80% enforced) | mvnw verify green; reviewed by master | b5917f9, f22c978 |
+| CM-022 | Controller slice tests | 1 | master | test/CM-022-controller-slices | merged | ChatRoom/Message/AuthControllerWebMvcTest (27) with real SecurityConfig: 200/201/400/401/403/404/409 + ProblemDetail schema; verify green 234 unit + 31 IT | 0815d78 |
+| CM-023 | WS/Mongo integration tests | 1 | codex | test/CM-023-ws-integration-tests | merged (ParticipantRepositoryIT moved to CM-028) | mvnw verify green; StompMessagingIT 5, ActuatorSecurityIT 3 | 97131f7 |
+| CM-024 | Global exception handler (ProblemDetail) | 1 | codex | refactor/CM-024-problem-detail | merged (2 rounds) | verify green 145 unit + 12 IT, service cov 85%, JaCoCo check met; FE test/lint/tsc/build OK | 3ae42ea |
+| CM-025 | Full validation constraints | 1 | master | feat/CM-025-validation | merged | @RoomName + per-type group sequence; ValidationUtil.validateRoomName removed; verify green 193 unit + 16 IT | 23d05ba |
+| CM-026 | OpenAPI/Swagger setup | 1 | master | docs/CM-026-openapi | merged | springdoc 2.8.9, dev/local only, behind login; OpenApiDocsIT 4 (all endpoints + Problem schema); README link | b466d23 |
+| CM-027 | CI setup (GitHub Actions) | 1 | agy2 | ci/CM-027-github-actions | merged | YAML parsed; reviewed by master | a40100b |
+| CM-028 | Room membership data integrity | 1 | master | fix/CM-028-membership-integrity | merged (memberCount backfill for old rooms pending: owner) | participants single source, atomic seat $inc, soft delete + SYSTEM event, auditing, ADR-0005; RoomMembershipIT (20 threads, cap 10 -> 10), ParticipantRepositoryIT; verify green 207 unit + 31 IT | 1a43243 |
+| CM-029 | Async message saving and timestamps | 1 | codex | fix/CM-029-persist-then-broadcast | merged | verify green 158 unit + 12 IT; FE 32 tests; reviewed by master | e645bfd |
+| CM-030 | Rate limiting enhancements | 1 | master | fix/CM-030-rate-limit | merged (verify Render proxy IP: owner) | remote-address key (no XFF parsing) + forward-headers-strategy=native in prod, X-RateLimit-*/Retry-After, fail-open; verify green 177 unit + 16 IT | e086ed8 |
+| CM-031 | Basic frontend tests | 1 | agy | test/CM-031-frontend-tests | merged | 22 vitest tests green, lint/tsc/build OK; reviewed by master | c2f69d6 |
+| CM-040 | UserPrincipal and DTO mappers | 2 | codex | refactor/CM-040-user-principal | merged | UserPrincipal (getName = internal id), @CurrentUser resolver, no repositories/OAuth2User in controllers (ControllerArchitectureTest), response records with static from(); gate verify green 269 unit + 40 IT, service cov 98% | 73a79ef |
+| CM-041 | RoomTypePolicy strategy pattern (+ review F5: active-room membership check) | 2 | codex | refactor/CM-041-room-type-policy | merged (2 rounds) | Public/Private/DirectRoomPolicy + EnumMap registry (fails fast), policy create() as factory, DM add-participant 403, active-room guard for WS/history (RoomMembershipIT orphan test); gate 306 unit + 45 IT, service* cov 98% | 81bb592 |
+| CM-042 | Resource-based API/WS routes | 2 | agy | | todo | | |
+| CM-043 | Multi-instance presence | 2 | codex | feat/CM-043-multi-instance-presence | in-progress | | |
+| CM-044 | Message pagination with cursor | 2 | codex | | todo | | |
+| CM-045 | Frontend STOMP refactor | 2 | claude-w | refactor/CM-045-stomp-provider | merged | one STOMP session (lib/realtime) with registry resubscribe, error queue dispatched to current handlers, capped backoff, resync merge by id, ConnectionBanner; client sends TEXT only, no chat.addUser; FE gate: 49 vitest, lint 0 errors, tsc, build OK | a014c70 |
+| CM-046 | Frontend UI state and a11y (+ resync duplicate follow-up) | 2 | claude-w | feat/CM-046-ui-states-a11y | in-progress | | |
+| CM-047 | Server-side user search | 2 | agy + master | feat/CM-047-user-search | merged | paged server search, no emails, provider endpoint removed; UserServiceTest 10, UserApiControllerTest 4, UserRepositoryIT 4 (regex literal), usersStore tests 3; verify green 172 unit + 16 IT; FE 35 tests | 9ec729a |
+| CM-048 | PUBLIC room discovery | 2 | agy | | todo | | |
+| CM-049 | DM unique member keys | 2 | master | fix/CM-049-unique-direct-messages | merged (memberKey backfill for existing DMs: owner) | sorted-pair memberKey, unique sparse index, unset on soft delete; existing DM returns 200, concurrent duplicate returns the winner; counterpart {id,name,avatarUrl} via one batched query; verify 312 unit + 47 IT, FE 56 vitest/lint/tsc/build OK | cd3f71f |
+| CM-050 | Professional README rewrite | 2 | agy | | todo | | |
+| CM-051 | Dockerfile improvements | 2 | agy2 (a), master (b) | chore/CM-051-dockerfile, chore/CM-051b-structured-logs | a merged (non-root, layered jar, actuator healthcheck); b merged (X-Request-Id + requestId/userId MDC for HTTP and STOMP, ECS JSON logs in prod, presence logs at DEBUG) | a: compose full healthy, uid 100; b: verify green 249 unit + 36 IT (RequestCorrelationIT) | 4a68c62, 646486f |
+| CM-052 | Major framework upgrades | 2 | agy | | todo | | |
+| CM-053 | Replace SockJS with pure WebSocket (+ review F3 strict origins) | 2 | claude-w | refactor/CM-053-plain-websocket | merged (deploy backend then frontend together: owner) | /ws plain WebSocket, allowed origin = app.client.url only (403 otherwise, proven without CORS filter), brokerURL derived from NEXT_PUBLIC_WS_URL (no env change), sockjs-client removed, ADR-0003 amended; gate 275 unit + 44 IT, 55 vitest | 0d31153 |
+| CM-054 | TypeScript types cleanup | 2 | master | refactor/CM-054-types-cleanup | merged | lib/type merged into lib/types (aligned with backend records), no-console ESLint rule, middleware route guard (JSESSIONID cookie, UX only); FE gate 52 vitest, lint 0 errors, tsc, build OK; OpenAPI type generation not done (would add a dependency) | ee2e6cc |
+| CM-055 | Backfill specs SPEC-001..007 from the audit drafts | 2 | master | docs/CM-055-specs | merged (Status Draft: owner approval pending) | every AC has a status; all cited test methods verified to exist | d2d5b7a |
+| CM-057 | Rate limit: do not count login/health paths (review F2) | 2 | master | fix/CM-057-rate-limit-proxy | merged | health, auth/status, OAuth2 authorization/callback exempt; servlet double registration disabled; RateLimitingIT 4; verify green 259 unit + 40 IT | 75e2cea |
+| CM-056 | WebSocket hardening (review F1, F4 server side, NV-4; F3 moved to CM-053) | 2 | master | fix/CM-056-ws-hardening | merged | STOMP SEND rate limit per user+destination in Redis (chat 10/5 s with private RATE_LIMITED error, typing 10/5 s, presence 20/60 s, dropped not thrown); TEXT-only client messages; /app/chat.addUser removed; StompError.code; verify green 274 unit + 42 IT (WsRateLimitIT) | 42447b4 |
+| CM-058 | Server-side STOMP subscription revocation on leave/delete (review F6) | 2 | | | todo (after CM-042) | | |
+
+## Notes
+- CM-011 is folded into CM-003. CM-006 already aligned the subscriber channel with the publisher ("presence-channel").
+- Step 0: develop created from main at f8a2855. Worktrees: ChatMee-codex, ChatMee-agy, ChatMee-agy2.
+- CM-005c: removed the empty UserProfile.tsx and UsersList.tsx (tsc + build OK).
+- Follow-up for CM-045: `/user/queue/errors` is subscribed once with the first room's handler (subscribe() skips existing destinations), so delivery errors in later rooms dispatch to a stale reducer.
+- Follow-ups from CM-004 (for CM-045/CM-023): a denied SUBSCRIBE closes the whole STOMP connection; existing subscriptions are not revoked when a user leaves a room.
+- Follow-ups from CM-008: frontend shows Join for non-PUBLIC rooms (ChatRoomListItem.tsx:221); duplicate join still returns 500 (CM-024/CM-028); add-participant into a DIRECT_MESSAGE room is still allowed (CM-041/CM-049).
+- CM-021 done. CustomOAuth2UserService still untested (could use DefaultOAuth2UserService.setRestOperations); candidate for CM-022.
+- Follow-up from CM-031: frontend DTO naming drift (chatRoomId vs roomId, type vs messageType) between lib/type and lib/types (CM-054).
+- 2026-10-09: herdr panes were not drivable from the new master session (auto-mode block; agy/agy2 had exited, codex stuck on a daemon dialog), so master implemented CM-022/025/026/028/030 and finished CM-047 directly, with the same verify gates.
+- Follow-ups from CM-028: backfill `memberCount` for rooms created before CM-028 (owner, production); optional periodic recount; deleted rooms keep live STOMP subscriptions until reconnect (CM-045); `MessageService` uses `existsById`, so a deleted room answers 403 instead of 404.
+- Follow-up from CM-030: behind Vercel rewrites, anonymous requests may all share the Vercel egress IP as remote address (owner to check Render proxy headers); authenticated requests are keyed by user.
+- Follow-up from CM-047: frontend room dialogs no longer show emails; `UserResponse` (with email) is still returned by `/auth/me` and `/auth/user` for the caller only.
+- Follow-ups from CM-022: controllers still inject `UserRepository` (MessageController, AuthApiController) - CM-040.
+- 2026-10-09 22:00 (Claude weekly reset): codex restarted without the background daemon ("Run without daemon this time"; the codex update prompt was skipped). agy/agy2 had exited and relaunching them with `--dangerously-skip-permissions` is blocked for master by the auto-mode classifier: the owner relaunches them. claude-w first reviews the merged security work (SEC-REVIEW-claude-w-REPORT.md), then CM-045. CM-055 added: the specs promised by SPEC_DRIVEN_SETUP were never written (docs/specs had only the template).
+- Security review (claude-w, 2026-10-09, SEC-REVIEW-claude-w-REPORT.md): no Critical/High. F1 STOMP SEND not rate limited (CM-056), F2 shared anonymous bucket behind Vercel locked the login flow (fixed in CM-057), F3 `setAllowedOriginPatterns("*")` on /ws (CM-056), F4 clients choose messageType incl. SYSTEM (CM-056 server side, CM-045 client side), F5 orphan membership in a soft-deleted room (folded into CM-041), F6 subscriptions not revoked server-side (CM-058), F7 frontend console.log (CM-054) and presence INFO logs (fixed in CM-051b).
+- Follow-ups from CM-045: a pending message whose confirmation was lost while disconnected shows twice after resync (history has no tempId: CM-044/CM-046); room-deleted event is matched by content (dedicated type in CM-042/CM-056); optional immediate retry on online/visibilitychange.

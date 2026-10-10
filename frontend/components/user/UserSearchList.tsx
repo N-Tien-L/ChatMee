@@ -1,5 +1,5 @@
 import { useUsersStore } from "@/lib/stores";
-import { UserResponse } from "@/lib/type/ResponseType";
+import { UserSummaryResponse } from "@/lib/types";
 import { Search, User } from "lucide-react";
 import React, { useEffect, useMemo, useState } from "react";
 import { useShallow } from "zustand/react/shallow";
@@ -8,7 +8,7 @@ import { Card, CardContent } from "../ui/card";
 import UserSearchItem from "./UserSearchItem";
 
 interface UserSearchListProps {
-  onUserAdd: (user: UserResponse) => void;
+  onUserAdd: (user: UserSummaryResponse) => void;
   excludeUserIds?: string[];
   placeHolder?: string;
 }
@@ -16,7 +16,7 @@ interface UserSearchListProps {
 const UserSearchList = ({
   onUserAdd,
   excludeUserIds = [],
-  placeHolder = "Search user by name or email...",
+  placeHolder = "Search user by name...",
 }: UserSearchListProps) => {
   const { users, loading, searchQuery, filteredUsers, setSearchQuery } =
     useUsersStore(
@@ -28,14 +28,14 @@ const UserSearchList = ({
         setSearchQuery: state.setSearchQuery,
       }))
     );
-  const fetchUSers = useUsersStore((state) => state.fetchUsers);
+  const fetchUsers = useUsersStore((state) => state.fetchUsers);
   const [addedUserIds, setAddedUserIds] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     if (users.length === 0) {
-      fetchUSers();
+      fetchUsers();
     }
-  }, [users.length, fetchUSers]);
+  }, [users.length, fetchUsers]);
 
   // Reset addedUserIds when excludeUserIds changes (user removed from selection)
   useEffect(() => {
@@ -61,7 +61,7 @@ const UserSearchList = ({
     });
   }, [filteredUsers, excludeUserIds, addedUserIds, searchQuery]);
 
-  const handleAddUser = (user: UserResponse) => {
+  const handleAddUser = (user: UserSummaryResponse) => {
     onUserAdd(user);
     setAddedUserIds((prev) => new Set([...prev, user.id]));
   };

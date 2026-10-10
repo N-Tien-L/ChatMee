@@ -1,6 +1,6 @@
 package com.lnt.chatmee.repository;
 
-import java.time.LocalDateTime;
+import java.time.Instant;
 import java.util.List;
 
 import org.springframework.data.domain.Pageable;
@@ -20,7 +20,7 @@ public interface MessageRepository extends MongoRepository<Message, String> {
     // Retrieve all messages in a chat room that were created after a specific time
     // ordered by creation time in ascending order
     // use for fetching new messages in real-time updates or long-polling
-    List<Message> findByChatRoomIdAndCreatedAtAfterOrderByCreatedAtAsc(String chatRoomId, LocalDateTime after);
+    List<Message> findByChatRoomIdAndCreatedAtAfterOrderByCreatedAtAsc(String chatRoomId, Instant after);
 
     // Retrieve all message send by a specific user in a given chat room
     List<Message> findBySenderIdAndChatRoomId(String senderId, String chatRoomId);

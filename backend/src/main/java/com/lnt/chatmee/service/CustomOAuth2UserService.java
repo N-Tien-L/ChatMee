@@ -1,6 +1,8 @@
 package com.lnt.chatmee.service;
 
 import java.util.UUID;
+import java.util.ArrayList;
+import com.lnt.chatmee.security.UserPrincipal;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -26,10 +28,8 @@ public class CustomOAuth2UserService extends DefaultOAuth2UserService {
         OAuth2User oAuth2User = super.loadUser(userRequest);
         
         String provider = userRequest.getClientRegistration().getRegistrationId();
-        logger.info("=== OAuth2 Login Debug Info ===");
-        logger.info("Provider: {}", provider);
-        logger.info("OAuth2User Attributes: {}", oAuth2User.getAttributes());
-        logger.info("OAuth2User Authorities: {}", oAuth2User.getAuthorities());
+        logger.debug("=== OAuth2 Login ===");
+        logger.debug("Provider: {}", provider);
         
         String providerId;
         String email;
@@ -42,7 +42,6 @@ public class CustomOAuth2UserService extends DefaultOAuth2UserService {
                 email = oAuth2User.getAttribute("email");
                 name = oAuth2User.getAttribute("name");
                 avatarUrl = oAuth2User.getAttribute("picture");
-                logger.info("Google OAuth - ProviderId: {}, Email: {}, Name: {}", providerId, email, name);
                 break;
 
             case "github":
@@ -51,9 +50,6 @@ public class CustomOAuth2UserService extends DefaultOAuth2UserService {
                 email = oAuth2User.getAttribute("email"); 
                 name = oAuth2User.getAttribute("login");
                 avatarUrl = oAuth2User.getAttribute("avatar_url");
-                logger.info("GitHub OAuth - Raw ID: {} (type: {}), ProviderId: {}, Email: {}, Name: {}", 
-                           githubId, githubId != null ? githubId.getClass().getSimpleName() : "null", 
-                           providerId, email, name);
                 break;
 
             default:
@@ -66,23 +62,19 @@ public class CustomOAuth2UserService extends DefaultOAuth2UserService {
                 .orElseGet(() -> {
                     logger.info("Creating new user for provider: {} with providerId: {}", provider, providerId);
                     return User.builder()
-                            .id(UUID.randomUUID().toString())
-                            .provider(provider)
-                            .providerId(providerId)
-                            .email(email)
-                            .name(name)
-                            .avatarUrl(avatarUrl)
-                            .build();
+                        .id(UUID.randomUUID().toString())
+                        .provider(provider)
+                        .providerId(providerId)
+                        .email(email)
+                        .name(name)
+                        .avatarUrl(avatarUrl)
+                        .build();
                 });
 
-        logger.info("User object before save: {}", user);
-        logger.info("User ID: {}, Provider: {}, ProviderId: {}, Email: {}, Name: {}", 
-                   user.getId(), user.getProvider(), user.getProviderId(), user.getEmail(), user.getName());
-
         User savedUser = userRepository.save(user);
-        logger.info("User saved successfully with ID: {}", savedUser.getId());
-        logger.info("=== End OAuth2 Login Debug Info ===");
+        logger.debug("User logged in successfully with ID: {}", savedUser.getId());
 
-        return oAuth2User;
+        return new UserPrincipal(savedUser.getId(), provider, providerId, savedUser.getName(),
+                oAuth2User.getAttributes(), new ArrayList<>(oAuth2User.getAuthorities()));
     }
 }

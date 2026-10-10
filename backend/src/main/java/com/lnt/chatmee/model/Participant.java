@@ -2,8 +2,11 @@ package com.lnt.chatmee.model;
 
 import java.time.LocalDateTime;
 
+import org.springframework.data.annotation.CreatedDate;
 import org.springframework.data.annotation.Id;
+import org.springframework.data.annotation.LastModifiedDate;
 import org.springframework.data.mongodb.core.index.CompoundIndex;
+import org.springframework.data.mongodb.core.index.Indexed;
 import org.springframework.data.mongodb.core.mapping.Document;
 
 import lombok.AllArgsConstructor;
@@ -11,8 +14,7 @@ import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
-import jakarta.persistence.PrePersist;
-import jakarta.persistence.PreUpdate;
+
 
 @Getter
 @Setter
@@ -28,9 +30,13 @@ public class Participant {
 
     private String chatRoomId;
 
+    @Indexed
+
     private String userId;
 
     private Role role;
+
+    @CreatedDate
 
     private LocalDateTime joinedAt;
 
@@ -42,18 +48,9 @@ public class Participant {
 
     private String nickName;
 
-    private LocalDateTime updatedAt;
-    
-    @PrePersist
-    public void prePersist() {
-        this.joinedAt = LocalDateTime.now();
-        this.updatedAt = LocalDateTime.now();
-    }   
+    @LastModifiedDate
 
-    @PreUpdate
-    public void preUpdate() {
-        this.updatedAt = LocalDateTime.now();
-    }
+    private LocalDateTime updatedAt;
 
     public enum Role {
         OWNER,

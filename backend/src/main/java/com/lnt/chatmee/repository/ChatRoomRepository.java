@@ -1,25 +1,62 @@
 package com.lnt.chatmee.repository;
 
+import java.time.LocalDateTime;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 
 import org.springframework.data.mongodb.repository.MongoRepository;
+import org.springframework.data.mongodb.repository.Query;
+import org.springframework.data.mongodb.repository.Update;
 import org.springframework.stereotype.Repository;
 
 import com.lnt.chatmee.model.ChatRoom;
+import com.lnt.chatmee.model.ChatRoom.RoomSettings;
 import com.lnt.chatmee.model.ChatRoom.RoomType;
 
 @Repository
 public interface ChatRoomRepository extends MongoRepository<ChatRoom, String> {
 
-    Optional<ChatRoom> findByIdAndParticipantsContaining(String roomId, String userId);
-    
+    Optional<ChatRoom> findByIdAndIsActiveTrue(String roomId);
+
+    Optional<ChatRoom> findByMemberKeyAndIsActiveTrue(String memberKey);
+
+    List<ChatRoom> findByIdInAndIsActiveTrue(Collection<String> roomIds);
+
     List<ChatRoom> findByTypeAndIsActiveTrue(RoomType type);
-
-    List<ChatRoom> findByParticipantsContainingAndIsActiveTrue(String userId);
-
     List<ChatRoom> findByCreatedByAndIsActiveTrue(String userId);
-
     List<ChatRoom> findByNameContainingIgnoreCaseAndTypeAndIsActiveTrue(String name, RoomType type);
-    
+
+    /**
+     * Atomically takes one seat in an active room if it has capacity (maxParticipants <= 0 means unlimited).
+     * A missing memberCount (rooms created before CM-028) counts as 0.
+     *
+     * @return 1 if a seat was taken, 0 if the room is full, inactive or missing
+     */
+    @Query("{ '_id': ?0, 'isActive': true, '$or': [ { 'maxParticipants': { '$lte': 0 } },"
+            + " { '$expr': { '$lt': [ { '$ifNull': [ '$memberCount', 0 ] }, '$maxParticipants' ] } } ] }")
+    @Update("{ '$inc': { 'memberCount': 1 }, '$set': { 'lastActivity': ?1 } }")
+    long reserveSeat(String roomId, LocalDateTime now);
+
+    /** Atomically gives back one seat; never lets memberCount go below 0. */
+    @Query("{ '_id': ?0, 'memberCount': { '$gt': 0 } }")
+    @Update("{ '$inc': { 'memberCount': -1 }, '$set': { 'lastActivity': ?1 } }")
+    long releaseSeat(String roomId, LocalDateTime now);
+
+    /**
+     * Updates the editable fields without overwriting memberCount, and only if the new capacity still fits
+     * the current members (maxParticipants <= 0 means unlimited).
+     *
+     * @return 1 if the room was updated, 0 if the new capacity is below memberCount or the room is missing
+     */
+    @Query("{ '_id': ?0, 'isActive': true, '$or': [ { '$expr': { '$lte': [ ?3, 0 ] } },"
+            + " { '$expr': { '$lte': [ { '$ifNull': [ '$memberCount', 0 ] }, ?3 ] } } ] }")
+    @Update("{ '$set': { 'name': ?1, 'description': ?2, 'maxParticipants': ?3, 'settings': ?4, 'lastActivity': ?5 } }")
+    long updateEditableFields(String roomId, String name, String description, int maxParticipants,
+            RoomSettings settings, LocalDateTime now);
+
+    /** Soft-deletes an active room and resets its member counter. */
+    @Query("{ '_id': ?0, 'isActive': true }")
+    @Update("{ '$set': { 'isActive': false, 'memberCount': 0, 'deletedAt': ?1, 'lastActivity': ?1 }, '$unset': { 'memberKey': '' } }")
+    long softDelete(String roomId, LocalDateTime now);
 }

@@ -1,5 +1,5 @@
 import { Message, MessageResponse } from "@/lib/types"
-import { addIsOwnToMessages } from "@/lib/utils/messageUtils";
+import { addIsOwnToMessages, mergeResyncedMessages } from "@/lib/utils/messageUtils";
 
 export type MessageState = {
     messages: Message[];
@@ -16,7 +16,8 @@ export type MessageAction =
     | { type: "ADD_OPTIMISTIC_MESSAGE"; payload: Message }
     | { type: "CONFIRM_SENT_MESSAGE"; payload: Message }
     | { type: "FAIL_SENT_MESSAGE"; payload: { tempId: string; error: string } }
-    | { type: "RECEIVE_WEBSOCKET_MESSAGE"; payload: { message: Message; userId?: string } };
+    | { type: "RECEIVE_WEBSOCKET_MESSAGE"; payload: { message: Message; userId?: string } }
+    | { type: "RESYNC"; payload: { messages: MessageResponse[]; userId?: string } };
 
 export const initialState: MessageState = {
     messages: [],
@@ -46,7 +47,7 @@ export function messageReducer(state: MessageState, action: MessageAction): Mess
         case "ADD_OPTIMISTIC_MESSAGE":
             return {
                 ...state,
-                sending: true,
+                sending: false,
                 messages: [...state.messages, action.payload],
             };
 
@@ -55,7 +56,7 @@ export function messageReducer(state: MessageState, action: MessageAction): Mess
                 ...state,
                 sending: false,
                 messages: state.messages.map((m) =>
-                    m.isOptimistic && m.tempId === action.payload.tempId ? { ...action.payload, isOwn: true, status: "sent" } : m
+                    m.isOptimistic && m.tempId === action.payload.tempId ? { ...action.payload, isOwn: true, isOptimistic: false, status: "sent" } : m
                 ),
             };
 
@@ -81,6 +82,14 @@ export function messageReducer(state: MessageState, action: MessageAction): Mess
                 messages: [...state.messages, finalMsg],
             };
         }
+
+        case "RESYNC":
+            return {
+                ...state,
+                loading: false,
+                error: null,
+                messages: mergeResyncedMessages(state.messages, action.payload.messages, action.payload.userId),
+            };
 
         default:
             return state;

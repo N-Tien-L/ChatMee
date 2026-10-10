@@ -9,8 +9,6 @@ import ChatRoomsList from "@/components/room/ChatRoomsList";
 import ChatInterface from "@/components/chat/ChatInterface";
 import { useShallow } from "zustand/react/shallow";
 import { CreateRoomModal } from "@/components/room/CreateRoomModal";
-import { useWebSocket } from "@/hooks/useWebSocket";
-import { Panel, PanelGroup, PanelResizeHandle } from "react-resizable-panels";
 import { LogOut } from "lucide-react";
 
 const DashboardContent = () => {
@@ -37,7 +35,6 @@ const DashboardContent = () => {
   const roomId = searchParams.get("roomId");
   const [hasCheckedAuth, setHasCheckedAuth] = useState(false);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
-  useWebSocket();
 
   useEffect(() => {
     const fetchAuthStatus = async () => {
@@ -139,6 +136,7 @@ const DashboardContent = () => {
           <main className="flex-1 bg-gray-100 w-full overflow-hidden min-w-0 flex flex-col">
             {roomId ? (
               <ChatInterface
+                key={roomId}
                 roomId={roomId}
                 onToggleSidebar={() => setIsSidebarOpen(true)}
               />

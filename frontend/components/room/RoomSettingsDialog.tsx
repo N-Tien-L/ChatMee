@@ -1,10 +1,10 @@
 import React, { useEffect, useState } from "react";
-import { ChatRoomResponse, UserResponse } from "@/lib/type/ResponseType";
-import { RoomType } from "@/lib/type/CoreModelsAndEnum";
+import { ChatRoom, UserSummaryResponse } from "@/lib/types";
+import { RoomType } from "@/lib/types";
 import {
   UpdateChatRoomRequest,
   JoinChatRoomRequest,
-} from "@/lib/type/RequestType";
+} from "@/lib/types";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { chatRoomApi } from "@/lib/api/chatRoomApi";
 import { userApi } from "@/lib/api/userApi";
@@ -38,7 +38,7 @@ interface RoomSettingsDialogProps {
   roomId: string;
   isOpen: boolean;
   onClose: () => void;
-  onSaved?: (room: ChatRoomResponse) => void;
+  onSaved?: (room: ChatRoom) => void;
 }
 
 // Simple toast helper
@@ -57,11 +57,11 @@ export const RoomSettingsDialog: React.FC<RoomSettingsDialogProps> = ({
   onSaved,
 }) => {
   const isMobile = useIsMobile();
-  const [room, setRoom] = useState<ChatRoomResponse | null>(null);
+  const [room, setRoom] = useState<ChatRoom | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
-  const [participants, setParticipants] = useState<UserResponse[]>([]);
-  const [allUsers, setAllUsers] = useState<UserResponse[]>([]);
+  const [participants, setParticipants] = useState<UserSummaryResponse[]>([]);
+  const [allUsers, setAllUsers] = useState<UserSummaryResponse[]>([]);
 
   // Form state
   const [formData, setFormData] = useState({
@@ -128,9 +128,9 @@ export const RoomSettingsDialog: React.FC<RoomSettingsDialogProps> = ({
 
   const loadAllUsers = async () => {
     try {
-      const response = await userApi.getAllUsers();
+      const response = await userApi.searchUsers("", 0, 50);
       if (response.success && response.data) {
-        setAllUsers(response.data);
+        setAllUsers(response.data.content);
       }
     } catch (error) {
       console.error("Error loading users:", error);
@@ -344,9 +344,6 @@ export const RoomSettingsDialog: React.FC<RoomSettingsDialogProps> = ({
                         <p className="text-sm font-medium truncate">
                           {participant.name || "Unknown User"}
                         </p>
-                        <p className="text-xs text-gray-500 truncate">
-                          {participant.email || "No email"}
-                        </p>
                       </div>
                     </div>
                   ))
@@ -373,7 +370,7 @@ export const RoomSettingsDialog: React.FC<RoomSettingsDialogProps> = ({
                     {availableUsers.length > 0 ? (
                       availableUsers.map((user) => (
                         <SelectItem key={user.id} value={user.id}>
-                          {user.name} ({user.email})
+                          {user.name}
                         </SelectItem>
                       ))
                     ) : (

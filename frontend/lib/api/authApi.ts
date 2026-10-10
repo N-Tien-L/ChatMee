@@ -1,11 +1,15 @@
-// Using Vercel proxy - all API calls go through same domain
-const API_BASE_URL = "";
-
-import { ApiResponse, AuthResponse, UserResponse } from "../type/ResponseType";
+import { ApiResponse, AuthResponse, UserResponse } from "@/lib/types";
 import { apiClient } from "./apiClient";
 
 // Auth API endpoints
 export const authApi = {
+    getWsToken: async (): Promise<string> => {
+        const response = await apiClient.post<{ token: string }>('/api/v1/auth/ws-token');
+        if (typeof response.data.token !== 'string' || !response.data.token) {
+            throw new Error('Invalid WebSocket token response');
+        }
+        return response.data.token;
+    },
 
     // get current authenticated user
     getCurrentUser: async (): Promise<ApiResponse<AuthResponse>> => {
@@ -50,7 +54,8 @@ export const authApi = {
     logout: async () => {
         try {
             // Logout from application
-            window.location.href = `/logout`
+            await apiClient.post("/logout")
+            window.location.href = "/login"
         } catch (error) {
             console.error("Error during logout: ", error)
             throw error

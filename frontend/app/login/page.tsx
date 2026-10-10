@@ -2,7 +2,7 @@
 
 import { LoginForm } from "@/components/LoginForm";
 import BlurText from "@/components/ui/shadcn-io/blur-text";
-import { motion } from "framer-motion";
+import { motion } from "motion/react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { useEffect, useState, Suspense } from "react";
 import { useAuthStore } from "@/lib/stores/authStore";
@@ -13,9 +13,8 @@ import { useShallow } from "zustand/react/shallow";
 const LoginContent = () => {
   const searchParams = useSearchParams();
   const router = useRouter();
-  const { user, isAuthenticated, loading } = useAuthStore(
+  const { isAuthenticated, loading } = useAuthStore(
     useShallow((state) => ({
-      user: state.user,
       isAuthenticated: state.isAuthenticated,
       loading: state.loading,
     }))

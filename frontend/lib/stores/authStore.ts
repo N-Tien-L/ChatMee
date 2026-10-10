@@ -1,7 +1,7 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 import { authApi } from '../api/authApi'
-import { UserResponse } from "../type/ResponseType";
+import { UserResponse } from "@/lib/types";
 import toast from 'react-hot-toast'
 
 interface AuthState {
@@ -17,7 +17,7 @@ interface AuthState {
 
 export const useAuthStore = create<AuthState>()(
     persist(
-        (set, get) => ({
+        (set) => ({
             // Initial state
             user: null,
             isAuthenticated: false,

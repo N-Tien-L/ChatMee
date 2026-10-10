@@ -1,5 +1,6 @@
 import { RoomSettings } from "../entities/chat/chat-room.entity";
 import { MessageType, RoomType } from "../entities/chat/enums";
+import { UserSummaryResponse } from "./user.dto";
 
 // Requests
 
@@ -43,11 +44,14 @@ export interface ChatRoomResponse {
     maxUsers: number;
     settings: RoomSettings;
     participants?: string[];
+    /** DIRECT_MESSAGE rooms: the other member as seen by the caller (CM-049). */
+    counterpart?: UserSummaryResponse | null;
+    updatedAt?: string;
 }
 
 export interface MessageResponse {
     id: string;
-    tempId: string;
+    tempId?: string;
     chatRoomId: string;
     senderId: string;
     senderName?: string;
