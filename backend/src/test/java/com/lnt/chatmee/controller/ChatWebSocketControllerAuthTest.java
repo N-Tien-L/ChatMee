@@ -15,7 +15,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.springframework.context.support.StaticApplicationContext;
-import org.springframework.messaging.converter.MappingJackson2MessageConverter;
+import org.springframework.messaging.converter.JacksonJsonMessageConverter;
 import org.springframework.messaging.simp.SimpMessageHeaderAccessor;
 import org.springframework.messaging.simp.SimpMessageType;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
@@ -52,7 +52,7 @@ class ChatWebSocketControllerAuthTest {
         handler.setApplicationContext(context);
         handler.setDestinationPrefixes(List.of("/app"));
         handler.setValidator(validator);
-        handler.setMessageConverter(new MappingJackson2MessageConverter());
+        handler.setMessageConverter(new JacksonJsonMessageConverter());
         handler.afterPropertiesSet();
     }
 

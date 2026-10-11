@@ -8,7 +8,7 @@ export const SESSION_COOKIE = "JSESSIONID";
  * Real authorization stays on the backend (an expired session still gets 401 -> /login from apiClient).
  * /login is deliberately not redirected away from: a stale cookie would otherwise cause a loop.
  */
-export function middleware(request: NextRequest) {
+export function proxy(request: NextRequest) {
     if (request.cookies.has(SESSION_COOKIE)) {
         return NextResponse.next();
     }

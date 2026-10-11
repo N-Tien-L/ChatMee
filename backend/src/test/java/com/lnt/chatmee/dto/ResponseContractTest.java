@@ -3,18 +3,30 @@ package com.lnt.chatmee.dto;
 import static org.assertj.core.api.Assertions.assertThat;
 import java.time.Instant;
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.Set;
 import org.junit.jupiter.api.Test;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.SerializationFeature;
+import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.cfg.DateTimeFeature;
+import tools.jackson.databind.json.JsonMapper;
 import com.lnt.chatmee.dto.response.*;
 import com.lnt.chatmee.model.ChatRoom;
 import com.lnt.chatmee.model.Message;
 import com.lnt.chatmee.model.User;
 
 class ResponseContractTest {
-    private final ObjectMapper json = new ObjectMapper().findAndRegisterModules()
-            .disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS);
+    private final ObjectMapper json = JsonMapper.builder()
+            .disable(DateTimeFeature.WRITE_DATES_AS_TIMESTAMPS).build();
+
+    @Test
+    void messagePage_record_serializesFixedPaginationEnvelope() throws Exception {
+        var page = new MessagePageResponse(List.of(), null, false);
+        var pageJson = json.valueToTree(ApiResponse.success(page));
+        assertThat(pageJson).isEqualTo(json.readTree("""
+                {"success":true,"data":{"messages":[],"nextCursor":null,"hasMore":false}}
+                """));
+        assertThat(MessagePageResponse.class.isRecord()).isTrue();
+    }
 
     @Test void responseFactories_records_preserveJsonPropertiesAndTimestamps() throws Exception {
         var time = Instant.parse("2026-10-09T01:02:03Z");

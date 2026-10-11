@@ -65,7 +65,7 @@ const transport = vi.hoisted(() => ({
 vi.mock('../useWebSocket', () => ({ useWebSocket: () => transport }));
 vi.mock('@/lib/stores/authStore', () => ({ useAuthStore: () => ({ user: { id: 'u1', name: 'Alice' } }) }));
 vi.mock('@/lib/api/messageApi', () => ({
-    messageApi: { get50RecentMessages: vi.fn().mockResolvedValue({ success: true, data: [] }) },
+    messageApi: { getMessages: vi.fn().mockResolvedValue({ success: true, data: { messages: [], nextCursor: null, hasMore: false } }) },
 }));
 
 describe('useRoomMessages resend, reload and resync', () => {
@@ -111,11 +111,11 @@ describe('useRoomMessages resend, reload and resync', () => {
     });
 
     it('reload_afterLoadFailure_showsLoadingThenMessages', async () => {
-        vi.mocked(messageApi.get50RecentMessages).mockRejectedValueOnce(new Error('Network Error'));
+        vi.mocked(messageApi.getMessages).mockRejectedValueOnce(new Error('Network Error'));
         const { result } = await mountRoom();
         expect(result.current.error).toBe('Network Error');
         const saved: MessageResponse = { ...base, id: 's1' };
-        vi.mocked(messageApi.get50RecentMessages).mockResolvedValueOnce({ success: true, message: 'ok', data: [saved] });
+        vi.mocked(messageApi.getMessages).mockResolvedValueOnce({ success: true, message: 'ok', data: { messages: [saved], nextCursor: null, hasMore: false } });
         act(() => { result.current.reload(); });
         expect(result.current.loading).toBe(true);
         await act(async () => {});
@@ -129,7 +129,7 @@ describe('useRoomMessages resend, reload and resync', () => {
         act(() => { void result.current.sendMessage('hello'); });
         const pending = result.current.messages[0];
         const savedCopy: MessageResponse = { ...base, id: 's1', chatRoomId: roomId, content: 'hello', createdAt: pending.createdAt };
-        vi.mocked(messageApi.get50RecentMessages).mockResolvedValueOnce({ success: true, message: 'ok', data: [savedCopy] });
+        vi.mocked(messageApi.getMessages).mockResolvedValueOnce({ success: true, message: 'ok', data: { messages: [savedCopy], nextCursor: null, hasMore: false } });
         const reconnected = transport.onReconnect.mock.calls.at(-1)![0];
         await act(async () => { reconnected(); });
         expect(result.current.messages.map(m => m.id)).toEqual(['s1']);

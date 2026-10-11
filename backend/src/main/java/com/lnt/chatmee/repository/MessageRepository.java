@@ -2,16 +2,34 @@ package com.lnt.chatmee.repository;
 
 import java.time.Instant;
 import java.util.List;
+import org.bson.types.ObjectId;
 
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Page;
 import org.springframework.data.mongodb.repository.MongoRepository;
+import org.springframework.data.mongodb.repository.Query;
 import org.springframework.stereotype.Repository;
 
 import com.lnt.chatmee.model.Message;
 
 @Repository
 public interface MessageRepository extends MongoRepository<Message, String> {
+
+    @Query(value = "{ 'chatRoomId': ?0, 'isDeleted': false }",
+            sort = "{ 'createdAt': -1, '_id': -1 }")
+    List<Message> findPage(String roomId, Pageable pageable);
+
+    default List<Message> findPageBefore(String roomId, Instant beforeCreatedAt, String beforeId, Pageable pageable) {
+        // Match the existing @Id mapping: valid 24-hex IDs are stored as ObjectIds, others as strings.
+        Object storedId = ObjectId.isValid(beforeId) ? new ObjectId(beforeId) : beforeId;
+        return findPageBeforeKey(roomId, beforeCreatedAt, storedId, pageable);
+    }
+
+    @Query(value = "{ 'chatRoomId': ?0, 'isDeleted': false, '$or': ["
+            + "{ 'createdAt': { '$lt': ?1 } },"
+            + "{ 'createdAt': ?1, '$expr': { '$lt': ['$_id', { '$literal': ?2 }] } }] }",
+            sort = "{ 'createdAt': -1, '_id': -1 }")
+    List<Message> findPageBeforeKey(String roomId, Instant beforeCreatedAt, Object beforeId, Pageable pageable);
     
     // Retrieve message for a specific chat room, ordered by creation time in descending order
     // use for loading older messages with pagination (e.g.: infinite roll in chat history)

@@ -13,8 +13,8 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
 import com.lnt.chatmee.model.ChatRoom;
 import com.lnt.chatmee.model.Message;
 import com.lnt.chatmee.model.Participant;
@@ -68,7 +68,7 @@ class StompMessagingIT {
         client = new WebSocketStompClient(new StandardWebSocketClient());
         client.setDefaultHeartbeat(new long[]{0, 0});
         client.setMessageConverter(new org.springframework.messaging.converter.CompositeMessageConverter(List.of(
-                new StringMessageConverter(), new org.springframework.messaging.converter.MappingJackson2MessageConverter())));
+                new StringMessageConverter(), new org.springframework.messaging.converter.JacksonJsonMessageConverter())));
     }
 
     @AfterEach
@@ -127,21 +127,21 @@ class StompMessagingIT {
         String tempId = UUID.randomUUID().toString();
         sendJson(session, payload(tempId, "Integration message", "forged-user"));
         JsonNode response = mapper.readTree(take(broadcasts));
-        assertThat(response.path("senderId").asText()).isEqualTo(member.getId());
-        assertThat(response.path("senderName").asText()).isEqualTo(member.getName());
-        assertThat(response.path("chatRoomId").asText()).isEqualTo(roomId);
-        assertThat(response.path("tempId").asText()).isEqualTo(tempId);
-        assertThat(response.path("content").asText()).isEqualTo("Integration message");
-        assertThat(response.path("id").asText()).isNotBlank();
-        assertThat(response.path("createdAt").asText()).endsWith("Z");
-        java.time.Instant.parse(response.path("createdAt").asText());
+        assertThat(response.path("senderId").asString()).isEqualTo(member.getId());
+        assertThat(response.path("senderName").asString()).isEqualTo(member.getName());
+        assertThat(response.path("chatRoomId").asString()).isEqualTo(roomId);
+        assertThat(response.path("tempId").asString()).isEqualTo(tempId);
+        assertThat(response.path("content").asString()).isEqualTo("Integration message");
+        assertThat(response.path("id").asString()).isNotBlank();
+        assertThat(response.path("createdAt").asString()).endsWith("Z");
+        java.time.Instant.parse(response.path("createdAt").asString());
         assertThat(response.has("isUpdated")).isTrue();
         assertThat(response.has("isDeleted")).isTrue();
-        Message persisted = mongo.findById(response.path("id").asText(), Message.class);
+        Message persisted = mongo.findById(response.path("id").asString(), Message.class);
         assertThat(persisted).isNotNull();
         // BSON dates retain milliseconds, while the wire Instant can retain nanoseconds.
         assertThat(persisted.getCreatedAt().toEpochMilli()).isEqualTo(
-                java.time.Instant.parse(response.path("createdAt").asText()).toEpochMilli());
+                java.time.Instant.parse(response.path("createdAt").asString()).toEpochMilli());
         assertThat(persisted.getSenderId()).isEqualTo(member.getId());
         assertThat(persisted.getChatRoomId()).isEqualTo(roomId);
         assertThat(persisted.getContent()).isEqualTo("Integration message");
@@ -170,8 +170,8 @@ class StompMessagingIT {
         String tempId = UUID.randomUUID().toString();
         sendJson(senderSession, payload(tempId, "x".repeat(5001), observer.getId()));
         JsonNode error = mapper.readTree(take(senderErrors));
-        assertThat(error.path("tempId").asText()).isEqualTo(tempId);
-        assertThat(error.path("message").asText()).contains("Validation failed", "5000");
+        assertThat(error.path("tempId").asString()).isEqualTo(tempId);
+        assertThat(error.path("message").asString()).contains("Validation failed", "5000");
         assertThat(observerErrors.poll(1, TimeUnit.SECONDS)).isNull();
         assertThat(senderRoom.poll(1, TimeUnit.SECONDS)).isNull();
         assertThat(observerRoom.poll(1, TimeUnit.SECONDS)).isNull();
@@ -241,7 +241,7 @@ class StompMessagingIT {
             @Override public Type getPayloadType(StompHeaders headers) { return JsonNode.class; }
             @Override public void handleFrame(StompHeaders headers, Object payload) {
                 JsonNode node = (JsonNode) payload;
-                String value = node.path("subscriptionReady").asText();
+                String value = node.path("subscriptionReady").asString();
                 if (value.startsWith("subscription-ready:")) {
                     if (value.equals(probe)) readiness.add(value);
                 } else {
@@ -253,7 +253,7 @@ class StompMessagingIT {
         // proves that this exact subscription is active before the application SEND.
         long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(10);
         while (System.nanoTime() < deadline) {
-            if (userId == null) messaging.convertAndSend(destination, Map.of("subscriptionReady", probe));
+            if (userId == null) messaging.convertAndSend(destination, (Object) Map.of("subscriptionReady", probe));
             else messaging.convertAndSendToUser(userId, "/queue/errors", Map.of("subscriptionReady", probe));
             if (probe.equals(readiness.poll(100, TimeUnit.MILLISECONDS))) return received;
         }

@@ -1,7 +1,7 @@
 package com.lnt.chatmee.service;
 
-import com.fasterxml.jackson.core.type.TypeReference;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.core.type.TypeReference;
+import tools.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
@@ -43,7 +43,7 @@ class RedisPresenceSubscriberTest {
         subscriber.onMessage(message, new byte[0]);
 
         verifyNoInteractions(presenceService);
-        verify(simpMessagingTemplate).convertAndSend("/topic/presence", presenceUpdate);
+        verify(simpMessagingTemplate).convertAndSend("/topic/presence", (Object) presenceUpdate);
     }
 
     @Test
@@ -57,7 +57,7 @@ class RedisPresenceSubscriberTest {
         subscriber.onMessage(message, new byte[0]);
 
         verifyNoInteractions(presenceService);
-        verify(simpMessagingTemplate).convertAndSend("/topic/presence", presenceUpdate);
+        verify(simpMessagingTemplate).convertAndSend("/topic/presence", (Object) presenceUpdate);
     }
 
     @Test
@@ -71,7 +71,7 @@ class RedisPresenceSubscriberTest {
         subscriber.onMessage(message, new byte[0]);
 
         verifyNoInteractions(presenceService);
-        verify(simpMessagingTemplate).convertAndSend("/topic/presence", presenceUpdate);
+        verify(simpMessagingTemplate).convertAndSend("/topic/presence", (Object) presenceUpdate);
     }
 
     @Test
@@ -80,7 +80,7 @@ class RedisPresenceSubscriberTest {
         when(message.getBody()).thenReturn("invalid".getBytes());
 
         when(objectMapper.readValue(anyString(), any(TypeReference.class)))
-            .thenThrow(new com.fasterxml.jackson.core.JsonParseException(null, "parse error"));
+            .thenThrow(new tools.jackson.core.exc.StreamReadException(null, "parse error"));
 
         // Should not throw
         subscriber.onMessage(message, new byte[0]);

@@ -1,10 +1,18 @@
 import { ApiResponse } from "@/lib/types";
-import { MessageResponse } from "../types";
+import { MessagePageResponse } from "../types";
 import { apiClient } from "./apiClient";
 
+export interface GetMessagesParams {
+    /** Cursor from a previous page's nextCursor; absent loads the newest page. */
+    before?: string;
+    limit?: number;
+}
+
 export const messageApi = {
-    get50RecentMessages: async (roomId: string): Promise<ApiResponse<MessageResponse[]>> => {
-        const response = await apiClient.get<ApiResponse<MessageResponse[]>>(`/api/v1/rooms/${roomId}/messages`);
+    getMessages: async (roomId: string, params: GetMessagesParams = {}): Promise<ApiResponse<MessagePageResponse>> => {
+        const response = await apiClient.get<ApiResponse<MessagePageResponse>>(`/api/v1/rooms/${roomId}/messages`, {
+            params: { before: params.before, limit: params.limit },
+        });
         return response.data;
     }
 }

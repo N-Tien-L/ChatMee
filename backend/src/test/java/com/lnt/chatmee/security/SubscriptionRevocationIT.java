@@ -15,7 +15,7 @@ import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
 
-import com.fasterxml.jackson.databind.JsonNode;
+import tools.jackson.databind.JsonNode;
 import com.lnt.chatmee.model.ChatRoom;
 import com.lnt.chatmee.model.Participant;
 import com.lnt.chatmee.model.User;
@@ -25,7 +25,7 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
+import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.server.LocalServerPort;
 import org.springframework.context.annotation.Import;
@@ -33,7 +33,7 @@ import org.springframework.data.mongodb.core.MongoTemplate;
 import org.springframework.data.mongodb.core.query.Criteria;
 import org.springframework.data.mongodb.core.query.Query;
 import org.springframework.data.redis.core.StringRedisTemplate;
-import org.springframework.messaging.converter.MappingJackson2MessageConverter;
+import org.springframework.messaging.converter.JacksonJsonMessageConverter;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.messaging.simp.stomp.StompHeaders;
 import org.springframework.messaging.simp.stomp.StompSession;
@@ -74,7 +74,7 @@ class SubscriptionRevocationIT {
         roomId = seedRoom(owner, member);
         client = new WebSocketStompClient(new StandardWebSocketClient());
         client.setDefaultHeartbeat(new long[]{0, 0});
-        client.setMessageConverter(new MappingJackson2MessageConverter());
+        client.setMessageConverter(new JacksonJsonMessageConverter());
     }
 
     @AfterEach
@@ -108,8 +108,8 @@ class SubscriptionRevocationIT {
         leave(member);
         publishRoomAndTyping("after-leave");
 
-        assertThat(take(room).path("marker").asText()).isEqualTo("after-leave");
-        assertThat(take(typing).path("marker").asText()).isEqualTo("after-leave");
+        assertThat(take(room).path("marker").asString()).isEqualTo("after-leave");
+        assertThat(take(typing).path("marker").asString()).isEqualTo("after-leave");
         for (BlockingQueue<JsonNode> queue : revoked) assertSilent(queue);
         assertThat(first.isConnected()).isTrue();
         assertThat(second.isConnected()).isTrue();
@@ -124,8 +124,8 @@ class SubscriptionRevocationIT {
         leave(member);
         publishRoomAndTyping("still-member");
 
-        assertThat(take(room).path("marker").asText()).isEqualTo("still-member");
-        assertThat(take(typing).path("marker").asText()).isEqualTo("still-member");
+        assertThat(take(room).path("marker").asString()).isEqualTo("still-member");
+        assertThat(take(typing).path("marker").asString()).isEqualTo("still-member");
         assertThat(observer.isConnected()).isTrue();
     }
 
@@ -145,13 +145,13 @@ class SubscriptionRevocationIT {
         mvc.perform(delete("/api/v1/rooms/" + roomId).with(oauth2Login().oauth2User(principal(owner)))
                 .with(csrf().asHeader())).andExpect(status().isOk());
         publishRoomAndTyping("after-delete");
-        messaging.convertAndSend("/topic/presence", Map.of("marker", "connection-alive"));
+        messaging.convertAndSend("/topic/presence", (Object) Map.of("marker", "connection-alive"));
 
         for (BlockingQueue<JsonNode> queue : rooms) {
             JsonNode deleted = take(queue);
-            assertThat(deleted.path("type").asText()).isEqualTo("SYSTEM");
-            assertThat(deleted.path("content").asText()).isEqualTo("This room has been deleted");
-            assertThat(deleted.path("chatRoomId").asText()).isEqualTo(roomId);
+            assertThat(deleted.path("type").asString()).isEqualTo("SYSTEM");
+            assertThat(deleted.path("content").asString()).isEqualTo("This room has been deleted");
+            assertThat(deleted.path("chatRoomId").asString()).isEqualTo(roomId);
             assertThat(deleted.path("id").isNull() || deleted.path("id").isMissingNode()).isTrue();
             assertThat(deleted.path("tempId").isNull() || deleted.path("tempId").isMissingNode()).isTrue();
             assertSilent(queue);
@@ -173,15 +173,15 @@ class SubscriptionRevocationIT {
 
         leave(member);
         publishRoomAndTyping("revoked");
-        messaging.convertAndSend(topic(otherRoom), Map.of("marker", "other-room"));
-        messaging.convertAndSend(topic(otherRoom) + "/typing", Map.of("marker", "other-typing"));
-        messaging.convertAndSend("/topic/presence", Map.of("marker", "presence"));
+        messaging.convertAndSend(topic(otherRoom), (Object) Map.of("marker", "other-room"));
+        messaging.convertAndSend(topic(otherRoom) + "/typing", (Object) Map.of("marker", "other-typing"));
+        messaging.convertAndSend("/topic/presence", (Object) Map.of("marker", "presence"));
         messaging.convertAndSendToUser(member.getId(), "/queue/errors", Map.of("marker", "private-error"));
 
-        assertThat(take(other).path("marker").asText()).isEqualTo("other-room");
-        assertThat(take(otherTyping).path("marker").asText()).isEqualTo("other-typing");
+        assertThat(take(other).path("marker").asString()).isEqualTo("other-room");
+        assertThat(take(otherTyping).path("marker").asString()).isEqualTo("other-typing");
         awaitPresenceMarker(presence, "presence");
-        assertThat(take(errors).path("marker").asText()).isEqualTo("private-error");
+        assertThat(take(errors).path("marker").asString()).isEqualTo("private-error");
         assertSilent(revoked);
         assertThat(session.isConnected()).isTrue();
     }
@@ -209,7 +209,7 @@ class SubscriptionRevocationIT {
         BlockingQueue<JsonNode> room = subscribeReady(ownerSession, topic(roomId), null);
         mvc.perform(delete("/api/v1/rooms/" + roomId).with(oauth2Login().oauth2User(principal(owner)))
                 .with(csrf().asHeader())).andExpect(status().isOk());
-        assertThat(take(room).path("type").asText()).isEqualTo("SYSTEM");
+        assertThat(take(room).path("type").asString()).isEqualTo("SYSTEM");
         assertSilent(revoked);
     }
 
@@ -255,8 +255,8 @@ class SubscriptionRevocationIT {
     private static String topic(String id) { return "/topic/rooms/" + id; }
 
     private void publishRoomAndTyping(String marker) {
-        messaging.convertAndSend(topic(roomId), Map.of("marker", marker));
-        messaging.convertAndSend(topic(roomId) + "/typing", Map.of("marker", marker));
+        messaging.convertAndSend(topic(roomId), (Object) Map.of("marker", marker));
+        messaging.convertAndSend(topic(roomId) + "/typing", (Object) Map.of("marker", marker));
     }
 
     private BlockingQueue<JsonNode> subscribeReady(StompSession session, String destination, String userId)
@@ -269,7 +269,7 @@ class SubscriptionRevocationIT {
             @Override public void handleFrame(StompHeaders headers, Object payload) {
                 assertThat(headers.getFirst("chatmeeRoomDeletedRecipients")).isNull();
                 JsonNode node = (JsonNode) payload;
-                String value = node.path("subscriptionReady").asText();
+                String value = node.path("subscriptionReady").asString();
                 if (value.startsWith("subscription-ready:")) {
                     if (value.equals(probe)) readiness.add(value);
                 } else received.add(node);
@@ -278,7 +278,7 @@ class SubscriptionRevocationIT {
         // Simple broker receipts are unsupported; an exact probe proves subscription readiness.
         long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(10);
         while (System.nanoTime() < deadline) {
-            if (userId == null) messaging.convertAndSend(destination, Map.of("subscriptionReady", probe));
+            if (userId == null) messaging.convertAndSend(destination, (Object) Map.of("subscriptionReady", probe));
             else messaging.convertAndSendToUser(userId, "/queue/errors", Map.of("subscriptionReady", probe));
             if (probe.equals(readiness.poll(100, TimeUnit.MILLISECONDS))) return received;
         }
@@ -301,7 +301,7 @@ class SubscriptionRevocationIT {
         while (System.nanoTime() < deadline) {
             JsonNode value = queue.poll(100, TimeUnit.MILLISECONDS);
             if (value != null && value.has("marker")) {
-                assertThat(value.path("marker").asText()).isEqualTo(marker);
+                assertThat(value.path("marker").asString()).isEqualTo(marker);
                 return;
             }
         }

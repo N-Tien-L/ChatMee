@@ -6,7 +6,7 @@ import static org.mockito.Mockito.*;
 
 import java.util.Map;
 import java.nio.charset.StandardCharsets;
-import org.springframework.messaging.converter.MappingJackson2MessageConverter;
+import org.springframework.messaging.converter.JacksonJsonMessageConverter;
 import org.springframework.util.MimeTypeUtils;
 import java.util.Optional;
 import org.junit.jupiter.api.AfterEach;
@@ -48,7 +48,7 @@ class ChatWebSocketControllerValidationTest {
         handler.setApplicationContext(context);
         handler.setDestinationPrefixes(java.util.List.of("/app"));
         handler.setValidator(validator);
-        handler.setMessageConverter(new MappingJackson2MessageConverter());
+        handler.setMessageConverter(new JacksonJsonMessageConverter());
         handler.afterPropertiesSet();
     }
 
@@ -115,7 +115,7 @@ class ChatWebSocketControllerValidationTest {
         headers.setSessionAttributes(Map.of());
         headers.setUser(() -> "test-user");
         headers.setContentType(MimeTypeUtils.APPLICATION_JSON);
-        com.fasterxml.jackson.databind.node.ObjectNode json = new com.fasterxml.jackson.databind.ObjectMapper().valueToTree(request);
+        tools.jackson.databind.node.ObjectNode json = new tools.jackson.databind.ObjectMapper().valueToTree(request);
         json.put("senderId", "test-user");
         byte[] payload = json
                 .toString().getBytes(StandardCharsets.UTF_8);

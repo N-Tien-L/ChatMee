@@ -177,7 +177,7 @@ Commits follow Conventional Commits with a `Refs: CM-xxx` footer.
 
 ```text
 .
-├── backend/                 # Spring Boot 3.5 API (Java 17)
+├── backend/                 # Spring Boot 4.1 API (Java 17)
 │   └── src/main/java/com/lnt/chatmee/
 │       ├── config/          # Spring configuration (security, WebSocket, Redis, Mongo, OpenAPI)
 │       ├── controller/      # Controllers
@@ -188,7 +188,7 @@ Commits follow Conventional Commits with a `Refs: CM-xxx` footer.
 │       ├── security/        # Security components
 │       ├── service/         # Use cases
 │       └── util/            # Utilities
-├── frontend/                # Next.js 15 App Router, React 19, TypeScript
+├── frontend/                # Next.js 16 App Router, React 19, TypeScript
 │   ├── app/                 # Routes
 │   ├── components/          # Pure UI components (components/ui is shadcn code)
 │   ├── lib/api/             # HTTP client, one file per resource

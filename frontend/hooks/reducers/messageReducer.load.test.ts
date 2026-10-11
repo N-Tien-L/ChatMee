@@ -48,6 +48,56 @@ describe('messageReducer history load', () => {
         expect(next.messages.map(m => m.id)).toEqual(['s1', 's2', 's3']);
     });
 
+    it('loadOlder_success_prependsWithoutDuplicates', () => {
+        const newest = messageReducer(initialState, {
+            type: 'FETCH_SUCCESS', payload: { messages: history, hasMore: true, nextCursor: 'c1', userId: 'u1' },
+        });
+        const loadingOlder = messageReducer(newest, { type: 'LOAD_OLDER_START' });
+        expect(loadingOlder.loadingOlder).toBe(true);
+        const older: MessageResponse[] = [
+            { ...base, id: 's0', createdAt: '2026-10-09T09:59:00Z' },
+            { ...base, id: 's1', createdAt: '2026-10-09T10:00:00Z' },
+        ];
+        const next = messageReducer(loadingOlder, {
+            type: 'LOAD_OLDER_SUCCESS', payload: { messages: older, hasMore: true, nextCursor: 'c0', userId: 'u1' },
+        });
+        expect(next.messages.map(m => m.id)).toEqual(['s0', 's1', 's2']);
+        expect(next.loadingOlder).toBe(false);
+        expect(next.nextCursor).toBe('c0');
+        expect(next.hasMoreMessages).toBe(true);
+    });
+
+    it('loadOlder_noMore_stopsRequesting', () => {
+        const state: MessageState = { ...initialState, messages: [live], hasMoreMessages: true, nextCursor: 'c1', loadingOlder: true };
+        const next = messageReducer(state, {
+            type: 'LOAD_OLDER_SUCCESS', payload: { messages: history, hasMore: false, nextCursor: null, userId: 'u1' },
+        });
+        expect(next.hasMoreMessages).toBe(false);
+        expect(next.nextCursor).toBeNull();
+        expect(next.messages.map(m => m.id)).toEqual(['s1', 's2', 's3']);
+    });
+
+    it('loadOlder_error_keepsCursorForRetry', () => {
+        const state: MessageState = { ...initialState, messages: [live], hasMoreMessages: true, nextCursor: 'c1', loadingOlder: true };
+        const next = messageReducer(state, { type: 'LOAD_OLDER_ERROR', payload: 'Network Error' });
+        expect(next).toMatchObject({ loadingOlder: false, olderError: 'Network Error', nextCursor: 'c1', hasMoreMessages: true });
+        expect(messageReducer(next, { type: 'LOAD_OLDER_START' }).olderError).toBeNull();
+    });
+
+    it('resync_afterOlderPagesLoaded_keepsOlderMessages', () => {
+        const older: MessageResponse = { ...base, id: 's0', createdAt: '2026-10-09T09:00:00Z' };
+        const state: MessageState = {
+            ...initialState, hasMoreMessages: true, nextCursor: 'c0',
+            messages: [...[older, ...history].map((m): Message => ({ ...m, isOwn: false, status: 'sent' })), pending],
+        };
+        const missed: MessageResponse = { ...base, id: 's4', createdAt: '2026-10-09T10:04:00Z' };
+        const next = messageReducer(state, { type: 'RESYNC', payload: { messages: [...history, missed], userId: 'u1' } });
+        expect(next.messages.map(m => m.id)).toEqual(['s0', 's1', 's2', 's4', 'optimistic-t1']);
+        expect(next.messages[4].status).toBe('sending');
+        expect(next.nextCursor).toBe('c0');
+        expect(next.hasMoreMessages).toBe(true);
+    });
+
     it('RESET_roomChanged_clearsMessagesAndError', () => {
         const next = messageReducer({ ...initialState, error: 'Network Error', messages: [live, pending] }, { type: 'RESET' });
         expect(next).toEqual(initialState);
