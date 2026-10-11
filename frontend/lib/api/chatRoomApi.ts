@@ -1,4 +1,4 @@
-import { ApiResponse, ChatRoomResponse } from "@/lib/types";
+import { ApiResponse, ChatRoomResponse, PagedResponse, PublicRoomSummary } from "@/lib/types";
 import {
     CreateChatRoomRequest,
     UpdateChatRoomRequest,
@@ -27,6 +27,19 @@ export const chatRoomApi = {
             return response.data;
         } catch (error) {
             console.error("Error fetching chat rooms: ", error)
+            throw error
+        }
+    },
+
+    // discover public rooms the caller has not joined (paged)
+    discoverRooms: async (query: string = '', page: number = 0, size: number = 20): Promise<ApiResponse<PagedResponse<PublicRoomSummary>>> => {
+        try {
+            const response = await apiClient.get<ApiResponse<PagedResponse<PublicRoomSummary>>>('/api/v1/rooms/discover', {
+                params: { query, page, size }
+            })
+            return response.data;
+        } catch (error) {
+            console.error("Error discovering chat rooms")
             throw error
         }
     },

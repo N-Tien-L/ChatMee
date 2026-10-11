@@ -18,6 +18,8 @@ import java.util.List;
 import java.util.Set;
 
 import org.junit.jupiter.api.Test;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
@@ -26,6 +28,7 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 
 import com.lnt.chatmee.config.SecurityConfig;
 import com.lnt.chatmee.dto.response.ChatRoomResponse;
+import com.lnt.chatmee.dto.response.PublicRoomSummary;
 import com.lnt.chatmee.exception.ChatRoomNotFoundException;
 import com.lnt.chatmee.exception.ForbiddenActionException;
 import com.lnt.chatmee.exception.RoomCapacityExceededException;
@@ -46,6 +49,31 @@ class ChatRoomControllerWebMvcTest extends SecuredWebMvcTestSupport {
 
     @MockitoBean ChatRoomService chatRoomService;
     @MockitoBean ParticipantService participantService;
+
+    @Test
+    void discoverRooms_authenticated_returnsPublicRoomsPage() throws Exception {
+        PublicRoomSummary room = new PublicRoomSummary("room-1", "General", "Chat", 3, 10, null);
+        when(chatRoomService.discoverRooms("u1", "gen", 1, 5))
+                .thenReturn(new PageImpl<>(List.of(room), PageRequest.of(1, 5), 6));
+
+        mvc.perform(get("/api/v1/rooms/discover").param("query", "gen").param("page", "1").param("size", "5")
+                        .with(oauth2Login().oauth2User(com.lnt.chatmee.support.TestUsers.principal("u1"))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.content[0].id").value("room-1"))
+                .andExpect(jsonPath("$.data.content[0].name").value("General"))
+                .andExpect(jsonPath("$.data.content[0].memberCount").value(3))
+                .andExpect(jsonPath("$.data.content[0].maxMembers").value(10))
+                .andExpect(jsonPath("$.data.content[0].participants").doesNotExist())
+                .andExpect(jsonPath("$.data.page").value(1))
+                .andExpect(jsonPath("$.data.totalElements").value(6))
+                .andExpect(jsonPath("$.data.totalPages").value(2));
+    }
+
+    @Test
+    void discoverRooms_unauthenticated_returns401() throws Exception {
+        mvc.perform(get("/api/v1/rooms/discover")).andExpect(status().isUnauthorized());
+        verifyNoInteractions(chatRoomService);
+    }
 
     @Test
     void createRoom_validPublicRoom_returns201WithRoom() throws Exception {

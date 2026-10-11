@@ -10,10 +10,13 @@ import {
   Globe,
   AlertCircle,
   RotateCw,
+  Compass,
 } from "lucide-react";
 import { Skeleton } from "../ui/skeleton";
 import ChatRoomListItem from "./ChatRoomListItem";
 import { useChatRoomsStore } from "@/lib/stores/chatRoomsStore";
+import { useDiscoverRoomsStore } from "@/lib/stores/discoverRoomsStore";
+import { DiscoverRoomsDialog } from "./DiscoverRoomsDialog";
 import { useShallow } from "zustand/react/shallow";
 import { useRouter, useSearchParams } from "next/navigation";
 
@@ -58,6 +61,8 @@ const ChatRoomsListContent: React.FC<ChatRoomsListProps> = ({
     }))
   );
 
+  const openDiscoverRooms = useDiscoverRoomsStore((state) => state.open);
+
   const handleRoomClick = (roomId: string) => {
     router.push(`/dashboard?roomId=${roomId}`, { scroll: false });
     if (onCloseSidebar) onCloseSidebar(); // Close sidebar on mobile
@@ -78,14 +83,25 @@ const ChatRoomsListContent: React.FC<ChatRoomsListProps> = ({
           <h2 className="text-base sm:text-lg font-semibold text-gray-900">
             Chats
           </h2>
-          <button
-            onClick={() => openCreateRoomModal()}
-            className="p-1.5 sm:p-2 rounded-lg bg-blue-500 text-white hover:bg-blue-600 transition-colors flex-shrink-0"
-            title="Create new chat room"
-            aria-label="Create new chat room"
-          >
-            <Plus className="w-4 h-4 sm:w-5 sm:h-5" aria-hidden="true" />
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => openDiscoverRooms()}
+              className="p-1.5 sm:p-2 rounded-lg border border-gray-300 text-gray-700 hover:bg-gray-100 transition-colors flex-shrink-0"
+              title="Discover rooms"
+              aria-label="Discover rooms"
+            >
+              <Compass className="w-4 h-4 sm:w-5 sm:h-5" aria-hidden="true" />
+            </button>
+            <button
+              onClick={() => openCreateRoomModal()}
+              className="p-1.5 sm:p-2 rounded-lg bg-blue-500 text-white hover:bg-blue-600 transition-colors flex-shrink-0"
+              title="Create new chat room"
+              aria-label="Create new chat room"
+            >
+              <Plus className="w-4 h-4 sm:w-5 sm:h-5" aria-hidden="true" />
+            </button>
+          </div>
         </div>
 
         {/* Search bar */}
@@ -222,6 +238,7 @@ const ChatRoomsListContent: React.FC<ChatRoomsListProps> = ({
           {filteredRooms.length} {filteredRooms.length === 1 ? "room" : "rooms"}
         </p>
       </div>
+      <DiscoverRoomsDialog />
     </div>
   );
 };

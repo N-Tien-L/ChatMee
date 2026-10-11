@@ -4,6 +4,9 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Optional;
 import org.springframework.dao.DuplicateKeyException;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import com.lnt.chatmee.dto.response.PublicRoomSummary;
 import com.lnt.chatmee.dto.response.UserSummaryResponse;
 import java.time.Instant;
 import java.time.LocalDateTime;
@@ -42,6 +45,9 @@ import lombok.RequiredArgsConstructor;
 @Service
 @RequiredArgsConstructor
 public class ChatRoomService {
+
+    static final int DEFAULT_PAGE_SIZE = 20;
+    static final int MAX_PAGE_SIZE = 50;
 
     static final String ROOM_DELETED_MESSAGE = "This room has been deleted";
 
@@ -175,6 +181,15 @@ public class ChatRoomService {
             return List.of();
         }
         return chatRoomRepository.findByIdInAndIsActiveTrue(roomIds);
+    }
+
+    /** Page is clamped to >= 0 and size to 1..MAX_PAGE_SIZE (non-positive size falls back to the default). */
+    public Page<PublicRoomSummary> discoverRooms(String userId, String query, int page, int size) {
+        String searchQuery = query == null ? "" : query.trim();
+        int pageSize = size <= 0 ? DEFAULT_PAGE_SIZE : Math.min(size, MAX_PAGE_SIZE);
+        List<String> joinedRoomIds = participantService.getRoomIdsOfUser(userId);
+        return chatRoomRepository.findDiscoverable(searchQuery, joinedRoomIds, PageRequest.of(Math.max(page, 0), pageSize))
+            .map(PublicRoomSummary::from);
     }
 
     public ChatRoom getChatRoomById(String userId, String roomId) {

@@ -3,3 +3,4 @@ export { RoomInfoDialog } from './RoomInfoDialog';
 export { RoomSettingsDialog } from './RoomSettingsDialog';
 export { default as ChatRoomsList } from './ChatRoomsList';
 export { CreateRoomModal } from './CreateRoomModal';
+export { DiscoverRoomsDialog } from './DiscoverRoomsDialog';

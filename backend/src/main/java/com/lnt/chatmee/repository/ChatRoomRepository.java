@@ -5,6 +5,8 @@ import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.mongodb.repository.MongoRepository;
 import org.springframework.data.mongodb.repository.Query;
 import org.springframework.data.mongodb.repository.Update;
@@ -26,6 +28,16 @@ public interface ChatRoomRepository extends MongoRepository<ChatRoom, String> {
     List<ChatRoom> findByTypeAndIsActiveTrue(RoomType type);
     List<ChatRoom> findByCreatedByAndIsActiveTrue(String userId);
     List<ChatRoom> findByNameContainingIgnoreCaseAndTypeAndIsActiveTrue(String name, RoomType type);
+
+    /** Derived "contains" queries quote the search text, so regex characters in it match literally. */
+    Page<ChatRoom> findByTypeAndIsActiveTrueAndNameContainingIgnoreCaseAndIdNotIn(RoomType type, String name,
+            Collection<String> excludedIds, Pageable pageable);
+
+    /** Active PUBLIC rooms whose name contains {@code name} (case-insensitive, literal), minus {@code excludedIds}. */
+    default Page<ChatRoom> findDiscoverable(String name, Collection<String> excludedIds, Pageable pageable) {
+        return findByTypeAndIsActiveTrueAndNameContainingIgnoreCaseAndIdNotIn(RoomType.PUBLIC, name, excludedIds,
+                pageable);
+    }
 
     /**
      * Atomically takes one seat in an active room if it has capacity (maxParticipants <= 0 means unlimited).
