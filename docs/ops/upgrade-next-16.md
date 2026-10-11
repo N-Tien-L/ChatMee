@@ -7,13 +7,13 @@
 | `next` | 15.5.27 | 16.3.8 |
 | `eslint-config-next` | 15.5.27 | 16.3.8 |
 | `react`, `react-dom` | 19.1.0 | 19.1.0 (unchanged; Next 16 peer range is `^19.0.0`) |
-| `@types/react`, `@types/react-dom` | 19.1.12 (resolved) | unchanged |
+| `@types/react` / `@types/react-dom` | 19.1.12 / 19.1.9 (resolved) | unchanged |
 
 Node.js: Next 16 requires Node `>=20.9.0`. CI runs Node 20 and 22, so both satisfy it. CI was not changed.
 
 ## Changes and why
 
-1. **`frontend/middleware.ts` renamed to `frontend/proxy.ts`.** Next 16 deprecates the `middleware` file and export. The function is renamed to `proxy`. The logic is identical: the `JSESSIONID` cookie guard for `/dashboard` and `/profile`, and the redirect to `/login`. `config.matcher` is unchanged. The build now lists it as `Proxy (Middleware)`. Edge runtime is not used here, so the `proxy` runtime (`nodejs`) is fine.
+1. **`frontend/middleware.ts` renamed to `frontend/proxy.ts`.** Next 16 deprecates the `middleware` file and export. The function is renamed to `proxy`. The logic is identical: the `JSESSIONID` cookie guard for `/dashboard` and `/profile`, and the redirect to `/login`. `config.matcher` is unchanged. The build now lists it as `Proxy (Middleware)`. The former middleware ran on the default Edge runtime; this guard has no Edge-specific dependency, so moving to the Node.js `proxy` runtime keeps its routing logic.
 2. **`frontend/middleware.test.ts`**: the import and calls now use `proxy`. Assertions are unchanged.
 3. **`frontend/eslint.config.mjs`**: `eslint-config-next` 16 ships native flat configs. The old `FlatCompat` wrapper fails with "Converting circular structure to JSON", so the config now imports `eslint-config-next/core-web-vitals` and `eslint-config-next/typescript` directly. The `no-console` rule and ignores are unchanged.
 4. **`frontend/eslint.config.mjs`: four React Compiler rules set to `warn`.** `eslint-config-next` 16 enables `react-hooks/set-state-in-effect`, `react-hooks/immutability`, `react-hooks/purity` and `react-hooks/preserve-manual-memoization` as errors. They report 9 existing errors in `CreateRoomModal`, `RoomInfoDialog`, `RoomSettingsDialog`, `UserSearchList`, `use-mobile`, `useRoomMessage` and `components/ui/sidebar.tsx`. The code works at runtime. Fixing it is a refactor outside CM-052, so the rules stay visible as warnings. A follow-up ticket should fix the code and restore `error`.
