@@ -1,5 +1,5 @@
 # SPEC-004: Real-time messaging and history
-- Status: Draft
+- Status: Approved
 - Owner: @N-Tien-L · Created: 2026-10-09 · Related: ADR-0003, ADR-0004, design/websocket-protocol.md
 
 ## 1. Goal

@@ -97,12 +97,12 @@ class ChatRoomControllerAuthorizationTest {
     }
 
     @Test
-    void joinRoom_publicRoom_returnsOk() throws Exception {
+    void joinRoom_publicRoom_returnsNoContent() throws Exception {
         when(rooms.findByIdAndIsActiveTrue("room")).thenReturn(Optional.of(ChatRoom.builder()
                 .id("room").type(RoomType.PUBLIC).isActive(true).build()));
         when(users.findById("actor")).thenReturn(Optional.of(User.builder().id("actor").build()));
         mvc.perform(post("/api/v1/rooms/room/members/me").with(oauth2Login().oauth2User(com.lnt.chatmee.support.TestUsers.principal("actor"))).with(csrf()))
-                .andExpect(status().isOk());
+                .andExpect(status().isNoContent());
         verify(participants).save(argThat(p -> p.getUserId().equals("actor") && p.getRole() == Role.MEMBER));
     }
 

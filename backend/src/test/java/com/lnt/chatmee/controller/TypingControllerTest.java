@@ -47,7 +47,7 @@ class TypingControllerTest {
     @Test
     void handleTypingEvent_forgedIdentity_broadcastsPrincipalIdentity() {
         when(participants.isUserParticipant("room", "internal-user")).thenReturn(true);
-        dispatch(() -> "internal-user", "{\"roomId\":\"room\",\"userId\":\"victim\",\"typing\":true}");
+        dispatch(() -> "internal-user", "{\"userId\":\"victim\",\"typing\":true}");
         verify(messaging).convertAndSend(eq("/topic/rooms/room/typing"), argThat((TypingMessage message) ->
                 "internal-user".equals(message.getUserId()) && "room".equals(message.getRoomId()) && message.isTyping()));
         verify(participants).isUserParticipant("room", "internal-user");
@@ -57,33 +57,37 @@ class TypingControllerTest {
     @Test
     void handleTypingEvent_identityOmitted_broadcastsSameMessageShape() {
         when(participants.isUserParticipant("room", "internal-user")).thenReturn(true);
-        dispatch(() -> "internal-user", "{\"roomId\":\"room\",\"typing\":false}");
+        dispatch(() -> "internal-user", "{\"typing\":false}");
         verify(messaging).convertAndSend(eq("/topic/rooms/room/typing"), argThat((TypingMessage message) ->
                 "internal-user".equals(message.getUserId()) && !message.isTyping()));
     }
 
     @Test
     void handleTypingEvent_nonMember_dropsEvent() {
-        dispatch(() -> "internal-user", "{\"roomId\":\"room\",\"userId\":\"victim\",\"typing\":true}");
+        dispatch(() -> "internal-user", "{\"userId\":\"victim\",\"typing\":true}");
         verify(participants).isUserParticipant("room", "internal-user");
         verifyNoInteractions(messaging);
     }
 
     @Test
     void handleTypingEvent_missingPrincipal_dropsEvent() {
-        dispatch(null, "{\"roomId\":\"room\",\"userId\":\"victim\",\"typing\":true}");
+        dispatch(null, "{\"userId\":\"victim\",\"typing\":true}");
         verifyNoInteractions(participants, messaging);
     }
 
     @Test
     void handleTypingEvent_missingRoom_dropsEvent() {
-        dispatch(() -> "internal-user", "{\"userId\":\"victim\",\"typing\":true}");
+        dispatch(() -> "internal-user", "/app/rooms/ /typing", "{\"typing\":true}");
         verifyNoInteractions(participants, messaging);
     }
 
     private void dispatch(Principal principal, String json) {
+        dispatch(principal, "/app/rooms/room/typing", json);
+    }
+
+    private void dispatch(Principal principal, String destination, String json) {
         SimpMessageHeaderAccessor headers = SimpMessageHeaderAccessor.create(SimpMessageType.MESSAGE);
-        headers.setDestination("/app/typing");
+        headers.setDestination(destination);
         headers.setSessionId("typing-session");
         headers.setSessionAttributes(java.util.Map.of());
         headers.setUser(principal);

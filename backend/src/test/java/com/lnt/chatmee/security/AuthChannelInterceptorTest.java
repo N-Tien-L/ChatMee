@@ -161,7 +161,7 @@ class AuthChannelInterceptorTest {
 
     @Test
     void preSend_knownApplicationSend_allowsControllerAuthorization() {
-        for (String destination : List.of("/app/chat.sendMessage", "/app/typing", "/app/presence")) {
+        for (String destination : List.of("/app/chat.sendMessage", "/app/rooms/room/typing", "/app/presence")) {
             Message<?> message = applicationFrame(StompCommand.SEND, destination, "internal-user");
             assertSame(message, interceptor.preSend(message, channel));
         }

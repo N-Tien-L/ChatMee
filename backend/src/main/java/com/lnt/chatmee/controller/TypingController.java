@@ -2,6 +2,7 @@ package com.lnt.chatmee.controller;
 
 import java.security.Principal;
 
+import org.springframework.messaging.handler.annotation.DestinationVariable;
 import org.springframework.messaging.handler.annotation.MessageMapping;
 import org.springframework.messaging.handler.annotation.Payload;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
@@ -19,14 +20,14 @@ public class TypingController {
     private final SimpMessagingTemplate messagingTemplate;
     private final ParticipantService participantService;
 
-    @MessageMapping("/typing")
-    public void handleTypingEvent(@Payload TypingMessage message, Principal principal) {
-        if (principal == null || message.getRoomId() == null || message.getRoomId().isBlank()
-                || !participantService.isUserParticipant(message.getRoomId(), principal.getName())) {
+    @MessageMapping("/rooms/{roomId}/typing")
+    public void handleTypingEvent(@DestinationVariable String roomId, @Payload TypingMessage message, Principal principal) {
+        if (principal == null || roomId == null || roomId.isBlank()
+                || !participantService.isUserParticipant(roomId, principal.getName())) {
             return;
         }
+        message.setRoomId(roomId);
         message.setUserId(principal.getName());
-        String destination = "/topic/rooms/" + message.getRoomId() + "/typing";
-        messagingTemplate.convertAndSend(destination, message);
+        messagingTemplate.convertAndSend("/topic/rooms/" + roomId + "/typing", message);
     }
 }

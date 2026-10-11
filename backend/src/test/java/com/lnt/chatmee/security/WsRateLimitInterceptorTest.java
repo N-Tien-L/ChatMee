@@ -83,10 +83,10 @@ class WsRateLimitInterceptorTest {
     void preSend_typingOrPresenceOverLimit_dropsFrameSilently() {
         when(limits.check(anyString(), anyInt(), anyLong())).thenReturn(DENIED);
 
-        assertThat(interceptor.preSend(frame(StompCommand.SEND, "/app/typing", "user-1", "{}"), channel)).isNull();
+        assertThat(interceptor.preSend(frame(StompCommand.SEND, "/app/rooms/room-1/typing", "user-1", "{}"), channel)).isNull();
         assertThat(interceptor.preSend(frame(StompCommand.SEND, "/app/presence", "user-1", "{}"), channel)).isNull();
 
-        verify(limits).check("ws:user-1:/app/typing", 10, 5);
+        verify(limits).check("ws:user-1:/app/rooms/*/typing", 10, 5);
         verify(limits).check("ws:user-1:/app/presence", 20, 60);
         verifyNoInteractions(messagingProvider, messaging);
     }

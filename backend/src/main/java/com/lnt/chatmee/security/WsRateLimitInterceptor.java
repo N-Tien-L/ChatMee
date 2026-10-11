@@ -13,6 +13,7 @@ import org.springframework.messaging.simp.stomp.StompHeaderAccessor;
 import org.springframework.messaging.support.ChannelInterceptor;
 import org.springframework.messaging.support.MessageHeaderAccessor;
 import org.springframework.stereotype.Component;
+import org.springframework.util.AntPathMatcher;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -33,6 +34,7 @@ import lombok.RequiredArgsConstructor;
 public class WsRateLimitInterceptor implements ChannelInterceptor {
 
     static final String CHAT_DESTINATION = "/app/chat.sendMessage";
+    private static final AntPathMatcher PATH_MATCHER = new AntPathMatcher();
 
     record Limit(int maxFrames, long windowSeconds) {}
 
@@ -40,7 +42,7 @@ public class WsRateLimitInterceptor implements ChannelInterceptor {
     // presence is sent on connect and every 30 s per tab.
     static final Map<String, Limit> LIMITS = Map.of(
             CHAT_DESTINATION, new Limit(10, 5),
-            "/app/typing", new Limit(10, 5),
+            AuthChannelInterceptor.TYPING_DESTINATION_PATTERN, new Limit(10, 5),
             "/app/presence", new Limit(20, 60));
 
     private final RateLimitingService rateLimitingService;
@@ -55,14 +57,18 @@ public class WsRateLimitInterceptor implements ChannelInterceptor {
             return message;
         }
         String destination = accessor.getDestination();
-        Limit limit = destination == null ? null : LIMITS.get(destination);
+        // All rooms share one typing bucket per user, so the route (not the concrete room) is the limit key.
+        String route = destination != null && PATH_MATCHER.match(AuthChannelInterceptor.TYPING_DESTINATION_PATTERN, destination)
+                ? AuthChannelInterceptor.TYPING_DESTINATION_PATTERN
+                : destination;
+        Limit limit = route == null ? null : LIMITS.get(route);
         Principal user = accessor.getUser();
         if (limit == null || user == null || user.getName() == null) {
             // Unknown destinations and anonymous frames are rejected by AuthChannelInterceptor.
             return message;
         }
         RateLimitingService.Decision decision = rateLimitingService.check(
-                "ws:" + user.getName() + ":" + destination, limit.maxFrames(), limit.windowSeconds());
+                "ws:" + user.getName() + ":" + route, limit.maxFrames(), limit.windowSeconds());
         if (decision.allowed()) {
             return message;
         }

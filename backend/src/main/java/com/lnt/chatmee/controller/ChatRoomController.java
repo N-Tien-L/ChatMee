@@ -83,14 +83,14 @@ public class ChatRoomController {
 
     @Operation(summary = "Join a public room as the caller")
     @PostMapping("/{roomId}/members/me")
-    public ResponseEntity<ApiResponse<String>> joinChatRoom(
+    public ResponseEntity<Void> joinChatRoom(
             @CurrentUser UserPrincipal user,
             @PathVariable String roomId) {
 
         // Join the room as the authenticated user
         participantService.joinRoom(roomId, user.userId());
 
-        return ResponseEntity.ok(ApiResponse.success("Successfully joined the chat room"));
+        return ResponseEntity.noContent().build();
     }
 
     @Operation(summary = "Add a participant (owner or admin only)")

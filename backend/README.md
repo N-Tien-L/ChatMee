@@ -54,7 +54,7 @@
     - `/app/chat.sendMessage`: Send a message.
     - `/app/chat.addUser`: Join a room (announce).
     - `/app/presence`: Update presence status.
-    - `/app/typing`: Send typing status.
+    - `/app/rooms/{roomId}/typing`: Send typing status.
 
 ## Error Handling
 Standard HTTP status codes are used:

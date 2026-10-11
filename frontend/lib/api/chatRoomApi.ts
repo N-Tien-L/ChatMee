@@ -64,11 +64,10 @@ export const chatRoomApi = {
         }
     },
 
-    // join chat room by ID
-    joinChatRoom: async (roomId: string): Promise<ApiResponse<string>> => {
+    // join chat room by ID (204 No Content; a resolved promise means the caller joined)
+    joinChatRoom: async (roomId: string): Promise<void> => {
         try {
-            const response = await apiClient.post<ApiResponse<string>>(`/api/v1/rooms/${roomId}/members/me`)
-            return response.data;
+            await apiClient.post(`/api/v1/rooms/${roomId}/members/me`)
         } catch (error) {
             console.error(`Error joining chat room with ID ${roomId}: `, error)
             throw error

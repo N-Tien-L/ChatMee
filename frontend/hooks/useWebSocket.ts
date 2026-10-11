@@ -57,7 +57,7 @@ export const useWebSocket = () => {
     );
 
     const sendTyping = useCallback(
-        (roomId: string, typing: boolean) => session.publish("/app/typing", { roomId, typing }),
+        (roomId: string, typing: boolean) => session.publish(`/app/rooms/${roomId}/typing`, { typing }),
         [session]
     );
 

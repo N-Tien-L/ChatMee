@@ -40,7 +40,7 @@ All payloads below are JSON. Directions are relative to the client.
 | Destination | Direction / command | Payload | Authorization | Error behavior |
 |---|---|---|---|---|
 | `/app/chat.sendMessage` | Client to server / SEND | `{roomId, content, messageType: "TEXT", tempId?}` | Authenticated Principal; member of payload room; at most 10 frames per 5 s per user; only `TEXT` is accepted (SYSTEM messages are server-generated) | Validation, membership, and synchronous processing errors go to the Principal's `/user/queue/errors`; validation/membership rejection prevents publication and persistence |
-| `/app/typing` | Client to server / SEND | `{roomId, typing}`; legacy `userId` is ignored | Authenticated Principal; member of payload room | Nonmembers and missing/blank room IDs are dropped without a broadcast |
+| `/app/rooms/{roomId}/typing` | Client to server / SEND | `{typing}`; roomId comes from the path, any `userId` is ignored | Authenticated Principal; member of payload room | Nonmembers and missing/blank room IDs are dropped without a broadcast |
 | `/app/presence` | Client to server / SEND | `{online}`; legacy `userId` is ignored | Any authenticated Principal; heartbeat for its known session only | Missing Principal is rejected by the interceptor; `online` and `userId` are ignored |
 | `/topic/rooms/{roomId}` | Server to client / SUBSCRIBE | `ChatMessageResponse`: server message ID, optional tempId, chatRoomId, senderId, senderName, content, type, timestamps, update/delete flags | Member of the exact room | Unauthorized SUBSCRIBE receives STOMP ERROR and connection closure |
 | `/topic/rooms/{roomId}/typing` | Server to client / SUBSCRIBE | `{roomId, userId, typing}`; server supplies userId | Member of the exact room | Unauthorized SUBSCRIBE receives STOMP ERROR and connection closure |
@@ -176,7 +176,7 @@ user and destination in Redis, using the same fixed-window `RateLimitingService`
 | Destination | Limit | Over the limit |
 |---|---|---|
 | `/app/chat.sendMessage` | 10 per 5 s | Frame dropped; private `{tempId, code: "RATE_LIMITED", message}` error |
-| `/app/typing` | 10 per 5 s | Frame dropped silently |
+| `/app/rooms/{roomId}/typing` | 10 per 5 s per user, shared across rooms | Frame dropped silently |
 | `/app/presence` | 20 per 60 s | Frame dropped silently |
 
 Frames are dropped, not rejected with an exception, because an exception would close
