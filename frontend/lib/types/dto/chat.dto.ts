@@ -64,6 +64,14 @@ export interface MessageResponse {
     isDeleted: boolean;
 }
 
+/** One page of GET /api/v1/rooms/{roomId}/messages (CM-044), oldest message first. */
+export interface MessagePageResponse {
+    messages: MessageResponse[];
+    /** Opaque cursor of the oldest message of this page; pass it as `before`. Null when there is nothing older. */
+    nextCursor: string | null;
+    hasMore: boolean;
+}
+
 /** Public metadata of a joinable room from GET /api/v1/rooms/discover (no participants). */
 export interface PublicRoomSummary {
     id: string;

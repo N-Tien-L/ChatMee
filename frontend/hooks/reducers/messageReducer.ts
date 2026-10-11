@@ -5,6 +5,10 @@ export type MessageState = {
     messages: Message[];
     loading: boolean;
     hasMoreMessages: boolean;
+    /** Cursor of the oldest loaded page (CM-044); the next older page is requested with before = nextCursor. */
+    nextCursor: string | null;
+    loadingOlder: boolean;
+    olderError: string | null;
     error: string | null;
     sending: boolean;
 }
@@ -12,8 +16,11 @@ export type MessageState = {
 export type MessageAction =
     | { type: "RESET" }
     | { type: "FETCH_START" }
-    | { type: "FETCH_SUCCESS"; payload: { messages: MessageResponse[]; hasMore: boolean; userId?: string } }
+    | { type: "FETCH_SUCCESS"; payload: { messages: MessageResponse[]; hasMore: boolean; nextCursor?: string | null; userId?: string } }
     | { type: "FETCH_ERROR"; payload: string }
+    | { type: "LOAD_OLDER_START" }
+    | { type: "LOAD_OLDER_SUCCESS"; payload: { messages: MessageResponse[]; hasMore: boolean; nextCursor: string | null; userId?: string } }
+    | { type: "LOAD_OLDER_ERROR"; payload: string }
     | { type: "ADD_OPTIMISTIC_MESSAGE"; payload: Message }
     | { type: "CONFIRM_SENT_MESSAGE"; payload: Message }
     | { type: "FAIL_SENT_MESSAGE"; payload: { tempId: string; error: string; code?: string } }
@@ -26,6 +33,9 @@ export const initialState: MessageState = {
     messages: [],
     loading: false,
     hasMoreMessages: false,
+    nextCursor: null,
+    loadingOlder: false,
+    olderError: null,
     error: null,
     sending: false
 }
@@ -46,12 +56,31 @@ export function messageReducer(state: MessageState, action: MessageAction): Mess
                 loading: false,
                 error: null,
                 messages: mergeResyncedMessages(state.messages, action.payload.messages, action.payload.userId),
-                hasMoreMessages: action.payload.hasMore
+                hasMoreMessages: action.payload.hasMore,
+                nextCursor: action.payload.nextCursor ?? null
             }
 
         case "FETCH_ERROR":
             // Keep what is on screen; the list shows the error and a Retry next to it.
-            return { ...state, loading: false, error: action.payload, hasMoreMessages: false }
+            return { ...state, loading: false, error: action.payload, hasMoreMessages: false, nextCursor: null }
+
+        case "LOAD_OLDER_START":
+            return { ...state, loadingOlder: true, olderError: null }
+
+        case "LOAD_OLDER_SUCCESS":
+            // Older messages are prepended through the same merge by id, so a page never duplicates one.
+            return {
+                ...state,
+                loadingOlder: false,
+                olderError: null,
+                messages: mergeResyncedMessages(state.messages, action.payload.messages, action.payload.userId),
+                hasMoreMessages: action.payload.hasMore && action.payload.nextCursor !== null,
+                nextCursor: action.payload.nextCursor,
+            }
+
+        case "LOAD_OLDER_ERROR":
+            // The cursor is kept, so Retry requests the same page again.
+            return { ...state, loadingOlder: false, olderError: action.payload }
 
         case "ADD_OPTIMISTIC_MESSAGE":
             return {
@@ -119,6 +148,7 @@ export function messageReducer(state: MessageState, action: MessageAction): Mess
         }
 
         case "RESYNC":
+            // Only the newest page is refetched: older pages and the cursor to page further back stay.
             return {
                 ...state,
                 loading: false,

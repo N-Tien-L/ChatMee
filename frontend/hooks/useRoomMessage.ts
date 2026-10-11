@@ -16,8 +16,11 @@ import { initialState, messageReducer } from "./reducers/messageReducer";
 // Cache messages per room for current session
 const sessionCache = new Map<
     string,
-    { messages: MessageResponse[]; hasMoreMessages: boolean; lastLoaded: number }
+    { messages: MessageResponse[]; hasMoreMessages: boolean; nextCursor: string | null; lastLoaded: number }
 >();
+
+/** Where loadOlder continues for the open room; replaced on every room change. */
+type Paging = { roomId: string; nextCursor: string | null; hasMore: boolean; inFlight: boolean };
 
 const ROOM_DELETED_CONTENT = "This room has been deleted";
 
@@ -28,6 +31,9 @@ const isRoomDeletedEvent = (message: Message) =>
 function isApiError(err: unknown): err is { response?: { data?: { detail?: string } }, message?: string } {
     return typeof err === "object" && err !== null;
 }
+
+const errorText = (err: unknown, fallback: string) =>
+    (isApiError(err) && (err.response?.data?.detail || err.message)) || fallback;
 
 interface RoomMessagesOptions {
     onRoomDeleted?: () => void;
@@ -53,9 +59,14 @@ export const useRoomMessages = (roomId: string, options: RoomMessagesOptions = {
         pendingTimers.current.delete(tempId);
     }, []);
 
+    // Kept outside the reducer so two scroll events before the next render cannot send the same
+    // cursor twice, and so a page that arrives after a room switch is recognised and ignored.
+    const pagingRef = useRef<Paging>({ roomId, nextCursor: null, hasMore: false, inFlight: false });
+
     useEffect(() => {
         // History loads merge into what is on screen, so a new room must start empty.
         dispatch({ type: "RESET" });
+        pagingRef.current = { roomId, nextCursor: null, hasMore: false, inFlight: false };
         const timers = pendingTimers.current;
         return () => {
             timers.forEach(clearTimeout);
@@ -72,40 +83,50 @@ export const useRoomMessages = (roomId: string, options: RoomMessagesOptions = {
         getLastReconnectAt,
     } = useWebSocket();
 
-    // Effect for loading 50 most recent messages (from cache or API)
+    // Effect for loading the newest page (from cache or API)
     useEffect(() => {
         let active = true;
         const loadMessages = async () => {
             if (!roomId) return;
+            const paging = pagingRef.current;
 
             // A cache filled before the last reconnect may miss messages sent while disconnected.
             const cached = sessionCache.get(roomId);
             if (cached && cached.lastLoaded >= getLastReconnectAt()) {
+                paging.nextCursor = cached.nextCursor;
+                paging.hasMore = cached.hasMoreMessages;
                 dispatch({
                     type: "FETCH_SUCCESS",
-                    payload: { messages: cached.messages, hasMore: cached.hasMoreMessages, userId: user?.id }
+                    payload: {
+                        messages: cached.messages,
+                        hasMore: cached.hasMoreMessages,
+                        nextCursor: cached.nextCursor,
+                        userId: user?.id,
+                    }
                 })
                 return;
             }
 
             dispatch({ type: "FETCH_START" });
             try {
-                const res = await messageApi.get50RecentMessages(roomId);
+                const res = await messageApi.getMessages(roomId);
                 if (!active) return;
                 if (!res.success) throw new Error(res.message || "Failed to load messages");
 
-                const data = Array.isArray(res.data) ? res.data : [];
-                const unique = deduplicateMessages(data).reverse();
-                const hasMore = data.length === 50;
-                dispatch({ type: "FETCH_SUCCESS", payload: { messages: unique, hasMore, userId: user?.id } });
-                sessionCache.set(roomId, { messages: unique, hasMoreMessages: hasMore, lastLoaded: Date.now() });
+                const unique = deduplicateMessages(res.data?.messages ?? []);
+                const nextCursor = res.data?.nextCursor ?? null;
+                const hasMore = !!res.data?.hasMore && nextCursor !== null;
+                paging.nextCursor = nextCursor;
+                paging.hasMore = hasMore;
+                dispatch({ type: "FETCH_SUCCESS", payload: { messages: unique, hasMore, nextCursor, userId: user?.id } });
+                sessionCache.set(roomId, {
+                    messages: unique, hasMoreMessages: hasMore, nextCursor, lastLoaded: Date.now(),
+                });
             } catch (err: unknown) {
                 if (!active) return;
-                let msg = "Failed to load messages";
-                if (isApiError(err)) {
-                    msg = err?.response?.data?.detail || err.message || "Failed to load messages";
-                }
-                dispatch({ type: "FETCH_ERROR", payload: msg });
+                paging.nextCursor = null;
+                paging.hasMore = false;
+                dispatch({ type: "FETCH_ERROR", payload: errorText(err, "Failed to load messages") });
             }
         };
 
@@ -118,16 +139,54 @@ export const useRoomMessages = (roomId: string, options: RoomMessagesOptions = {
     /** Retries the initial history load after a failure. */
     const reload = useCallback(() => setReloadCount((count) => count + 1), []);
 
-    // Resync after a reconnect: refetch the latest page and merge it by message id.
+    /**
+     * Loads the page before the oldest loaded message (scroll to top, or Retry after a failure).
+     * At most one request per room is in flight; a page for a room that is no longer open is dropped.
+     */
+    const loadOlder = useCallback(async () => {
+        const paging = pagingRef.current;
+        if (paging.roomId !== roomId || paging.inFlight || !paging.hasMore || !paging.nextCursor) return;
+        paging.inFlight = true;
+        dispatch({ type: "LOAD_OLDER_START" });
+        try {
+            const res = await messageApi.getMessages(roomId, { before: paging.nextCursor });
+            if (pagingRef.current !== paging) return;
+            if (!res.success || !res.data) throw new Error(res.message || "Failed to load older messages");
+
+            const older = deduplicateMessages(res.data.messages ?? []);
+            const nextCursor = res.data.nextCursor ?? null;
+            const hasMore = res.data.hasMore && nextCursor !== null;
+            paging.nextCursor = nextCursor;
+            paging.hasMore = hasMore;
+            dispatch({ type: "LOAD_OLDER_SUCCESS", payload: { messages: older, hasMore, nextCursor, userId: user?.id } });
+            const cached = sessionCache.get(roomId);
+            if (cached) {
+                sessionCache.set(roomId, {
+                    ...cached,
+                    messages: mergeResyncedMessages(cached.messages, older),
+                    hasMoreMessages: hasMore,
+                    nextCursor,
+                });
+            }
+        } catch (err: unknown) {
+            if (pagingRef.current !== paging) return;
+            dispatch({ type: "LOAD_OLDER_ERROR", payload: errorText(err, "Failed to load older messages") });
+        } finally {
+            paging.inFlight = false;
+        }
+    }, [roomId, user?.id]);
+
+    // Resync after a reconnect: refetch the newest page and merge it by message id. Older pages
+    // already on screen are kept, and so is the cursor to page further back.
     useEffect(() => {
         if (!roomId) return;
         let active = true;
         const removeListener = onReconnect(() => {
             void (async () => {
                 try {
-                    const res = await messageApi.get50RecentMessages(roomId);
-                    if (!active || !res.success || !Array.isArray(res.data)) return;
-                    const latest = deduplicateMessages(res.data).reverse();
+                    const res = await messageApi.getMessages(roomId);
+                    if (!active || !res.success || !Array.isArray(res.data?.messages)) return;
+                    const latest = deduplicateMessages(res.data.messages);
                     // Pending messages saved while the confirmation was lost are confirmed, not failed.
                     matchResyncedPending(messagesRef.current, latest, user?.id)
                         .forEach((_, tempId) => clearPendingTimer(tempId));
@@ -135,7 +194,8 @@ export const useRoomMessages = (roomId: string, options: RoomMessagesOptions = {
                     const cached = sessionCache.get(roomId);
                     sessionCache.set(roomId, {
                         messages: mergeResyncedMessages(cached?.messages ?? [], latest),
-                        hasMoreMessages: cached?.hasMoreMessages ?? latest.length === 50,
+                        hasMoreMessages: cached ? cached.hasMoreMessages : res.data.hasMore && res.data.nextCursor !== null,
+                        nextCursor: cached ? cached.nextCursor : res.data.nextCursor ?? null,
                         lastLoaded: Date.now(),
                     });
                 } catch {
@@ -270,5 +330,6 @@ export const useRoomMessages = (roomId: string, options: RoomMessagesOptions = {
         resendMessage,
         discardMessage,
         reload,
+        loadOlder,
     };
 };

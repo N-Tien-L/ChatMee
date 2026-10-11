@@ -53,9 +53,13 @@ const ChatRoomView: React.FC<ChatInterfaceProps> = ({
     resendMessage,
     discardMessage,
     reload,
+    loadOlder,
     loading,
     error,
     sending,
+    hasMoreMessages,
+    loadingOlder,
+    olderError,
   } = useRoomMessages(roomId, { onRoomDeleted: handleRoomDeleted });
   const [newMessage, setNewMessage] = useState("");
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -178,7 +182,8 @@ const ChatRoomView: React.FC<ChatInterfaceProps> = ({
         onToggleSidebar={onToggleSidebar}
       />
 
-      <div className="flex-1 min-h-0 overflow-y-auto">
+      {/* MessageList owns the scroll container (load older on scroll to top, CM-044). */}
+      <div className="flex-1 min-h-0">
         <MessageList
           messages={messages}
           onlineUsers={onlineUsers}
@@ -191,6 +196,10 @@ const ChatRoomView: React.FC<ChatInterfaceProps> = ({
           onResend={resendMessage}
           onDiscard={discardMessage}
           canResend={connected}
+          hasMore={hasMoreMessages}
+          loadingOlder={loadingOlder}
+          olderError={olderError}
+          onLoadOlder={loadOlder}
         />
       </div>
 
