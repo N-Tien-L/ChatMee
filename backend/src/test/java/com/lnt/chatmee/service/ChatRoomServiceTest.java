@@ -12,6 +12,7 @@ import com.lnt.chatmee.exception.InvalidRequestException;
 import com.lnt.chatmee.exception.ErrorCode;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
+import com.lnt.chatmee.security.RoomSubscriptionInterceptor;
 import com.lnt.chatmee.model.ChatRoom;
 import com.lnt.chatmee.model.Message;
 import com.lnt.chatmee.model.Participant;
@@ -315,13 +316,23 @@ class ChatRoomServiceTest {
         when(chatRoomRepository.findByIdAndIsActiveTrue("room1")).thenReturn(Optional.of(room));
         when(chatRoomRepository.softDelete(eq("room1"), any())).thenReturn(1L);
         when(participantService.removeAllParticipants("room1")).thenReturn(3L);
+        when(participantService.getParticipantUserIds("room1")).thenReturn(Set.of("user1", "user2", "user3"));
 
         chatRoomService.deleteChatRoomById("user1", "room1");
 
         verify(chatRoomRepository, never()).delete(any());
         verify(participantService).removeAllParticipants("room1");
         ArgumentCaptor<ChatMessageResponse> event = ArgumentCaptor.forClass(ChatMessageResponse.class);
-        verify(messagingTemplate).convertAndSend(eq("/topic/rooms/room1"), event.capture());
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<Map<String, Object>> headers = ArgumentCaptor.forClass(Map.class);
+        var order = inOrder(participantService, chatRoomRepository, messagingTemplate);
+        order.verify(participantService).getParticipantUserIds("room1");
+        order.verify(chatRoomRepository).softDelete(eq("room1"), any());
+        order.verify(participantService).removeAllParticipants("room1");
+        order.verify(messagingTemplate).convertAndSend(eq("/topic/rooms/room1"), event.capture(), headers.capture());
+        assertThat(headers.getValue().get(RoomSubscriptionInterceptor.ROOM_DELETED_RECIPIENTS_HEADER))
+                .isEqualTo(Set.of("user1", "user2", "user3"));
+        assertThat(headers.getValue()).doesNotContainKey("nativeHeaders");
         assertThat(event.getValue().type()).isEqualTo(Message.MessageType.SYSTEM);
         assertThat(event.getValue().content()).isEqualTo(ChatRoomService.ROOM_DELETED_MESSAGE);
         assertThat(event.getValue().chatRoomId()).isEqualTo("room1");

@@ -50,10 +50,15 @@ nearly full room may answer `ROOM_FULL` instead of `ALREADY_PARTICIPANT` for a d
 ## Soft delete
 
 `DELETE /api/v1/rooms/{roomId}` (creator only) calls `softDelete`, removes every
-participant row of the room (blocking new REST and STOMP access through the normal
-membership checks; existing broker subscriptions await CM-058), and broadcasts a SYSTEM message to `/topic/rooms/{roomId}`
+participant row of the room (blocking new REST/STOMP access and ordinary delivery to
+existing room/typing subscriptions through the live CM-058 outbound guard), and broadcasts a SYSTEM message to `/topic/rooms/{roomId}`
 (`docs/design/websocket-protocol.md`). Inactive rooms are invisible to every read and
 cannot be joined. Messages of deleted rooms are kept.
+Before `softDelete`, member IDs are snapshotted only for this terminal event's
+internal delivery audience, so its subscribed recipients still receive it after
+cleanup. This does not authorize subsequent ordinary frames. The snapshot follows
+the existing nontransactional lifecycle; see the protocol's concurrency and
+multi-instance delivery limits.
 
 ## Timestamps
 
@@ -96,4 +101,10 @@ role assignment checks and atomic capacity reservation/compensation remain in
 row. STOMP room SUBSCRIBE/SEND authorization, typing, message sending,
 and REST message history all use this guard. A join that inserts after soft-delete
 cleanup may still leave an orphan row, but it cannot grant access to the inactive room.
-Already established broker subscriptions are not revoked by this check (F6, CM-058).
+CM-058 applies the same guard immediately before every ordinary outbound room/typing
+delivery, including already established subscriptions. No membership cache is used;
+a removal or soft-delete in shared MongoDB blocks the next check on any instance.
+Only the server-marked room-deleted event uses its pre-delete member snapshot.
+Other subscriptions and the STOMP connection remain usable; already accepted
+transport frames cannot be recalled. See `websocket-protocol.md` for the instance-local
+room-event fan-out limitation and the per-recipient database-read cost.

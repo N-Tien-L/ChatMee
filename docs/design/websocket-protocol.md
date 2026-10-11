@@ -93,10 +93,61 @@ is marked inactive and its memberships are removed, the server broadcasts one
 `ChatMessageResponse` to the existing `/topic/rooms/{roomId}` destination with
 `type = SYSTEM`, no `id`/`tempId`, `senderId` = the deleting creator and
 `content = "This room has been deleted"`. No new destination is introduced.
-Because the memberships are gone, later SUBSCRIBE and SEND frames for that room are
-denied by the normal membership rule. The server does not revoke existing
-subscriptions; since CM-045 the client removes the room from its list when it
-receives this event, which unmounts the room view and unsubscribes its topics.
+Before marking the room inactive, the server snapshots its member user IDs. Only
+this terminal broadcast carries that immutable audience in an internal Simp header
+(`chatmeeRoomDeletedRecipients`), which the simple broker copies to each recipient.
+The header is never a native STOMP header or part of the JSON/client protocol.
+This lets the event reach those members' existing subscriptions even though the
+room is now inactive and its membership rows have been removed. A subscriber who
+left before the snapshot receives no event. Concurrent membership changes follow
+the existing nontransactional room lifecycle: the snapshot defines this event's
+audience; subscriptions must still exist when the broker processes the broadcast.
+
+Later SUBSCRIBE and SEND frames are denied by the normal membership rule, and
+ordinary outbound room/typing frames are dropped server-side (CM-058). Since
+CM-045 the client also removes the room from its list on the SYSTEM event, which
+unmounts the room view and unsubscribes its topics.
+
+### Existing subscription revocation (CM-058)
+
+Option A is implemented by `RoomSubscriptionInterceptor` on `clientOutboundChannel`.
+It uses `ExecutorChannelInterceptor.beforeHandle`, so authorization happens after
+executor queuing, just before each transport handler receives a MESSAGE. Returning
+null drops only that recipient's frame; it sends no ERROR and closes no connection.
+Broker registrations stay until the client unsubscribes/disconnects. If a user
+later rejoins, the old subscription can receive frames again under the live guard.
+
+Authenticated `SessionConnectedEvent` and `SessionDisconnectEvent` maintain an
+instance-local session-ID to internal-user-ID map. The receiver comes from the
+outbound `simpSessionId`, never a sender Principal or payload. Missing receiver
+identity, malformed room topics and membership database errors fail closed.
+Presence, private error queues, heartbeats and other control frames pass through.
+
+Every ordinary MESSAGE for `/topic/rooms/{roomId}` or its `/typing` topic calls
+`ParticipantService.isUserParticipant`, requiring an active room and a membership
+row. There is **no membership cache** (cache staleness bound: zero), so leaving
+blocks the next delivery check on every open session without eviction hooks.
+Messages waiting in the outbound executor are checked when handled. Frames already
+accepted by the WebSocket transport before a concurrent leave/delete cannot be
+recalled from its buffers or the network.
+
+**Multiple instances:** a REST leave/delete on instance A changes shared MongoDB;
+instance B's next outbound check reads that change directly, assuming the existing
+primary-read configuration. No Redis revocation fan-out or TTL is needed. Database
+unavailability drops room frames rather than extending an old grant. The cost is
+up to two Mongo reads per recipient/frame; load measurements are a follow-up before
+introducing any positive membership cache and its explicit staleness tradeoff.
+
+The existing simple broker and room-deleted broadcast are instance-local; CM-043
+fans out presence, not room messages. This change revokes delivery on remote socket
+instances but does not introduce distributed room-event delivery. Reliable room
+and terminal-event fan-out across instances remains a separate follow-up.
+
+Spring contracts covered by the new tests (execution pending): the actual executor channel invokes
+`beforeHandle` at handler time; the wire integration tests obtain receiving identity
+from real connection events and preserve the internal deletion audience through
+the real broker without changing the client payload. Execution is delegated to
+the orchestrator's `./mvnw verify` gate for this ticket.
 
 ## Client (CM-045)
 
@@ -211,6 +262,13 @@ topic names are retained for compatibility.
 - `PresenceWebSocketControllerTest`: online/offline flags cannot change presence,
   forged/omitted identity refreshes only the Principal session, and missing Principal.
 - `PresenceRestControllerTest`: offline POST mapping removed and online GET kept.
+- `SubscriptionRevocationIT`: REST leave/delete with live STOMP subscribers,
+  two sessions per member, deletion SYSTEM event followed by silence, unaffected
+  members/rooms/presence/private errors, and shared-database removal without a
+  local invalidation hook (CM-058; orchestrator verification pending).
+- `RoomSubscriptionInterceptorTest`: receiver identity, every-frame authorization,
+  session cleanup, database failure, server-only deletion exception and queued-frame
+  filtering through an actual `ExecutorSubscribableChannel` (CM-058).
 
 CM-029 regression coverage:
 - `ChatWebSocketControllerAuthTest`: Mockito InOrder proves save before broadcast,
