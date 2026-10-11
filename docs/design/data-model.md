@@ -8,9 +8,52 @@ Status: Implemented (CM-028). Decision record: ADR-0005.
 |---|---|---|---|
 | `chat_rooms` | `ChatRoom` | `type`, `name`, `createdBy`, `maxParticipants` (`<= 0` = unlimited), `memberCount`, `isActive`, `deletedAt`, `createdAt` (auditing), `lastActivity`, `settings` | `_id` |
 | `participants` | `Participant` | `chatRoomId`, `userId`, `role` (OWNER, ADMIN, MEMBER), `joinedAt` / `updatedAt` (auditing) | unique `(chatRoomId, userId)`, `userId` |
+| `messages` | `Message` | `chatRoomId`, `senderId`, `createdAt`, `isDeleted` | `_id`; `messages_room_created_id`: `(chatRoomId ASC, createdAt DESC, _id DESC)` (CM-044) |
 
 `spring.data.mongodb.auto-index-creation=true` (base `application.properties`) makes
 Spring Data create the declared indexes at startup in every profile.
+
+## Message history cursor (CM-044)
+
+`Message` declares the nonunique compound index
+`{chatRoomId: 1, createdAt: -1, _id: -1}` with `@CompoundIndex`, following the same
+automatic startup creation pattern as participant indexes. History queries always
+restrict `chatRoomId` and `isDeleted = false`, order by `createdAt DESC, _id DESC`,
+and fetch `limit + 1` rows. A cursor applies the strict boundary
+`createdAt < cursorTime OR (createdAt = cursorTime AND _id < cursorId)` within the
+same room and deletion filter. The ID tie-break includes messages sharing the
+same stored millisecond timestamp.
+The tie comparison uses an aggregation `$expr` with a literal, correctly typed
+ID boundary so it follows the same BSON ordering as the index. The existing
+`String @Id` mapping stores valid 24-hex IDs as ObjectIds and other IDs as strings;
+a plain query `$lt` would type-bracket its operand and could skip string IDs at
+a timestamp shared with ObjectIds. No message fields or storage types change.
+
+`GET /api/v1/rooms/{roomId}/messages?before=<cursor>&limit=<n>` returns
+`ApiResponse<MessagePageResponse>` with `messages` oldest first, `nextCursor`, and
+`hasMore`. The extra row is omitted; it only determines whether an older page
+exists. `nextCursor` identifies the oldest included message and is null when no
+older rows exist; `hasMore` is exactly `nextCursor != null`. Empty pages use
+`messages = []`, `nextCursor = null`, `hasMore = false`. Nonpositive limits use 50;
+positive limits are capped at 100. The response changes from the previous bare
+list; the frontend switches in the coordinated CM-044 wave.
+
+Clients treat cursors as opaque. `MessageCursor` encodes unpadded base64url of
+`<createdAt epoch millis>:<message id>` and rejects malformed/noncanonical values.
+The boundary uses stored BSON Date millisecond precision, not pre-save Instant
+nanoseconds. Missing `before` selects the newest page; supplied empty/invalid
+`before` returns a 400 `VALIDATION_FAILED` ProblemDetail through the history
+controller's local validation handler. Caller-account, room existence and active
+membership checks retain their existing 404/403 behavior and run before cursor
+processing. Sender IDs in the returned page are deduplicated for one batched
+`UserRepository.findAllById` lookup; empty pages need none. Missing sender accounts
+or names retain `Unknown User`; the extra row does not trigger a sender lookup.
+
+There is no `after=` catch-up parameter. Reconnect continues to refetch the newest
+page and merge by message ID (CM-045). Repository integration tests cover timestamp
+ties across page sizes, soft-deleted/other-room exclusion, string/ObjectId/mixed ID
+mapping and automatic compound-index creation. Execution of the CM-044 tests is
+delegated to the orchestrator's Maven verification gate.
 
 ## Membership invariants
 

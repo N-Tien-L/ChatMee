@@ -1,6 +1,11 @@
 package com.lnt.chatmee.service;
 
 import java.util.List;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import java.time.Instant;
 import com.lnt.chatmee.dto.request.ChatMessageRequest;
@@ -8,9 +13,11 @@ import com.lnt.chatmee.exception.UserNotFoundException;
 import java.util.stream.Collectors;
 
 import org.springframework.dao.DataAccessException;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 
 import com.lnt.chatmee.dto.response.ChatMessageResponse;
+import com.lnt.chatmee.dto.response.MessagePageResponse;
 import com.lnt.chatmee.exception.ChatRoomNotFoundException;
 import com.lnt.chatmee.exception.DatabaseOperationException;
 import com.lnt.chatmee.exception.ForbiddenActionException;
@@ -52,6 +59,10 @@ public class MessageService {
     }
 
     public List<ChatMessageResponse> getRecentMessages(String roomId, String userId) {
+        return getMessages(roomId, userId, null, 50).messages();
+    }
+
+    public MessagePageResponse getMessages(String roomId, String userId, String before, int limit) {
         userRepository.findById(userId)
                 .orElseThrow(() -> new UserNotFoundException("Authenticated user not found"));
         if(!chatRoomRepository.existsById(roomId)) {
@@ -62,21 +73,36 @@ public class MessageService {
             throw new ForbiddenActionException("You are not a participant of this room");
         }
 
+        MessageCursor cursor = MessageCursor.decode(before);
+        int pageSize = limit <= 0 ? 50 : Math.min(limit, 100);
+        PageRequest request = PageRequest.of(0, pageSize + 1);
         try {
-            List<Message> messages = messageRepository.findTop50ByChatRoomIdAndIsDeletedFalseOrderByCreatedAtDesc(roomId);
-            return messages.stream().map(this::convertToResponse).collect((Collectors.toList()));
+            List<Message> rows = cursor == null
+                    ? messageRepository.findPage(roomId, request)
+                    : messageRepository.findPageBefore(roomId, cursor.createdAt(), cursor.messageId(), request);
+            boolean hasMore = rows.size() > pageSize;
+            List<Message> page = new ArrayList<>(rows.subList(0, Math.min(pageSize, rows.size())));
+            Collections.reverse(page);
+
+            Map<String, String> senderNames = new HashMap<>();
+            if (!page.isEmpty()) {
+                Set<String> senderIds = page.stream().map(Message::getSenderId).collect(Collectors.toSet());
+                userRepository.findAllById(senderIds).forEach(user -> {
+                    if (user.getName() != null) {
+                        senderNames.put(user.getId(), user.getName());
+                    }
+                });
+            }
+            List<ChatMessageResponse> messages = page.stream()
+                    .map(message -> ChatMessageResponse.from(message,
+                            senderNames.getOrDefault(message.getSenderId(), "Unknown User"), null))
+                    .toList();
+            String nextCursor = hasMore
+                    ? new MessageCursor(page.get(0).getCreatedAt(), page.get(0).getId()).encode() : null;
+            return new MessagePageResponse(messages, nextCursor, hasMore);
         } catch (DataAccessException e) {
             throw new DatabaseOperationException("Failed to fetch messages", e);
         }
-    }
-
-    private ChatMessageResponse convertToResponse(Message message) {
-        // Get sender name
-        String senderName = userRepository.findById(message.getSenderId())
-            .map(User::getName)
-            .orElse("Unknown User");
-
-        return ChatMessageResponse.from(message, senderName, null);
     }
 
     /** Persist synchronously; callers may broadcast only the returned saved message. */
