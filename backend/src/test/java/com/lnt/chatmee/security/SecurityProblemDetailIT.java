@@ -55,8 +55,20 @@ class SecurityProblemDetailIT {
         } finally { filters.remove(denial); }
     }
 
+    // Spring Security 7 favours relative URIs; the browser entry point keeps the Boot 3 absolute Location.
     @Test
     void login_anonymousBrowserRequest_keepsRedirect() throws Exception {
-        mvc.perform(get("/login/private")).andExpect(status().is3xxRedirection());
+        mvc.perform(get("/login/private")).andExpect(status().is3xxRedirection())
+                .andExpect(header().string("Location", "http://localhost/login"));
+    }
+
+    // Jackson 3 sorts properties alphabetically by default; spring.jackson.mapper.sort-properties-alphabetically=false
+    // keeps the Boot 3 ProblemDetail key order.
+    @Test
+    void api_anonymousRequest_keepsProblemPropertyOrder() throws Exception {
+        mvc.perform(get("/api/v1/users")).andExpect(status().isUnauthorized())
+                .andExpect(content().string("{\"type\":\"urn:chatmee:error:unauthenticated\",\"title\":\"Unauthorized\","
+                        + "\"status\":401,\"detail\":\"Authentication required\",\"instance\":\"/api/v1/users\","
+                        + "\"code\":\"UNAUTHENTICATED\",\"errors\":[]}"));
     }
 }

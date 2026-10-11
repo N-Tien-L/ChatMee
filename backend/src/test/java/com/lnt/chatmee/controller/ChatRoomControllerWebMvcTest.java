@@ -88,6 +88,38 @@ class ChatRoomControllerWebMvcTest extends SecuredWebMvcTestSupport {
                 .andExpect(jsonPath("$.data.participants[0]").value("u1"));
     }
 
+    // Jackson 2 bound JSON null to false for primitive booleans; Boot 4 keeps that via
+    // spring.jackson.deserialization.fail-on-null-for-primitives=false (Jackson 3 default is to fail).
+    @Test
+    void createRoom_nullSettingFlags_bindsFalse() throws Exception {
+        when(chatRoomService.createRoom(any(), eq("u1"))).thenReturn(ChatRoomResponse.builder().id("room-1").build());
+
+        mvc.perform(post(CREATE).with(oauth2Login().oauth2User(com.lnt.chatmee.support.TestUsers.principal("u1"))).with(csrf().asHeader())
+                        .contentType(MediaType.APPLICATION_JSON).content("""
+                                {"roomType":"PUBLIC","roomName":"General","settings":{"allowFileSharing":null,
+                                 "allowGuestUsers":null,"moderationRequired":null,"welcomeMessage":"hi"}}"""))
+                .andExpect(status().isCreated());
+
+        var request = org.mockito.ArgumentCaptor.forClass(com.lnt.chatmee.dto.request.CreateChatRoomRequest.class);
+        org.mockito.Mockito.verify(chatRoomService).createRoom(request.capture(), eq("u1"));
+        ChatRoom.RoomSettings settings = request.getValue().getSettings();
+        org.assertj.core.api.Assertions.assertThat(settings.isAllowFileSharing()).isFalse();
+        org.assertj.core.api.Assertions.assertThat(settings.isAllowGuestUsers()).isFalse();
+        org.assertj.core.api.Assertions.assertThat(settings.isModerationRequired()).isFalse();
+        org.assertj.core.api.Assertions.assertThat(settings.getWelcomeMessage()).isEqualTo("hi");
+    }
+
+    // Jackson 2 ignored content after the first JSON value; kept via spring.jackson.deserialization.fail-on-trailing-tokens=false.
+    @Test
+    void createRoom_trailingContentAfterJson_isAccepted() throws Exception {
+        when(chatRoomService.createRoom(any(), eq("u1"))).thenReturn(ChatRoomResponse.builder().id("room-1").build());
+
+        mvc.perform(post(CREATE).with(oauth2Login().oauth2User(com.lnt.chatmee.support.TestUsers.principal("u1"))).with(csrf().asHeader())
+                        .contentType(MediaType.APPLICATION_JSON).content("{\"roomType\":\"PUBLIC\",\"roomName\":\"General\"} trailing"))
+                .andExpect(status().isCreated());
+        org.mockito.Mockito.verify(chatRoomService).createRoom(any(), eq("u1"));
+    }
+
     @Test
     void createRoom_missingTypeAndBadName_returns400ValidationProblem() throws Exception {
         expectProblem(mvc.perform(post(CREATE).with(oauth2Login().oauth2User(com.lnt.chatmee.support.TestUsers.principal("u1"))).with(csrf().asHeader())
@@ -137,6 +169,21 @@ class ChatRoomControllerWebMvcTest extends SecuredWebMvcTestSupport {
                 .thenThrow(new ChatRoomNotFoundException("Can't find chat room with id: room-1 or user is not a participant"));
 
         expectProblem(mvc.perform(get("/api/v1/rooms/room-1").with(oauth2Login().oauth2User(com.lnt.chatmee.support.TestUsers.principal("u1")))), 404, "ROOM_NOT_FOUND");
+    }
+
+    @Test
+    void updateRoom_nullSettingFlags_bindsFalse() throws Exception {
+        mvc.perform(put("/api/v1/rooms/room-1").with(oauth2Login().oauth2User(com.lnt.chatmee.support.TestUsers.principal("u1"))).with(csrf().asHeader())
+                        .contentType(MediaType.APPLICATION_JSON).content("""
+                                {"settings":{"allowFileSharing":null,"allowGuestUsers":null,"moderationRequired":null}}"""))
+                .andExpect(status().isOk());
+
+        var request = org.mockito.ArgumentCaptor.forClass(com.lnt.chatmee.dto.request.UpdateChatRoomRequest.class);
+        org.mockito.Mockito.verify(chatRoomService).updateChatRoomById(eq("u1"), eq("room-1"), request.capture());
+        ChatRoom.RoomSettings settings = request.getValue().getSettings();
+        org.assertj.core.api.Assertions.assertThat(settings.isAllowFileSharing()).isFalse();
+        org.assertj.core.api.Assertions.assertThat(settings.isAllowGuestUsers()).isFalse();
+        org.assertj.core.api.Assertions.assertThat(settings.isModerationRequired()).isFalse();
     }
 
     @Test

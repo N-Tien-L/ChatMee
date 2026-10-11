@@ -73,7 +73,7 @@ public class SecurityConfig {
                                         ErrorCode.UNAUTHENTICATED, "Authentication required"),
                                 PathPatternRequestMatcher.pathPattern("/api/**"))
                         .defaultAuthenticationEntryPointFor(
-                                new LoginUrlAuthenticationEntryPoint("/login"),
+                                browserLoginEntryPoint(),
                                 AnyRequestMatcher.INSTANCE)
                         .defaultAccessDeniedHandlerFor((request, response, exception) ->
                                 GlobalExceptionHandler.writeProblem(objectMapper, request, response,
@@ -91,5 +91,12 @@ public class SecurityConfig {
                         .deleteCookies("JSESSIONID"));
 
         return http.build();
+    }
+
+    // Spring Security 7 redirects to a relative "/login" by default; keep the absolute Location sent before Boot 4.
+    private static LoginUrlAuthenticationEntryPoint browserLoginEntryPoint() {
+        LoginUrlAuthenticationEntryPoint entryPoint = new LoginUrlAuthenticationEntryPoint("/login");
+        entryPoint.setFavorRelativeUris(false);
+        return entryPoint;
     }
 }

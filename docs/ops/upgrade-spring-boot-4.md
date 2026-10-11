@@ -63,6 +63,12 @@ Note: `com.fasterxml.jackson.core:jackson-databind` 2.21.5 is still on the runti
   for the JSON entry point and access-denied handler. Rules are unchanged: same permitAll paths, CSRF with
   `SpaCsrfTokenRequestHandler`, CORS, OAuth2 login, logout.
 
+- Login redirect: Spring Security 7's `LoginUrlAuthenticationEntryPoint` favours relative URIs, which would send
+  `Location: /login` instead of the absolute URL sent before. `SecurityConfig` builds the browser entry point with
+  `setFavorRelativeUris(false)` under the same `AnyRequestMatcher` registration, so an unauthenticated browser request
+  still gets the absolute login URL (e.g. `http://localhost/login` in MockMvc). API requests still get 401
+  ProblemDetail with no `Location`.
+
 **Spring Framework 7 / messaging**
 - `SimpMessagingTemplate.convertAndSend(String, Map)` became ambiguous with the new
   `convertAndSend(Object payload, Map headers)` overload. Calls with a `Map` payload cast it to `Object`,
@@ -104,6 +110,51 @@ loaded in that test because it imports an optional `.env` file.
   plus `WebSocketServletAutoConfiguration` are replaced by `TomcatServletWebServerAutoConfiguration` (it also
   carries the Tomcat WebSocket setup).
 - `MongoDBContainer` -> `org.testcontainers.mongodb.MongoDBContainer`.
+
+## Compatibility settings (keep Boot 3 behaviour)
+
+| Setting | Where | Why |
+|---|---|---|
+| `setFavorRelativeUris(false)` on the browser `LoginUrlAuthenticationEntryPoint` | `SecurityConfig` | Security 7 default is a relative `Location: /login`; Boot 3 sent the absolute URL. |
+| `spring.jackson.deserialization.fail-on-null-for-primitives=false` | `application.properties` | Jackson 3 enables it; Jackson 2 bound JSON `null` to `false`/`0`. Affects `RoomSettings` flags (create/update room) and STOMP `TypingMessage.typing` / `PresenceMessage.online`. Also restores `""` -> `false` for those flags. |
+| `spring.jackson.deserialization.fail-on-trailing-tokens=false` | `application.properties` | Jackson 3 enables it; Jackson 2 ignored content after the first JSON value (`{...} x` was accepted). |
+| `spring.jackson.mapper.sort-properties-alphabetically=false` | `application.properties` | Jackson 3 enables it; it reordered ProblemDetail keys (`detail, instance, status, title, type`). Boot 3 order is `type, title, status, detail, instance, code, errors`. |
+| `management.endpoint.health.probes.enabled=false` | `application.properties` | Boot 4 adds liveness/readiness health groups by default. |
+
+The Jackson settings apply to the one Boot `JsonMapper`, which backs the HTTP converters, the STOMP message
+converter (Boot's `WebSocketMessagingAutoConfiguration`; the app does not override converters) and the
+security ProblemDetail writer.
+
+### How the Jackson defaults were compared
+
+Every `DeserializationFeature`, `SerializationFeature`, `MapperFeature` and stream read/write feature of the Boot 4
+`JsonMapper` was compared with a Boot 3-equivalent Jackson 2 mapper (`Jackson2ObjectMapperBuilder` with
+`WRITE_DATES_AS_TIMESTAMPS` and `WRITE_DURATIONS_AS_TIMESTAMPS` off, as Boot 3 configured it). Then both mappers
+serialized every response DTO (ApiResponse envelopes, ChatMessageResponse with nanosecond Instants and an emoji,
+ChatRoomResponse with settings and LocalDateTime, PagedResponse, PublicRoomSummary, Auth/User/WsToken responses,
+StompError, presence/typing messages, presence maps with nulls, ProblemDetail, doubles/NaN). They also read 49
+request inputs (null/string/number/empty coercions for primitives, enums and Integer, unknown/duplicate
+properties, trailing tokens, comments, single quotes, leading zeros, control characters, Instant/LocalDateTime
+forms, big numbers). With the three Jackson settings above there were 0 differences, byte for byte. Unchanged
+between Boot 3 and Boot 4: `FAIL_ON_UNKNOWN_PROPERTIES` off, `WRITE_DATES_AS_TIMESTAMPS` off,
+`DEFAULT_VIEW_INCLUSION` off, ISO-8601 Instants with `Z`, nulls written.
+
+Jackson 3 default changes kept (no effect on this app's DTOs):
+- `READ_ENUMS_USING_TO_STRING` / `WRITE_ENUMS_USING_TO_STRING` on: no app enum (`RoomType`, `MessageType`, `Role`,
+  `ErrorCode`) overrides `toString()`, so the text is the same as `name()`.
+- `FIX_FIELD_NAME_UPPER_CASE_PREFIX` on: no DTO property has the `xYyy` shape it renames.
+- `ALLOW_FINAL_FIELDS_AS_MUTATORS` off / `USE_GETTERS_AS_SETTERS` off: request DTOs are Lombok `@Data` classes with
+  setters (no final fields, no getter-only collections), and responses are records or beans that are only written.
+- `FAIL_ON_EMPTY_BEANS` off: no empty bean is serialized; it would only turn an error into `{}`.
+- `COMBINE_UNICODE_SURROGATES_IN_UTF8` on: emoji output was byte-identical in the comparison.
+- `USE_FAST_DOUBLE_PARSER` / `USE_FAST_BIG_NUMBER_PARSER` on: same values, faster parsing.
+- `ALLOW_VOID_VALUED_PROPERTIES`, `FAIL_ON_ORDER_MAP_BY_INCOMPARABLE_KEY`: features not used here.
+
+Regression tests: `ChatRoomControllerWebMvcTest.createRoom_nullSettingFlags_bindsFalse`,
+`updateRoom_nullSettingFlags_bindsFalse`, `createRoom_trailingContentAfterJson_isAccepted`;
+`JacksonCompatibilityTest` (STOMP null flags, trailing content, ProblemDetail order with the real Boot mapper);
+`SecurityProblemDetailIT.login_anonymousBrowserRequest_keepsRedirect` (absolute `Location`) and
+`api_anonymousRequest_keepsProblemPropertyOrder`. All of them failed before the fixes.
 
 ## Remaining deprecation warnings
 
