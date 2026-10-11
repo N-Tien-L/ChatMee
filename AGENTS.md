@@ -4,8 +4,8 @@ Shared instructions for AI coding agents working in this repository. Read this f
 
 ## 1. Project Overview
 ChatMee is a real-time chat application, consisting of:
-- `backend/`: Java 17, Spring Boot 3.5, Spring Security (OAuth2 login, session cookie), STOMP over WebSocket, MongoDB (Spring Data), Redis (presence, rate limit, pub/sub between instances).
-- `frontend/`: Next.js 15 (App Router), React 19, strict TypeScript, Tailwind 4, shadcn/ui, Zustand, @stomp/stompjs.
+- `backend/`: Java 17, Spring Boot 4.1, Spring Security 7 (OAuth2 login, session cookie), STOMP over WebSocket, MongoDB (Spring Data), Redis (presence, rate limit, pub/sub between instances).
+- `frontend/`: Next.js 16 (App Router), React 19, strict TypeScript, Tailwind 4, shadcn/ui, Zustand, @stomp/stompjs.
 - Deployment: backend runs via Docker on Render; frontend on Vercel (using rewrites as reverse proxy for `/api`, `/oauth2`, `/login`, `/logout`).
 
 Authoritative documents: `docs/specs/` (requirements), `docs/design/` (technical design), `docs/adr/` (architectural decisions), `docs/plan/` (tickets).
