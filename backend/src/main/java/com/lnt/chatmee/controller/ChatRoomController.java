@@ -4,6 +4,7 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import java.util.List;
 
+import org.springframework.data.domain.Page;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import com.lnt.chatmee.security.CurrentUser;
@@ -16,6 +17,7 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.lnt.chatmee.dto.request.CreateChatRoomRequest;
@@ -23,6 +25,8 @@ import com.lnt.chatmee.dto.request.JoinChatRoomRequest;
 import com.lnt.chatmee.dto.request.UpdateChatRoomRequest;
 import com.lnt.chatmee.dto.response.ApiResponse;
 import com.lnt.chatmee.dto.response.ChatRoomResponse;
+import com.lnt.chatmee.dto.response.PagedResponse;
+import com.lnt.chatmee.dto.response.PublicRoomSummary;
 import com.lnt.chatmee.model.ChatRoom;
 import com.lnt.chatmee.service.ChatRoomService;
 import com.lnt.chatmee.service.ParticipantService;
@@ -56,6 +60,26 @@ public class ChatRoomController {
     public ResponseEntity<ApiResponse<List<ChatRoomResponse>>> getChatRoomList(@CurrentUser UserPrincipal user) {
         List<ChatRoomResponse> responseBody = chatRoomService.toResponses(chatRoomService.getList(user.userId()), user.userId());
         return ResponseEntity.ok(ApiResponse.success(responseBody));
+    }
+
+    @Operation(summary = "Discover active public rooms the caller has not joined (paged, public metadata only)")
+    @GetMapping("/discover")
+    public ResponseEntity<ApiResponse<PagedResponse<PublicRoomSummary>>> discoverRooms(
+            @RequestParam(defaultValue = "") String query,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size,
+            @CurrentUser UserPrincipal user) {
+        Page<PublicRoomSummary> rooms = chatRoomService.discoverRooms(user.userId(), query, page, size);
+
+        PagedResponse<PublicRoomSummary> pageData = PagedResponse.<PublicRoomSummary>builder()
+            .content(rooms.getContent())
+            .page(rooms.getNumber())
+            .size(rooms.getSize())
+            .totalElements(rooms.getTotalElements())
+            .totalPages(rooms.getTotalPages())
+            .build();
+
+        return ResponseEntity.ok(ApiResponse.success("Rooms retrieved successfully", pageData));
     }
 
     @Operation(summary = "Get a room the caller belongs to")

@@ -19,6 +19,10 @@ import com.lnt.chatmee.model.User;
 import com.lnt.chatmee.repository.ChatRoomRepository;
 import com.lnt.chatmee.repository.UserRepository;
 import org.junit.jupiter.api.Test;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.Pageable;
+import com.lnt.chatmee.dto.response.PublicRoomSummary;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
@@ -150,6 +154,42 @@ class ChatRoomServiceTest {
         verify(chatRoomRepository).save(saved.capture());
         assertThat(saved.getValue().getMaxParticipants()).isEqualTo(5);
         assertThat(saved.getValue().getSettings().isAllowGuestUsers()).isTrue();
+    }
+
+    @Test
+    void discoverRooms_excludesJoinedPrivateDirectAndDeletedRooms() {
+        ChatRoom open = ChatRoom.builder().id("open").name("Open").type(ChatRoom.RoomType.PUBLIC)
+                .memberCount(2).maxParticipants(10).isActive(true).build();
+        when(participantService.getRoomIdsOfUser("user1")).thenReturn(List.of("joined"));
+        when(chatRoomRepository.findDiscoverable(eq("op"), eq(List.of("joined")), any(Pageable.class)))
+                .thenReturn(new PageImpl<>(List.of(open)));
+
+        Page<PublicRoomSummary> result = chatRoomService.discoverRooms("user1", " op ", 0, 20);
+
+        assertThat(result.getContent()).singleElement().satisfies(r -> {
+            assertThat(r.id()).isEqualTo("open");
+            assertThat(r.memberCount()).isEqualTo(2);
+            assertThat(r.maxMembers()).isEqualTo(10);
+        });
+        // PUBLIC/active filtering lives in the repository query; the service passes the caller's joined rooms.
+        verify(chatRoomRepository).findDiscoverable(eq("op"), eq(List.of("joined")), any(Pageable.class));
+    }
+
+    @Test
+    void discoverRooms_oversizedOrInvalidPaging_clampsPageAndSize() {
+        when(participantService.getRoomIdsOfUser("user1")).thenReturn(List.of());
+        when(chatRoomRepository.findDiscoverable(anyString(), any(), any(Pageable.class)))
+                .thenReturn(new PageImpl<>(List.of()));
+        ArgumentCaptor<Pageable> pageable = ArgumentCaptor.forClass(Pageable.class);
+
+        chatRoomService.discoverRooms("user1", null, -3, 500);
+        chatRoomService.discoverRooms("user1", "", 2, 0);
+
+        verify(chatRoomRepository, times(2)).findDiscoverable(eq(""), any(), pageable.capture());
+        assertThat(pageable.getAllValues().get(0).getPageNumber()).isZero();
+        assertThat(pageable.getAllValues().get(0).getPageSize()).isEqualTo(50);
+        assertThat(pageable.getAllValues().get(1).getPageNumber()).isEqualTo(2);
+        assertThat(pageable.getAllValues().get(1).getPageSize()).isEqualTo(20);
     }
 
     @Test
