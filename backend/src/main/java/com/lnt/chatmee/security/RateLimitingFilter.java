@@ -1,6 +1,6 @@
 package com.lnt.chatmee.security;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.ObjectMapper;
 import com.lnt.chatmee.exception.GlobalExceptionHandler;
 import com.lnt.chatmee.exception.ErrorCode;
 

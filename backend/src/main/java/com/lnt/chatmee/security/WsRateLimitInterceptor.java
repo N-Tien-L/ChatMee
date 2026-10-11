@@ -1,6 +1,5 @@
 package com.lnt.chatmee.security;
 
-import java.io.IOException;
 import java.security.Principal;
 import java.util.Map;
 
@@ -15,8 +14,9 @@ import org.springframework.messaging.support.MessageHeaderAccessor;
 import org.springframework.stereotype.Component;
 import org.springframework.util.AntPathMatcher;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.core.JacksonException;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
 import com.lnt.chatmee.dto.StompError;
 import com.lnt.chatmee.exception.ErrorCode;
 import com.lnt.chatmee.service.RateLimitingService;
@@ -89,8 +89,8 @@ public class WsRateLimitInterceptor implements ChannelInterceptor {
         }
         try {
             JsonNode tempId = objectMapper.readTree(bytes).get("tempId");
-            return tempId != null && tempId.isTextual() ? tempId.asText() : null;
-        } catch (IOException ex) {
+            return tempId != null && tempId.isString() ? tempId.asString() : null;
+        } catch (JacksonException ex) {
             return null;
         }
     }
