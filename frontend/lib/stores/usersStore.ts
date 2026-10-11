@@ -1,12 +1,13 @@
 import { create } from 'zustand'
 import { userApi } from '../api/userApi'
 import { UserSummaryResponse } from "@/lib/types";
-import toast from 'react-hot-toast'
 
 interface UsersState {
     users: UserSummaryResponse[],
     usersCache: Map<string, UserSummaryResponse>
     loading: boolean
+    /** Last search failure, shown inline with a retry action. */
+    error: string | null
     searchQuery: string;
     filteredUsers: UserSummaryResponse[];
 
@@ -25,6 +26,7 @@ export const useUsersStore = create<UsersState>((set, get) => ({
     users: [],
     usersCache: new Map(),
     loading: false,
+    error: null,
     searchQuery: "",
     filteredUsers: [],
 
@@ -55,7 +57,7 @@ export const useUsersStore = create<UsersState>((set, get) => ({
 
     fetchUsers: async (query = "") => {
         try {
-            set({ loading: true })
+            set({ loading: true, error: null })
             const response = await userApi.searchUsers(query, 0, 50)
             // Ignore responses for queries the user has already typed past.
             if (query !== get().searchQuery) return
@@ -64,11 +66,11 @@ export const useUsersStore = create<UsersState>((set, get) => ({
                 get().setUsers(response.data.content)
             } else {
                 console.error('Failed to fetch users:', response.message)
-                toast.error('Failed to fetch users')
+                set({ error: response.message || 'Failed to fetch users' })
             }
         } catch (error) {
             console.error('Failed to fetch users:', error)
-            toast.error('Failed to fetch users')
+            if (query === get().searchQuery) set({ error: 'Failed to fetch users' })
         } finally {
             set({ loading: false })
         }

@@ -20,7 +20,7 @@ import lombok.RequiredArgsConstructor;
 
 @RestController
 @Tag(name = "Messages", description = "Message history")
-@RequestMapping("/api/v1/messages")
+@RequestMapping("/api/v1/rooms/{roomId}/messages")
 @RequiredArgsConstructor
 public class MessageController {
 
@@ -28,7 +28,7 @@ public class MessageController {
     private final MessageService messageService;
 
     @Operation(summary = "Get recent messages of a room the caller belongs to")
-    @GetMapping("/room/{roomId}")
+    @GetMapping
     public ResponseEntity<ApiResponse<List<ChatMessageResponse>>> getRecentMessages(
             @PathVariable String roomId,
             @CurrentUser UserPrincipal user) {

@@ -42,7 +42,7 @@ import com.lnt.chatmee.support.SecuredWebMvcTestSupport;
 @Import(SecurityConfig.class)
 class ChatRoomControllerWebMvcTest extends SecuredWebMvcTestSupport {
 
-    private static final String CREATE = "/api/v1/chatrooms/create";
+    private static final String CREATE = "/api/v1/rooms";
 
     @MockitoBean ChatRoomService chatRoomService;
     @MockitoBean ParticipantService participantService;
@@ -98,7 +98,7 @@ class ChatRoomControllerWebMvcTest extends SecuredWebMvcTestSupport {
         when(chatRoomService.getList("u1")).thenReturn(rooms);
         when(chatRoomService.toResponses(rooms, "u1")).thenReturn(List.of(ChatRoomResponse.builder().id("room-1").build()));
 
-        mvc.perform(get("/api/v1/chatrooms").with(oauth2Login().oauth2User(com.lnt.chatmee.support.TestUsers.principal("u1"))))
+        mvc.perform(get("/api/v1/rooms").with(oauth2Login().oauth2User(com.lnt.chatmee.support.TestUsers.principal("u1"))))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data[0].id").value("room-1"));
     }
@@ -108,12 +108,12 @@ class ChatRoomControllerWebMvcTest extends SecuredWebMvcTestSupport {
         when(chatRoomService.getChatRoomById("u1", "room-1"))
                 .thenThrow(new ChatRoomNotFoundException("Can't find chat room with id: room-1 or user is not a participant"));
 
-        expectProblem(mvc.perform(get("/api/v1/chatrooms/room-1").with(oauth2Login().oauth2User(com.lnt.chatmee.support.TestUsers.principal("u1")))), 404, "ROOM_NOT_FOUND");
+        expectProblem(mvc.perform(get("/api/v1/rooms/room-1").with(oauth2Login().oauth2User(com.lnt.chatmee.support.TestUsers.principal("u1")))), 404, "ROOM_NOT_FOUND");
     }
 
     @Test
     void updateRoom_maxUsersBelowMinimum_returns400ValidationProblem() throws Exception {
-        expectProblem(mvc.perform(put("/api/v1/chatrooms/room-1").with(oauth2Login().oauth2User(com.lnt.chatmee.support.TestUsers.principal("u1"))).with(csrf().asHeader())
+        expectProblem(mvc.perform(put("/api/v1/rooms/room-1").with(oauth2Login().oauth2User(com.lnt.chatmee.support.TestUsers.principal("u1"))).with(csrf().asHeader())
                 .contentType(MediaType.APPLICATION_JSON).content("{\"maxUsers\":1}")), 400, "VALIDATION_FAILED")
                 .andExpect(jsonPath("$.errors[?(@.field == 'maxUsers')]").isNotEmpty());
         verifyNoInteractions(chatRoomService);
@@ -124,7 +124,7 @@ class ChatRoomControllerWebMvcTest extends SecuredWebMvcTestSupport {
         doThrow(new UnauthorizedRoomActionException("Only room creator can delete the room"))
                 .when(chatRoomService).deleteChatRoomById("u1", "room-1");
 
-        expectProblem(mvc.perform(delete("/api/v1/chatrooms/room-1").with(oauth2Login().oauth2User(com.lnt.chatmee.support.TestUsers.principal("u1"))).with(csrf().asHeader())),
+        expectProblem(mvc.perform(delete("/api/v1/rooms/room-1").with(oauth2Login().oauth2User(com.lnt.chatmee.support.TestUsers.principal("u1"))).with(csrf().asHeader())),
                 403, "FORBIDDEN_ACTION");
     }
 
@@ -133,7 +133,7 @@ class ChatRoomControllerWebMvcTest extends SecuredWebMvcTestSupport {
         doThrow(new ForbiddenActionException("Only PUBLIC rooms can be joined"))
                 .when(participantService).joinRoom("room-1", "u1");
 
-        expectProblem(mvc.perform(post("/api/v1/chatrooms/room-1/join").with(oauth2Login().oauth2User(com.lnt.chatmee.support.TestUsers.principal("u1"))).with(csrf().asHeader())),
+        expectProblem(mvc.perform(post("/api/v1/rooms/room-1/members/me").with(oauth2Login().oauth2User(com.lnt.chatmee.support.TestUsers.principal("u1"))).with(csrf().asHeader())),
                 403, "FORBIDDEN_ACTION");
     }
 
@@ -142,7 +142,7 @@ class ChatRoomControllerWebMvcTest extends SecuredWebMvcTestSupport {
         doThrow(new UserAlreadyInRoomException("User is already in the room"))
                 .when(participantService).joinRoom("room-1", "u1");
 
-        expectProblem(mvc.perform(post("/api/v1/chatrooms/room-1/join").with(oauth2Login().oauth2User(com.lnt.chatmee.support.TestUsers.principal("u1"))).with(csrf().asHeader())),
+        expectProblem(mvc.perform(post("/api/v1/rooms/room-1/members/me").with(oauth2Login().oauth2User(com.lnt.chatmee.support.TestUsers.principal("u1"))).with(csrf().asHeader())),
                 409, "ALREADY_PARTICIPANT");
     }
 
@@ -151,13 +151,13 @@ class ChatRoomControllerWebMvcTest extends SecuredWebMvcTestSupport {
         doThrow(new RoomCapacityExceededException("Room has reached maximum capacity"))
                 .when(participantService).joinRoom("room-1", "u1");
 
-        expectProblem(mvc.perform(post("/api/v1/chatrooms/room-1/join").with(oauth2Login().oauth2User(com.lnt.chatmee.support.TestUsers.principal("u1"))).with(csrf().asHeader())),
+        expectProblem(mvc.perform(post("/api/v1/rooms/room-1/members/me").with(oauth2Login().oauth2User(com.lnt.chatmee.support.TestUsers.principal("u1"))).with(csrf().asHeader())),
                 409, "ROOM_FULL");
     }
 
     @Test
     void addParticipant_missingUserId_returns400ValidationProblem() throws Exception {
-        expectProblem(mvc.perform(post("/api/v1/chatrooms/room-1/add-participant").with(oauth2Login().oauth2User(com.lnt.chatmee.support.TestUsers.principal("u1"))).with(csrf().asHeader())
+        expectProblem(mvc.perform(post("/api/v1/rooms/room-1/members").with(oauth2Login().oauth2User(com.lnt.chatmee.support.TestUsers.principal("u1"))).with(csrf().asHeader())
                 .contentType(MediaType.APPLICATION_JSON).content("{}")), 400, "VALIDATION_FAILED")
                 .andExpect(jsonPath("$.errors[?(@.field == 'userId')]").isNotEmpty());
         verifyNoInteractions(participantService);
@@ -165,7 +165,7 @@ class ChatRoomControllerWebMvcTest extends SecuredWebMvcTestSupport {
 
     @Test
     void leaveRoom_member_returns200() throws Exception {
-        mvc.perform(post("/api/v1/chatrooms/room-1/leave").with(oauth2Login().oauth2User(com.lnt.chatmee.support.TestUsers.principal("u1"))).with(csrf().asHeader()))
+        mvc.perform(delete("/api/v1/rooms/room-1/members/me").with(oauth2Login().oauth2User(com.lnt.chatmee.support.TestUsers.principal("u1"))).with(csrf().asHeader()))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true));
     }

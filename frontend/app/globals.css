@@ -120,6 +120,11 @@
   body {
     @apply bg-background text-foreground;
   }
+  /* Visible keyboard focus for elements without their own focus style (utilities override it). */
+  :focus-visible {
+    outline: 2px solid var(--color-blue-600);
+    outline-offset: 2px;
+  }
 }
 
 @property --border-angle {

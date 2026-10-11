@@ -1,7 +1,16 @@
 import React, { useEffect, useState } from "react";
 import { ChatRoom, UserSummaryResponse } from "@/lib/types";
 import { RoomType } from "@/lib/types";
-import { Globe, Lock, Users, Calendar, UserCheck, Shield } from "lucide-react";
+import {
+  Globe,
+  Lock,
+  Users,
+  Calendar,
+  UserCheck,
+  Shield,
+  AlertCircle,
+  RotateCw,
+} from "lucide-react";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { chatRoomApi } from "@/lib/api/chatRoomApi";
 import { userApi } from "@/lib/api/userApi";
@@ -26,6 +35,8 @@ interface RoomInfoDialogProps {
   isOpen: boolean;
   onClose: () => void;
   onOpenSettings?: () => void;
+  /** Element that gets focus back when the dialog closes. */
+  returnFocusRef?: React.RefObject<HTMLElement | null>;
 }
 
 // Simple toast helper (can be replaced with proper toast system later)
@@ -64,6 +75,7 @@ export const RoomInfoDialog: React.FC<RoomInfoDialogProps> = ({
   isOpen,
   onClose,
   onOpenSettings,
+  returnFocusRef,
 }) => {
   const isMobile = useIsMobile();
   const { user } = useAuthStore();
@@ -71,6 +83,7 @@ export const RoomInfoDialog: React.FC<RoomInfoDialogProps> = ({
   const [participants, setParticipants] = useState<UserSummaryResponse[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [isActionLoading, setIsActionLoading] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   useEffect(() => {
     if (isOpen && roomId) {
@@ -80,9 +93,12 @@ export const RoomInfoDialog: React.FC<RoomInfoDialogProps> = ({
 
   const loadRoomInfo = async () => {
     setIsLoading(true);
+    setLoadError(null);
     try {
       const response = await chatRoomApi.getChatRoomById(roomId);
-      if (response.success && response.data) {
+      if (!response.success) {
+        setLoadError(response.message || "Failed to load room information");
+      } else if (response.data) {
         setRoom(response.data);
         // Load participant details
         if (
@@ -94,8 +110,7 @@ export const RoomInfoDialog: React.FC<RoomInfoDialogProps> = ({
       }
     } catch (error) {
       console.error("Error loading room info:", error);
-      showToast("Failed to load room information", "error");
-      onClose();
+      setLoadError("Failed to load room information");
     } finally {
       setIsLoading(false);
     }
@@ -120,11 +135,9 @@ export const RoomInfoDialog: React.FC<RoomInfoDialogProps> = ({
     if (!room) return;
     setIsActionLoading(true);
     try {
-      const response = await chatRoomApi.joinChatRoom(room.id);
-      if (response.success) {
-        showToast("You've joined the room");
-        await loadRoomInfo(); // Reload to update participant list
-      }
+      await chatRoomApi.joinChatRoom(room.id);
+      showToast("You've joined the room");
+      await loadRoomInfo(); // Reload to update participant list
     } catch (error) {
       console.error("Error joining room:", error);
       showToast("Failed to join the room", "error");
@@ -163,13 +176,40 @@ export const RoomInfoDialog: React.FC<RoomInfoDialogProps> = ({
   const isUserCreator = room?.createdBy === user?.id;
   const isDM = room?.roomType === RoomType.DIRECT_MESSAGE;
 
+  // Return focus to the opener when it is not the element focused before opening (Radix default).
+  const handleCloseAutoFocus = (event: Event) => {
+    if (!returnFocusRef?.current) return;
+    event.preventDefault();
+    returnFocusRef.current.focus();
+  };
+
   const content = (
     <div className="space-y-6">
       {isLoading ? (
-        <div className="space-y-4">
+        <div
+          className="space-y-4"
+          role="status"
+          aria-busy="true"
+          aria-label="Loading room information"
+        >
           <Skeleton className="h-20 w-full" />
           <Skeleton className="h-16 w-full" />
           <Skeleton className="h-32 w-full" />
+        </div>
+      ) : loadError ? (
+        <div
+          className="flex flex-col items-center text-center gap-3 py-6"
+          role="alert"
+        >
+          <AlertCircle className="w-8 h-8 text-red-400" aria-hidden="true" />
+          <div>
+            <p className="font-medium text-gray-900">Could not load room information</p>
+            <p className="text-sm text-gray-500">{loadError}</p>
+          </div>
+          <Button variant="outline" size="sm" onClick={() => loadRoomInfo()}>
+            <RotateCw className="w-4 h-4 mr-2" aria-hidden="true" />
+            Retry
+          </Button>
         </div>
       ) : room ? (
         <>
@@ -324,7 +364,11 @@ export const RoomInfoDialog: React.FC<RoomInfoDialogProps> = ({
   if (isMobile) {
     return (
       <Sheet open={isOpen} onOpenChange={onClose}>
-        <SheetContent side="bottom" className="max-h-[90vh] overflow-y-auto">
+        <SheetContent
+          side="bottom"
+          className="max-h-[90vh] overflow-y-auto"
+          onCloseAutoFocus={handleCloseAutoFocus}
+        >
           <SheetHeader>
             <SheetTitle>Room Information</SheetTitle>
           </SheetHeader>
@@ -336,7 +380,10 @@ export const RoomInfoDialog: React.FC<RoomInfoDialogProps> = ({
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="max-w-md max-h-[80vh] overflow-y-auto">
+      <DialogContent
+        className="max-w-md max-h-[80vh] overflow-y-auto"
+        onCloseAutoFocus={handleCloseAutoFocus}
+      >
         <DialogHeader>
           <DialogTitle>Room Information</DialogTitle>
         </DialogHeader>

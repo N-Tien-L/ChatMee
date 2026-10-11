@@ -63,7 +63,7 @@ public class SecurityConfig {
                 .addFilterBefore(rateLimitingFilter, UsernamePasswordAuthenticationFilter.class)
                 .authorizeHttpRequests(authz -> authz
                         // Cross-site WebSocket handshakes are public; STOMP CONNECT authenticates with a single-use token.
-                        .requestMatchers("/", "/login", "/error", "/actuator/health/**", "/actuator/info", "/api/v1/auth/status", "/ws/**").permitAll()
+                        .requestMatchers("/", "/login", "/error", "/actuator/health/**", "/actuator/info", "/ws/**").permitAll()
                         .requestMatchers("/api/v1/**").authenticated()
                         .anyRequest().authenticated())
 

@@ -30,7 +30,7 @@ import com.lnt.chatmee.support.SecuredWebMvcTestSupport;
 @Import(SecurityConfig.class)
 class MessageControllerWebMvcTest extends SecuredWebMvcTestSupport {
 
-    private static final String HISTORY = "/api/v1/messages/room/room-1";
+    private static final String HISTORY = "/api/v1/rooms/room-1/messages";
 
     @MockitoBean MessageService messageService;
     @MockitoBean UserRepository userRepository;

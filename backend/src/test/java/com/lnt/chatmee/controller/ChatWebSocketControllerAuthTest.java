@@ -69,7 +69,7 @@ class ChatWebSocketControllerAuthTest {
         ArgumentCaptor<Message> saved = ArgumentCaptor.forClass(Message.class);
         verify(messages).persistMessage(saved.capture());
         assertEquals("internal-user", saved.getValue().getSenderId());
-        verify(messaging).convertAndSend(eq("/topic/public/room"), argThat((ChatMessageResponse response) ->
+        verify(messaging).convertAndSend(eq("/topic/rooms/room"), argThat((ChatMessageResponse response) ->
                 response.senderId().equals("internal-user") && response.senderName().equals("Real Name")));
         verify(participants).isUserParticipant("room", "internal-user");
         verify(users, never()).findById("victim");
@@ -112,7 +112,7 @@ class ChatWebSocketControllerAuthTest {
         dispatch("/app/chat.sendMessage", () -> "internal-user");
         var order = inOrder(messages, messaging);
         order.verify(messages).persistMessage(any(Message.class));
-        order.verify(messaging).convertAndSend(eq("/topic/public/room"), argThat((ChatMessageResponse response) ->
+        order.verify(messaging).convertAndSend(eq("/topic/rooms/room"), argThat((ChatMessageResponse response) ->
                 response.id().equals("stored-id") && response.createdAt().equals(storedAt)));
     }
 

@@ -32,13 +32,22 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Trash2, UserPlus, Save, AlertTriangle } from "lucide-react";
+import {
+  Trash2,
+  UserPlus,
+  Save,
+  AlertTriangle,
+  AlertCircle,
+  RotateCw,
+} from "lucide-react";
 
 interface RoomSettingsDialogProps {
   roomId: string;
   isOpen: boolean;
   onClose: () => void;
   onSaved?: (room: ChatRoom) => void;
+  /** Element that gets focus back when the dialog closes. */
+  returnFocusRef?: React.RefObject<HTMLElement | null>;
 }
 
 // Simple toast helper
@@ -55,11 +64,13 @@ export const RoomSettingsDialog: React.FC<RoomSettingsDialogProps> = ({
   isOpen,
   onClose,
   onSaved,
+  returnFocusRef,
 }) => {
   const isMobile = useIsMobile();
   const [room, setRoom] = useState<ChatRoom | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [participants, setParticipants] = useState<UserSummaryResponse[]>([]);
   const [allUsers, setAllUsers] = useState<UserSummaryResponse[]>([]);
 
@@ -84,9 +95,12 @@ export const RoomSettingsDialog: React.FC<RoomSettingsDialogProps> = ({
 
   const loadRoomData = async () => {
     setIsLoading(true);
+    setLoadError(null);
     try {
       const response = await chatRoomApi.getChatRoomById(roomId);
-      if (response.success && response.data) {
+      if (!response.success) {
+        setLoadError(response.message || "Failed to load room data");
+      } else if (response.data) {
         setRoom(response.data);
         setFormData({
           roomName: response.data.roomName,
@@ -104,8 +118,7 @@ export const RoomSettingsDialog: React.FC<RoomSettingsDialogProps> = ({
       }
     } catch (error) {
       console.error("Error loading room data:", error);
-      showToast("Failed to load room data", "error");
-      onClose();
+      setLoadError("Failed to load room data");
     } finally {
       setIsLoading(false);
     }
@@ -227,12 +240,39 @@ export const RoomSettingsDialog: React.FC<RoomSettingsDialogProps> = ({
     (user) => !room?.participants?.includes(user.id)
   );
 
+  // Return focus to the opener when it is not the element focused before opening (Radix default).
+  const handleCloseAutoFocus = (event: Event) => {
+    if (!returnFocusRef?.current) return;
+    event.preventDefault();
+    returnFocusRef.current.focus();
+  };
+
   const content = (
     <div className="space-y-4">
       {isLoading ? (
-        <div className="space-y-4">
+        <div
+          className="space-y-4"
+          role="status"
+          aria-busy="true"
+          aria-label="Loading room settings"
+        >
           <Skeleton className="h-10 w-full" />
           <Skeleton className="h-32 w-full" />
+        </div>
+      ) : loadError ? (
+        <div
+          className="flex flex-col items-center text-center gap-3 py-6"
+          role="alert"
+        >
+          <AlertCircle className="w-8 h-8 text-red-400" aria-hidden="true" />
+          <div>
+            <p className="font-medium text-gray-900">Could not load room settings</p>
+            <p className="text-sm text-gray-500">{loadError}</p>
+          </div>
+          <Button variant="outline" size="sm" onClick={() => loadRoomData()}>
+            <RotateCw className="w-4 h-4 mr-2" aria-hidden="true" />
+            Retry
+          </Button>
         </div>
       ) : room ? (
         <Tabs defaultValue="general" className="w-full">
@@ -448,7 +488,11 @@ export const RoomSettingsDialog: React.FC<RoomSettingsDialogProps> = ({
   if (isMobile) {
     return (
       <Sheet open={isOpen} onOpenChange={onClose}>
-        <SheetContent side="bottom" className="max-h-[90vh] overflow-y-auto">
+        <SheetContent
+          side="bottom"
+          className="max-h-[90vh] overflow-y-auto"
+          onCloseAutoFocus={handleCloseAutoFocus}
+        >
           <SheetHeader>
             <SheetTitle>Room Settings</SheetTitle>
           </SheetHeader>
@@ -460,7 +504,10 @@ export const RoomSettingsDialog: React.FC<RoomSettingsDialogProps> = ({
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
+      <DialogContent
+        className="max-w-2xl max-h-[85vh] overflow-y-auto"
+        onCloseAutoFocus={handleCloseAutoFocus}
+      >
         <DialogHeader>
           <DialogTitle>Room Settings</DialogTitle>
         </DialogHeader>

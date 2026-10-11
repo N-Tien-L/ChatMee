@@ -12,6 +12,7 @@ import org.springframework.messaging.support.MessageHeaderAccessor;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.stereotype.Component;
+import org.springframework.util.AntPathMatcher;
 
 import com.lnt.chatmee.service.ParticipantService;
 
@@ -21,7 +22,12 @@ import lombok.RequiredArgsConstructor;
 @RequiredArgsConstructor
 public class AuthChannelInterceptor implements ChannelInterceptor {
     private static final Set<String> SEND_DESTINATIONS = Set.of(
-            "/app/chat.sendMessage", "/app/typing", "/app/presence");
+            "/app/chat.sendMessage", "/app/presence");
+    // Typing is sent to /app/rooms/{roomId}/typing; the controller checks membership for that room.
+    static final String TYPING_DESTINATION_PATTERN = "/app/rooms/*/typing";
+    private static final AntPathMatcher PATH_MATCHER = new AntPathMatcher();
+    private static final String ROOM_TOPIC_PREFIX = "/topic/rooms/";
+    private static final String TYPING_SUFFIX = "/typing";
     private final WsTokenService wsTokenService;
     private final ParticipantService participantService;
 
@@ -51,7 +57,7 @@ public class AuthChannelInterceptor implements ChannelInterceptor {
             }
             if (StompCommand.SUBSCRIBE.equals(accessor.getCommand())) {
                 authorizeSubscription(accessor.getDestination(), principal.getName());
-            } else if (accessor.getDestination() == null || !SEND_DESTINATIONS.contains(accessor.getDestination())) {
+            } else if (!isSendAllowed(accessor.getDestination())) {
                 // Clients must use application handlers; direct broker sends bypass their checks.
                 throw new AccessDeniedException("WebSocket destination not allowed");
             }
@@ -59,20 +65,24 @@ public class AuthChannelInterceptor implements ChannelInterceptor {
         return message;
     }
 
+    private static boolean isSendAllowed(String destination) {
+        return destination != null
+                && (SEND_DESTINATIONS.contains(destination) || PATH_MATCHER.match(TYPING_DESTINATION_PATTERN, destination));
+    }
+
     private void authorizeSubscription(String destination, String userId) {
         if ("/topic/presence".equals(destination) || "/user/queue/errors".equals(destination)) {
             return;
         }
-        if (destination != null) {
-            for (String prefix : new String[]{"/topic/public/", "/topic/typing/"}) {
-                if (destination.startsWith(prefix)) {
-                    String roomId = destination.substring(prefix.length());
-                    if (!roomId.isBlank() && !roomId.contains("/")
-                            && participantService.isUserParticipant(roomId, userId)) {
-                        return;
-                    }
-                    break;
-                }
+        if (destination != null && destination.startsWith(ROOM_TOPIC_PREFIX)) {
+            // /topic/rooms/{roomId} and /topic/rooms/{roomId}/typing share one membership rule.
+            String path = destination.substring(ROOM_TOPIC_PREFIX.length());
+            String roomId = path.endsWith(TYPING_SUFFIX)
+                    ? path.substring(0, path.length() - TYPING_SUFFIX.length())
+                    : path;
+            if (!roomId.isBlank() && !roomId.contains("/")
+                    && participantService.isUserParticipant(roomId, userId)) {
+                return;
             }
         }
         throw new AccessDeniedException("WebSocket subscription not allowed");

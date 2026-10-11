@@ -40,10 +40,10 @@ All payloads below are JSON. Directions are relative to the client.
 | Destination | Direction / command | Payload | Authorization | Error behavior |
 |---|---|---|---|---|
 | `/app/chat.sendMessage` | Client to server / SEND | `{roomId, content, messageType: "TEXT", tempId?}` | Authenticated Principal; member of payload room; at most 10 frames per 5 s per user; only `TEXT` is accepted (SYSTEM messages are server-generated) | Validation, membership, and synchronous processing errors go to the Principal's `/user/queue/errors`; validation/membership rejection prevents publication and persistence |
-| `/app/typing` | Client to server / SEND | `{roomId, typing}`; legacy `userId` is ignored | Authenticated Principal; member of payload room | Nonmembers and missing/blank room IDs are dropped without a broadcast |
-| `/app/presence` | Client to server / SEND | `{online}`; legacy `userId` is ignored | Any authenticated Principal; only its own presence changes | Missing Principal is rejected by the interceptor; no other user's presence can be changed |
-| `/topic/public/{roomId}` | Server to client / SUBSCRIBE | `ChatMessageResponse`: server message ID, optional tempId, chatRoomId, senderId, senderName, content, type, timestamps, update/delete flags | Member of the exact room | Unauthorized SUBSCRIBE receives STOMP ERROR and connection closure |
-| `/topic/typing/{roomId}` | Server to client / SUBSCRIBE | `{roomId, userId, typing}`; server supplies userId | Member of the exact room | Unauthorized SUBSCRIBE receives STOMP ERROR and connection closure |
+| `/app/rooms/{roomId}/typing` | Client to server / SEND | `{typing}`; roomId comes from the path, any `userId` is ignored | Authenticated Principal; member of payload room | Nonmembers and missing/blank room IDs are dropped without a broadcast |
+| `/app/presence` | Client to server / SEND | `{online}`; legacy `userId` is ignored | Any authenticated Principal; heartbeat for its known session only | Missing Principal is rejected by the interceptor; `online` and `userId` are ignored |
+| `/topic/rooms/{roomId}` | Server to client / SUBSCRIBE | `ChatMessageResponse`: server message ID, optional tempId, chatRoomId, senderId, senderName, content, type, timestamps, update/delete flags | Member of the exact room | Unauthorized SUBSCRIBE receives STOMP ERROR and connection closure |
+| `/topic/rooms/{roomId}/typing` | Server to client / SUBSCRIBE | `{roomId, userId, typing}`; server supplies userId | Member of the exact room | Unauthorized SUBSCRIBE receives STOMP ERROR and connection closure |
 | `/topic/presence` | Server to client / SUBSCRIBE | `{userId, online}`; server supplies userId | Any authenticated Principal | Missing Principal receives STOMP ERROR and connection closure |
 | `/user/queue/errors` | Server to client / SUBSCRIBE | `{tempId?, code, message}` (`StompError`; `code` is an `ErrorCode` name such as `VALIDATION_FAILED`, `FORBIDDEN_ACTION`, `RATE_LIMITED`, `INTERNAL_ERROR`) | Any authenticated Principal, for its own user destination | Application errors are private to that Principal; never sent to a room topic |
 
@@ -52,7 +52,7 @@ All payloads below are JSON. Directions are relative to the client.
 For `/app/chat.sendMessage`, the controller validates the payload, resolves the
 Principal's stored identity, and checks room membership. It then calls
 `MessageService.persistMessage` synchronously. Only after the repository returns
-successfully does it broadcast the saved message to `/topic/public/{roomId}`.
+successfully does it broadcast the saved message to `/topic/rooms/{roomId}`.
 The payload uses the saved `id`, `createdAt`, and `updatedAt`, plus the original
 `tempId`. Database failure sends `{tempId, message}` to the sender's
 `/user/queue/errors` and produces no room broadcast. There is no background
@@ -90,7 +90,7 @@ BSON Date retains millisecond precision; JSON Instant can retain nanoseconds.
 
 Deleting a room is a soft delete (see `docs/design/data-model.md`). After the room
 is marked inactive and its memberships are removed, the server broadcasts one
-`ChatMessageResponse` to the existing `/topic/public/{roomId}` destination with
+`ChatMessageResponse` to the existing `/topic/rooms/{roomId}` destination with
 `type = SYSTEM`, no `id`/`tempId`, `senderId` = the deleting creator and
 `content = "This room has been deleted"`. No new destination is introduced.
 Because the memberships are gone, later SUBSCRIBE and SEND frames for that room are
@@ -144,7 +144,7 @@ room helpers. No component creates its own client.
   `ParticipantService.isUserParticipant(roomId, userId)`. It does not come from
   `ChatRoom.participants` or client identity fields.
 - Room subscriptions accept exactly one nonblank room-ID path segment after
-  `/topic/public/` or `/topic/typing/`. Empty IDs and nested paths are denied.
+  `/topic/rooms/` (`{roomId}` for messages, `{roomId}/typing` for typing). Empty IDs and nested paths are denied.
 - Subscription destinations are an allowlist: only the four subscription forms
   above are accepted. All other destinations, including raw `/queue/**`, other
   users' `/user/**` paths, and unknown `/topic/**`, are denied.
@@ -156,7 +156,7 @@ room helpers. No component creates its own client.
   revoking an already-active subscription after membership removal is not
   implemented in this ticket.
 - Chat identity is resolved from the Principal and stored User record. Presence
-  and typing overwrite payload userId with the Principal's ID before broadcasting;
+  uses authenticated session identity; typing overwrites payload userId with the Principal's ID before broadcasting;
   response shapes remain compatible with existing clients.
 - Chat errors use
   `convertAndSendToUser(principal.getName(), "/queue/errors", error)`. The broker
@@ -176,7 +176,7 @@ user and destination in Redis, using the same fixed-window `RateLimitingService`
 | Destination | Limit | Over the limit |
 |---|---|---|
 | `/app/chat.sendMessage` | 10 per 5 s | Frame dropped; private `{tempId, code: "RATE_LIMITED", message}` error |
-| `/app/typing` | 10 per 5 s | Frame dropped silently |
+| `/app/rooms/{roomId}/typing` | 10 per 5 s per user, shared across rooms | Frame dropped silently |
 | `/app/presence` | 20 per 60 s | Frame dropped silently |
 
 Frames are dropped, not rejected with an exception, because an exception would close
@@ -186,8 +186,9 @@ the whole STOMP connection. Like the HTTP limiter, it fails open when Redis is d
 
 `GET /api/v1/online-users` remains available under the existing authenticated API
 security policy. `POST /api/v1/presence/offline` has been removed; the frontend
-does not use it. Explicit STOMP presence reports can affect only the authenticated
-user; session connect/disconnect events also drive presence.
+does not use it. STOMP presence reports are heartbeats for known authenticated sessions. Both
+`online` and legacy `userId` are ignored, including the logout `{online:false}`
+report. Only session connect/disconnect and expired instance leases drive presence.
 
 Real Redis/Mongo integration and a cross-user room subscription scenario belong
 to CM-023. The in-process wire tests here use the real broker/interceptor and
@@ -207,8 +208,8 @@ topic names are retained for compatibility.
   errors without persistence or room broadcasts; valid boundary payload succeeds.
 - `TypingControllerTest`: forged/omitted identity, membership rejection, missing
   Principal, and missing room.
-- `PresenceWebSocketControllerTest`: forged online/offline identity, omitted
-  identity, and missing Principal.
+- `PresenceWebSocketControllerTest`: online/offline flags cannot change presence,
+  forged/omitted identity refreshes only the Principal session, and missing Principal.
 - `PresenceRestControllerTest`: offline POST mapping removed and online GET kept.
 
 CM-029 regression coverage:
@@ -230,3 +231,31 @@ CM-053 regression coverage:
   endpoint's own origin check still rejects a foreign `Origin` with 403.
 - `stompClient.test.ts`: `NEXT_PUBLIC_WS_URL` derivation (http to ws, https to wss,
   ws/wss unchanged).
+
+
+## Shared presence registry (CM-043)
+
+An authenticated session is registered by instance ID and STOMP session ID. A user
+stays online while any session on any instance is alive. Closing the last session
+starts a 10 s Redis grace deadline; reconnect cancels it, avoiding reload flicker.
+Instance leases refresh every 15 s and expire after 45 s; expired owners are pruned
+by snapshot refresh, a 15 s sweep, and on GET. The last-tab offline event arrives
+10-25 s after closure because the 10 s grace deadline is checked periodically.
+Idle sweeps check pending once inside the script and skip full work when empty;
+refresh still detects crashed peers even without local sessions. Only state transitions are published to `presence-channel`
+and each Redis subscriber forwards the same `{userId, online}` shape to its local
+`/topic/presence`. Subscriber delivery never writes back into the registry.
+
+`GET /api/v1/online-users` reads the shared registry, including users in grace.
+`/app/presence {online}` only refreshes a session known locally from authenticated
+CONNECT. It cannot create a session, set offline, or broadcast a payload. The
+existing 20 per 60 s rate limit remains. Redis outages fail open with local reads;
+shared correctness resumes on snapshot reconciliation. See ADR-0002's amendment
+for keys, configuration, recovery and failure bounds. Global presence visibility
+remains an open question under SPEC-005 AC-005-4.
+
+Tests: `PresenceRegistryIT` (two instances, concurrent tabs, reconnect grace, expired
+leases, recovery reconciliation), `PresenceServiceTest` (immutable shared reads,
+fail-open local sessions, unknown heartbeat rejection), `PresenceEventListenerTest`
+(authenticated session identity), `PresenceWebSocketControllerTest` (ignored flags),
+`RedisPresenceSubscriberTest` (fan-out without registry writes).

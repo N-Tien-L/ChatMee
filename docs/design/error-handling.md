@@ -10,7 +10,7 @@ REST failures use Spring `ProblemDetail` and `application/problem+json`. Success
   "title": "Conflict",
   "status": 409,
   "detail": "User is already in the room",
-  "instance": "/api/v1/chatrooms/room/join",
+  "instance": "/api/v1/rooms/room/members/me",
   "code": "ALREADY_PARTICIPANT",
   "errors": []
 }

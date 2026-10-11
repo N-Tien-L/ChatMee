@@ -33,7 +33,7 @@ class RateLimitingFilterTest {
     }
 
     @ParameterizedTest
-    @ValueSource(strings = {"/actuator/health", "/actuator/health/liveness", "/api/v1/auth/status",
+    @ValueSource(strings = {"/actuator/health", "/actuator/health/liveness",
             "/oauth2/authorization/google", "/login/oauth2/code/github"})
     void filter_loginAndHealthPaths_skipRateLimit(String path) throws Exception {
         var request = new MockHttpServletRequest("GET", path);

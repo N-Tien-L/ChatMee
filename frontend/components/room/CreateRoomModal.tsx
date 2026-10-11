@@ -225,6 +225,7 @@ export const CreateRoomModal = ({ isOpen, onClose }: CreateRoomModalProps) => {
                       variant="outline"
                       size="sm"
                       onClick={decreaseMaxUser}
+                      aria-label="Decrease maximum users"
                       className="h-9 w-9 p-0"
                       disabled={maxUser <= 2}
                     >
@@ -266,6 +267,7 @@ export const CreateRoomModal = ({ isOpen, onClose }: CreateRoomModalProps) => {
                       variant="outline"
                       size="sm"
                       onClick={increaseMaxUser}
+                      aria-label="Increase maximum users"
                       className="h-9 w-9 p-0"
                       disabled={maxUser >= 1000}
                     >
@@ -402,8 +404,9 @@ export const CreateRoomModal = ({ isOpen, onClose }: CreateRoomModalProps) => {
                         variant="ghost"
                         onClick={handleRemoveSelectedUser}
                         className="h-6 w-6 p-0 text-gray-500 hover:text-red-500"
+                        aria-label={`Remove ${selectedUser.name}`}
                       >
-                        <X className="w-4 h-4" />
+                        <X className="w-4 h-4" aria-hidden="true" />
                       </Button>
                     </div>
                   </div>

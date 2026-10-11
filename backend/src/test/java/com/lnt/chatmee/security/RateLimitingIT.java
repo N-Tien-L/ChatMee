@@ -29,7 +29,7 @@ class RateLimitingIT {
     @Test
     void anonymousRequest_freshClient_isCountedExactlyOnce() throws Exception {
         // A fresh key starts at zero, so a request counted twice (servlet + security chain) would leave 18.
-        mvc.perform(get("/api/v1/chatrooms").with(remoteAddr(uniqueClient())))
+        mvc.perform(get("/api/v1/rooms").with(remoteAddr(uniqueClient())))
                 .andExpect(status().isUnauthorized())
                 .andExpect(header().string("X-RateLimit-Limit", "20"))
                 .andExpect(header().string("X-RateLimit-Remaining", "19"));
@@ -47,10 +47,10 @@ class RateLimitingIT {
     }
 
     @Test
-    void authStatus_moreRequestsThanAnonymousLimitFromOneProxyAddress_neverReturns429() throws Exception {
+    void health_moreRequestsThanAnonymousLimitFromOneProxyAddress_neverReturns429() throws Exception {
         String sharedProxy = uniqueClient();
         for (int i = 0; i < 25; i++) {
-            mvc.perform(get("/api/v1/auth/status").with(remoteAddr(sharedProxy)))
+            mvc.perform(get("/actuator/health").with(remoteAddr(sharedProxy)))
                     .andExpect(status().isOk())
                     .andExpect(header().doesNotExist("X-RateLimit-Limit"));
         }

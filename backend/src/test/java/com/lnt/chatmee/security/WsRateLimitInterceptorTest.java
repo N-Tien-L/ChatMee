@@ -83,10 +83,10 @@ class WsRateLimitInterceptorTest {
     void preSend_typingOrPresenceOverLimit_dropsFrameSilently() {
         when(limits.check(anyString(), anyInt(), anyLong())).thenReturn(DENIED);
 
-        assertThat(interceptor.preSend(frame(StompCommand.SEND, "/app/typing", "user-1", "{}"), channel)).isNull();
+        assertThat(interceptor.preSend(frame(StompCommand.SEND, "/app/rooms/room-1/typing", "user-1", "{}"), channel)).isNull();
         assertThat(interceptor.preSend(frame(StompCommand.SEND, "/app/presence", "user-1", "{}"), channel)).isNull();
 
-        verify(limits).check("ws:user-1:/app/typing", 10, 5);
+        verify(limits).check("ws:user-1:/app/rooms/*/typing", 10, 5);
         verify(limits).check("ws:user-1:/app/presence", 20, 60);
         verifyNoInteractions(messagingProvider, messaging);
     }
@@ -94,7 +94,7 @@ class WsRateLimitInterceptorTest {
     @Test
     void preSend_nonSendFramesAndUnlistedDestinations_areNotCounted() {
         for (Message<byte[]> frame : List.of(
-                frame(StompCommand.SUBSCRIBE, "/topic/public/room", "user-1", ""),
+                frame(StompCommand.SUBSCRIBE, "/topic/rooms/room", "user-1", ""),
                 frame(StompCommand.CONNECT, null, "user-1", ""),
                 frame(StompCommand.SEND, "/app/unknown", "user-1", "{}"),
                 frame(StompCommand.SEND, null, "user-1", "{}"))) {

@@ -139,15 +139,10 @@ export const useChatRoomsStore = create<chatRoomState>((set, get) => ({
 
     joinRoom: async (roomId: string) => {
         try {
-            const response = await chatRoomApi.joinChatRoom(roomId);
-            if (response.success) {
-                toast.success("Successfully joined the room!");
-                await get().fetchRooms(); // Refresh rooms
-                return true;
-            } else {
-                toast.error(response.message || "Failed to join room");
-                return false;
-            }
+            await chatRoomApi.joinChatRoom(roomId);
+            toast.success("Successfully joined the room!");
+            await get().fetchRooms(); // Refresh rooms
+            return true;
         } catch (error) {
             console.error("Failed to join room:", error);
             toast.error("Failed to join room");
