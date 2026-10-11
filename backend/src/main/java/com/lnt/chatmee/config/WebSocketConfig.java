@@ -3,6 +3,7 @@ package com.lnt.chatmee.config;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.Import;
 import org.springframework.messaging.simp.config.ChannelRegistration;
 import org.springframework.messaging.simp.config.MessageBrokerRegistry;
 import org.springframework.scheduling.TaskScheduler;
@@ -13,15 +14,18 @@ import org.springframework.web.socket.config.annotation.WebSocketMessageBrokerCo
 import org.springframework.web.socket.config.annotation.WebSocketTransportRegistration;
 
 import com.lnt.chatmee.security.AuthChannelInterceptor;
+import com.lnt.chatmee.security.RoomSubscriptionInterceptor;
 
 import lombok.RequiredArgsConstructor;
 
 @Configuration
 @EnableWebSocketMessageBroker
+@Import(RoomSubscriptionInterceptor.class)
 @RequiredArgsConstructor
 public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
 
     private final AuthChannelInterceptor authChannelInterceptor;
+    private final RoomSubscriptionInterceptor roomSubscriptionInterceptor;
 
     @Value("${app.client.url}")
     private String clientUrl;
@@ -53,6 +57,7 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
 
     @Override
     public void configureClientOutboundChannel(ChannelRegistration registration) {
+        registration.interceptors(roomSubscriptionInterceptor);
         registration.taskExecutor()
                 .corePoolSize(4)
                 .maxPoolSize(16)

@@ -17,6 +17,8 @@ import java.util.Set;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
+import org.springframework.messaging.simp.SimpMessageHeaderAccessor;
+import org.springframework.messaging.simp.SimpMessageType;
 import org.springframework.stereotype.Service;
 
 import com.lnt.chatmee.dto.request.CreateChatRoomRequest;
@@ -34,6 +36,7 @@ import com.lnt.chatmee.service.policy.RoomTypePolicy;
 import com.lnt.chatmee.service.policy.RoomTypePolicyRegistry;
 import com.lnt.chatmee.repository.ChatRoomRepository;
 import com.lnt.chatmee.repository.UserRepository;
+import com.lnt.chatmee.security.RoomSubscriptionInterceptor;
 import com.lnt.chatmee.util.ValidationUtil;
 
 import lombok.RequiredArgsConstructor;
@@ -135,7 +138,7 @@ public class ChatRoomService {
 
     /**
      * Soft-deletes the room: it is marked inactive, every membership is removed (blocking new STOMP
-     * authorization for the room; existing subscriptions await CM-058), and a SYSTEM message is broadcast to the room topic.
+     * authorization and ordinary outbound delivery), and a SYSTEM message reaches the pre-delete members.
      */
     public void deleteChatRoomById(String userId, String roomId) {
         User authenticatedUser = userRepository.findById(userId)
@@ -150,6 +153,7 @@ public class ChatRoomService {
             throw new UnauthorizedRoomActionException("Only room creator can delete the room");
         }
 
+        Set<String> deletedRecipients = Set.copyOf(participantService.getParticipantUserIds(roomId));
         if (chatRoomRepository.softDelete(roomId, LocalDateTime.now()) == 0) {
             throw new ChatRoomNotFoundException("Can't find chat room with id: " + roomId);
         }
@@ -166,8 +170,11 @@ public class ChatRoomService {
             .isUpdated(false)
             .isDeleted(false)
             .build();
+        SimpMessageHeaderAccessor headers = SimpMessageHeaderAccessor.create(SimpMessageType.MESSAGE);
+        headers.setHeader(RoomSubscriptionInterceptor.ROOM_DELETED_RECIPIENTS_HEADER, deletedRecipients);
+        headers.setLeaveMutable(true);
         messagingTemplate.convertAndSend("/topic/rooms/" + roomId,
-                ChatMessageResponse.from(deletionMessage, authenticatedUser.getName(), null));
+                ChatMessageResponse.from(deletionMessage, authenticatedUser.getName(), null), headers.getMessageHeaders());
 
         logger.info("Room {} soft-deleted by user {}, {} memberships removed", roomId, authenticatedUser.getId(), removed);
     }
