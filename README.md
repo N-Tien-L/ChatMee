@@ -23,9 +23,12 @@ Implemented features, taken from the specs in [`docs/specs/`](docs/specs/):
 - **Group rooms**: create a `PUBLIC` or `PRIVATE` room with a name, description and member limit; the creator becomes `OWNER`. Users see only the rooms they belong to. ([SPEC-002](docs/specs/SPEC-002-chat-rooms.md))
 - **Joining and membership roles**: members join public rooms while seats are free; `OWNER` and `ADMIN` add members to private rooms; only `OWNER` grants `ADMIN`. Membership changes are atomic, so a room never exceeds its member limit. ([SPEC-002](docs/specs/SPEC-002-chat-rooms.md), [ADR-0005](docs/adr/0005-room-membership-consistency-without-transactions.md))
 - **Room deletion**: the owner soft-deletes a room; members lose access and receive a room-deleted message. ([SPEC-002](docs/specs/SPEC-002-chat-rooms.md))
-- **Direct messages**: a two-person room that shows the other person's name. ([SPEC-003](docs/specs/SPEC-003-direct-messages.md))
+- **Leaving and revocation**: a member who leaves, or a room that is deleted, stops receiving that room's frames at once, including on subscriptions that were already open. The owner cannot leave their own room. ([SPEC-002](docs/specs/SPEC-002-chat-rooms.md), [websocket protocol](docs/design/websocket-protocol.md))
+- **Public room discovery**: `GET /api/v1/rooms/discover` returns paged public rooms the caller has not joined. ([SPEC-002](docs/specs/SPEC-002-chat-rooms.md))
+- **Direct messages**: a two-person room that shows the other person's name. Each pair of users has one direct message, and starting it again returns the existing room. The room list includes the other member as `counterpart`. A direct message cannot be joined, extended, given another member limit, or left. ([SPEC-003](docs/specs/SPEC-003-direct-messages.md))
 - **Real-time messaging**: messages are saved before they are broadcast to `/topic/rooms/{roomId}`. Failures are reported privately to the sender. ([SPEC-004](docs/specs/SPEC-004-messaging-realtime.md))
 - **Message history**: the latest 50 messages of a room are loaded ([SPEC-004](docs/specs/SPEC-004-messaging-realtime.md))
+- **Failed messages**: a failed message offers Resend and Discard. ([SPEC-004](docs/specs/SPEC-004-messaging-realtime.md))
 - **Reconnect and resync**: the client reconnects with backoff, re-subscribes, and refetches the latest history page. Switching rooms drops the previous room's subscriptions. ([SPEC-004](docs/specs/SPEC-004-messaging-realtime.md), [websocket protocol](docs/design/websocket-protocol.md))
 - **Presence**: a user is online while any authenticated STOMP session exists on any backend instance, with a 10 s grace period after the last session closes. ([SPEC-005](docs/specs/SPEC-005-presence-typing.md), [ADR-0002](docs/adr/0002-redis-for-presence-and-rate-limit.md))
 - **Typing indicators**: members of a room see who is typing; events are throttled per user. ([SPEC-005](docs/specs/SPEC-005-presence-typing.md))
@@ -36,12 +39,6 @@ Implemented features, taken from the specs in [`docs/specs/`](docs/specs/):
 
 Planned work, taken from the specs (ticket IDs refer to [`docs/plan/`](docs/plan/)):
 
-- Discover and join public rooms with `GET /rooms/discover` (CM-048, [SPEC-002](docs/specs/SPEC-002-chat-rooms.md)).
-- One direct message per pair of users, returned as the existing room (CM-049, [SPEC-003](docs/specs/SPEC-003-direct-messages.md)).
-- Room list responses include the other member of each direct message (CM-049, [SPEC-003](docs/specs/SPEC-003-direct-messages.md)).
-- Block adding participants to direct messages (CM-041, in review, [SPEC-003](docs/specs/SPEC-003-direct-messages.md)).
-- Revoke open STOMP subscriptions when membership is removed (CM-058, [SPEC-002](docs/specs/SPEC-002-chat-rooms.md)).
-- "Resend" action for failed messages (CM-046, [SPEC-004](docs/specs/SPEC-004-messaging-realtime.md)).
 - Cursor-based message history with `before` and `nextCursor` (CM-044, [SPEC-004](docs/specs/SPEC-004-messaging-realtime.md)).
 - Presence visible only to users who share a room (open question, [SPEC-005](docs/specs/SPEC-005-presence-typing.md)).
 
@@ -105,7 +102,8 @@ sequenceDiagram
 - **WebSocket authorization**: SUBSCRIBE and SEND go through destination allowlists. Room topics require membership, and direct sends to `/topic`, `/queue` or `/user` are denied. Application errors go only to the sender's user queue ([websocket protocol](docs/design/websocket-protocol.md)).
 - **Rate limits**: anonymous REST callers get 20 requests per minute per address and signed-in users 100 per minute. Chat messages are limited to 10 per 5 s per user, typing to 10 per 5 s, and presence reports to 20 per 60 s. Over-limit REST calls return 429 with `Retry-After`. Redis failures fail open ([SPEC-007](docs/specs/SPEC-007-rate-limiting.md)).
 - **Logs**: logs do not contain session IDs, email addresses, raw OAuth attributes or message content ([SPEC-001](docs/specs/SPEC-001-auth-oauth2.md), [SPEC-004](docs/specs/SPEC-004-messaging-realtime.md)).
-- **Known gaps**: open STOMP subscriptions are not revoked when membership is removed (CM-058), and online presence is visible to every signed-in user (see [Roadmap](#roadmap)).
+- **Subscription revocation**: each room frame is delivered only after membership is checked again in the database, so a member who leaves or a deleted room stops receiving frames on open sessions. Frames already accepted by the WebSocket transport cannot be recalled ([websocket protocol](docs/design/websocket-protocol.md)).
+- **Known gap**: online presence is visible to every signed-in user (see [Roadmap](#roadmap)).
 
 ## Testing
 
@@ -171,6 +169,8 @@ Changes follow the workflow in [AGENTS.md](AGENTS.md):
 
 Commits follow Conventional Commits with a `Refs: CM-xxx` footer.
 
+## What I Learned
+
 <!-- TODO(owner): personal section -->
 
 ## Repository Layout
@@ -199,3 +199,7 @@ Commits follow Conventional Commits with a `Refs: CM-xxx` footer.
 ```
 
 The frontend layout is the module boundary listed in [AGENTS.md](AGENTS.md).
+
+## License
+
+See the [LICENSE](LICENSE) file for details.
