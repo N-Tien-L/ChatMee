@@ -56,14 +56,14 @@ class RequestCorrelationIT {
 
     @Test
     void unauthenticatedApiRequest_stillReturnsRequestIdHeader() throws Exception {
-        mvc.perform(get("/api/v1/chatrooms"))
+        mvc.perform(get("/api/v1/rooms"))
                 .andExpect(status().isUnauthorized())
                 .andExpect(header().exists("X-Request-Id"));
     }
 
     @Test
     void securityFilterChain_tagsUserAfterContextIsLoadedAndBeforeAuthorization() {
-        List<Filter> filters = filterChainProxy.getFilters("/api/v1/chatrooms");
+        List<Filter> filters = filterChainProxy.getFilters("/api/v1/rooms");
 
         int contextIndex = indexOf(filters, SecurityContextHolderFilter.class);
         int userMdcIndex = indexOf(filters, UserMdcFilter.class);

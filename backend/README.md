@@ -22,8 +22,6 @@
 | Method | Path | Description |
 | :--- | :--- | :--- |
 | `GET` | `/auth/me` | Get current authenticated user details. |
-| `GET` | `/auth/status` | Check authentication status (returns boolean). |
-| `GET` | `/auth/user` | Get user info (similar to `/me` but simplified). |
 
 ### Users (`/users`)
 | Method | Path | Description |
@@ -32,35 +30,31 @@
 | `GET` | `/users/{userId}` | Get user by ID. |
 | `GET` | `/users/provider/{provider}/id/{providerId}` | Get user by OAuth provider ID. |
 
-### Chat Rooms (`/chatrooms`)
+### Chat Rooms (`/rooms`)
 | Method | Path | Description |
 | :--- | :--- | :--- |
-| `GET` | `/chatrooms` | List all chat rooms the user is part of (or public ones). |
-| `POST` | `/chatrooms/create` | Create a new chat room. |
-| `GET` | `/chatrooms/{roomId}` | Get details of a specific chat room. |
-| `PUT` | `/chatrooms/{roomId}` | Update chat room details. |
-| `DELETE` | `/chatrooms/{roomId}` | Delete a chat room. |
-| `POST` | `/chatrooms/{roomId}/join` | Join a chat room. |
-| `POST` | `/chatrooms/{roomId}/leave` | Leave a chat room. |
-| `POST` | `/chatrooms/{roomId}/add-participant` | Add a user to a chat room (Admin/Owner only). |
-
-### Messages (`/messages`)
-| Method | Path | Description |
-| :--- | :--- | :--- |
-| `GET` | `/messages/room/{roomId}` | Get recent messages for a specific room. |
+| `GET` | `/rooms` | List all chat rooms the user is part of (or public ones). |
+| `POST` | `/rooms` | Create a new chat room. |
+| `GET` | `/rooms/{roomId}` | Get details of a specific chat room. |
+| `PUT` | `/rooms/{roomId}` | Update chat room details. |
+| `DELETE` | `/rooms/{roomId}` | Delete a chat room. |
+| `POST` | `/rooms/{roomId}/members/me` | Join a chat room as the caller. |
+| `DELETE` | `/rooms/{roomId}/members/me` | Leave a chat room. |
+| `POST` | `/rooms/{roomId}/members` | Add a user to a chat room (Admin/Owner only). |
+| `GET` | `/rooms/{roomId}/messages` | Get recent messages for a specific room. |
 
 ## WebSocket (`/ws`)
 - **Endpoint**: `/ws` (STOMP over plain WebSocket; origin must be `app.client.url`)
 - **Destinations**:
-    - `/topic/public/{roomId}`: Public room messages.
+    - `/topic/rooms/{roomId}`: Room messages and room events.
     - `/topic/presence`: User presence updates.
-    - `/topic/typing/{roomId}`: Typing indicators.
+    - `/topic/rooms/{roomId}/typing`: Typing indicators.
     - `/user/queue/errors`: Error notifications.
 - **Application Destinations** (Client sends to):
     - `/app/chat.sendMessage`: Send a message.
     - `/app/chat.addUser`: Join a room (announce).
     - `/app/presence`: Update presence status.
-    - `/app/typing`: Send typing status.
+    - `/app/rooms/{roomId}/typing`: Send typing status.
 
 ## Error Handling
 Standard HTTP status codes are used:

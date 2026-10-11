@@ -88,7 +88,7 @@ function setup(overrides: Partial<StompSessionOptions> = {}) {
     return { session, client: () => clients[clients.length - 1], clients, getToken };
 }
 
-const ROOM = "/topic/public/r1";
+const ROOM = "/topic/rooms/r1";
 
 describe("stompSession", () => {
     beforeEach(() => { vi.useFakeTimers(); });
@@ -262,12 +262,12 @@ describe("stompSession", () => {
 
     it("publishes only while connected and stops cleanly", async () => {
         const { session, client } = setup();
-        expect(session.publish("/app/typing", { roomId: "r1", typing: true })).toBe(false);
+        expect(session.publish("/app/rooms/r1/typing", { typing: true })).toBe(false);
         await client().connect();
-        expect(session.publish("/app/typing", { roomId: "r1", typing: true })).toBe(true);
+        expect(session.publish("/app/rooms/r1/typing", { typing: true })).toBe(true);
         expect(client().publish).toHaveBeenCalledWith({
-            destination: "/app/typing",
-            body: JSON.stringify({ roomId: "r1", typing: true }),
+            destination: "/app/rooms/r1/typing",
+            body: JSON.stringify({ typing: true }),
         });
 
         session.stop();

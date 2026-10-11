@@ -59,22 +59,15 @@ class AuthControllerWebMvcTest extends SecuredWebMvcTestSupport {
     }
 
     @Test
-    void getAuthStatus_anonymous_returnsFalse() throws Exception {
-        mvc.perform(get("/api/v1/auth/status"))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.data").value(false));
+    void getAuthStatus_removed_anonymousReturns401Problem() throws Exception {
+        // CM-042 (A-4): /api/v1/auth/status was removed in favour of /api/v1/auth/me.
+        expectProblem(mvc.perform(get("/api/v1/auth/status")), 401, "UNAUTHENTICATED");
     }
 
     @Test
-    void getAuthStatus_authenticated_returnsTrue() throws Exception {
+    void getAuthStatus_removed_authenticatedReturns404() throws Exception {
         mvc.perform(get("/api/v1/auth/status").with(oauth2Login().oauth2User(com.lnt.chatmee.support.TestUsers.principal("u1"))))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.data").value(true));
-    }
-
-    @Test
-    void getAuthStatus_oldSession_returns401Problem() throws Exception {
-        expectProblem(mvc.perform(get("/api/v1/auth/status").with(oauth2Login())), 401, "UNAUTHENTICATED");
+                .andExpect(status().isNotFound());
     }
 
     @Test

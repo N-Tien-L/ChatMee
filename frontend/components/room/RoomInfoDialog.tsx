@@ -120,11 +120,9 @@ export const RoomInfoDialog: React.FC<RoomInfoDialogProps> = ({
     if (!room) return;
     setIsActionLoading(true);
     try {
-      const response = await chatRoomApi.joinChatRoom(room.id);
-      if (response.success) {
-        showToast("You've joined the room");
-        await loadRoomInfo(); // Reload to update participant list
-      }
+      await chatRoomApi.joinChatRoom(room.id);
+      showToast("You've joined the room");
+      await loadRoomInfo(); // Reload to update participant list
     } catch (error) {
       console.error("Error joining room:", error);
       showToast("Failed to join the room", "error");

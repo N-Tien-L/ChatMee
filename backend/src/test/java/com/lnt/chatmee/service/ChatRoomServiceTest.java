@@ -321,7 +321,7 @@ class ChatRoomServiceTest {
         verify(chatRoomRepository, never()).delete(any());
         verify(participantService).removeAllParticipants("room1");
         ArgumentCaptor<ChatMessageResponse> event = ArgumentCaptor.forClass(ChatMessageResponse.class);
-        verify(messagingTemplate).convertAndSend(eq("/topic/public/room1"), event.capture());
+        verify(messagingTemplate).convertAndSend(eq("/topic/rooms/room1"), event.capture());
         assertThat(event.getValue().type()).isEqualTo(Message.MessageType.SYSTEM);
         assertThat(event.getValue().content()).isEqualTo(ChatRoomService.ROOM_DELETED_MESSAGE);
         assertThat(event.getValue().chatRoomId()).isEqualTo("room1");

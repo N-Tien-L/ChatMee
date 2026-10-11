@@ -14,7 +14,7 @@ export const useWebSocket = () => {
 
     const subscribeRoom = useCallback(
         (roomId: string, onMessage: (msg: Message) => void) =>
-            session.subscribe(`/topic/public/${roomId}`, (frame) => {
+            session.subscribe(`/topic/rooms/${roomId}`, (frame) => {
                 let message: Message;
                 try {
                     message = JSON.parse(frame.body);
@@ -28,7 +28,7 @@ export const useWebSocket = () => {
 
     const subscribeTyping = useCallback(
         (roomId: string) =>
-            session.subscribe(`/topic/typing/${roomId}`, async (frame) => {
+            session.subscribe(`/topic/rooms/${roomId}/typing`, async (frame) => {
                 let data: TypingMessage;
                 try {
                     data = JSON.parse(frame.body);
@@ -57,7 +57,7 @@ export const useWebSocket = () => {
     );
 
     const sendTyping = useCallback(
-        (roomId: string, typing: boolean) => session.publish("/app/typing", { roomId, typing }),
+        (roomId: string, typing: boolean) => session.publish(`/app/rooms/${roomId}/typing`, { typing }),
         [session]
     );
 

@@ -179,10 +179,10 @@ class RoomMembershipIT {
         participantService.createParticipant(room.getId(), "user-0", Role.MEMBER);
         assertThat(participantRepository.existsByChatRoomIdAndUserId(room.getId(), "user-0")).isTrue();
         assertThat(participantService.isUserParticipant(room.getId(), "user-0")).isFalse();
-        for (String destination : List.of("/topic/public/", "/topic/typing/")) {
+        for (String suffix : List.of("", "/typing")) {
             var headers = org.springframework.messaging.simp.stomp.StompHeaderAccessor.create(
                 org.springframework.messaging.simp.stomp.StompCommand.SUBSCRIBE);
-            headers.setUser(() -> "user-0"); headers.setDestination(destination + room.getId());
+            headers.setUser(() -> "user-0"); headers.setDestination("/topic/rooms/" + room.getId() + suffix);
             var frame = org.springframework.messaging.support.MessageBuilder.createMessage(new byte[0], headers.getMessageHeaders());
             assertThatThrownBy(() -> authChannelInterceptor.preSend(frame, null))
                 .isInstanceOf(org.springframework.security.access.AccessDeniedException.class);

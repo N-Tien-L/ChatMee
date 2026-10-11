@@ -31,7 +31,7 @@ class GlobalExceptionHandlerTest {
 
     private ResultActions roomFailure(RuntimeException exception, int status, String code) throws Exception {
         when(rooms.getChatRoomById("u1", "room")).thenThrow(exception);
-        return check(mvc.perform(get("/api/v1/chatrooms/room")), status, code);
+        return check(mvc.perform(get("/api/v1/rooms/room")), status, code);
     }
 
     private ResultActions check(ResultActions result, int status, String code) throws Exception {
@@ -62,18 +62,18 @@ class GlobalExceptionHandlerTest {
     void joinRoom_duplicateJoin_returns409Problem() throws Exception {
         doThrow(new UserAlreadyInRoomException("User is already in the room"))
                 .when(participants).joinRoom("room", "u1");
-        check(mvc.perform(post("/api/v1/chatrooms/room/join")), 409, "ALREADY_PARTICIPANT");
+        check(mvc.perform(post("/api/v1/rooms/room/members/me")), 409, "ALREADY_PARTICIPANT");
     }
 
     @Test
     void joinRoom_fullRoom_returns409Problem() throws Exception {
         doThrow(new RoomCapacityExceededException("Room full")).when(participants).joinRoom("room", "u1");
-        check(mvc.perform(post("/api/v1/chatrooms/room/join")), 409, "ROOM_FULL");
+        check(mvc.perform(post("/api/v1/rooms/room/members/me")), 409, "ROOM_FULL");
     }
 
     @Test
     void createRoom_invalidFields_returns400WithFieldErrors() throws Exception {
-        check(mvc.perform(post("/api/v1/chatrooms/create").contentType(MediaType.APPLICATION_JSON)
+        check(mvc.perform(post("/api/v1/rooms").contentType(MediaType.APPLICATION_JSON)
                 .content("{\"maxUsers\":0}")), 400, "VALIDATION_FAILED")
                 .andExpect(jsonPath("$.errors[?(@.field == 'maxUsers')]").isNotEmpty())
                 .andExpect(jsonPath("$.errors[?(@.field == 'roomType')]").isNotEmpty());
@@ -82,7 +82,7 @@ class GlobalExceptionHandlerTest {
 
     @Test
     void createRoom_invalidName_returns400Problem() throws Exception {
-        check(mvc.perform(post("/api/v1/chatrooms/create").contentType(MediaType.APPLICATION_JSON)
+        check(mvc.perform(post("/api/v1/rooms").contentType(MediaType.APPLICATION_JSON)
                 .content("{\"roomType\":\"PUBLIC\",\"roomName\":\"bad!\"}")), 400, "VALIDATION_FAILED")
                 .andExpect(jsonPath("$.errors[?(@.field == 'roomName')]").isNotEmpty());
         verifyNoInteractions(rooms);
@@ -90,7 +90,7 @@ class GlobalExceptionHandlerTest {
 
     @Test
     void createRoom_malformedJson_returns400Problem() throws Exception {
-        check(mvc.perform(post("/api/v1/chatrooms/create").contentType(MediaType.APPLICATION_JSON)
+        check(mvc.perform(post("/api/v1/rooms").contentType(MediaType.APPLICATION_JSON)
                 .content("{")), 400, "INVALID_ARGUMENT");
     }
 
@@ -136,11 +136,11 @@ class GlobalExceptionHandlerTest {
                 users, mock(com.lnt.chatmee.security.WsTokenService.class)))
                 .setCustomArgumentResolvers(resolver).setControllerAdvice(new GlobalExceptionHandler()).build();
         check(authMvc.perform(get("/api/v1/auth/me")), 404, "USER_NOT_FOUND");
-        check(authMvc.perform(get("/api/v1/auth/user")), 404, "USER_NOT_FOUND");
+        check(authMvc.perform(get("/api/v1/auth/me")), 404, "USER_NOT_FOUND");
     }
 
     @Test
     void getRoom_wrongMethod_returns405Problem() throws Exception {
-        check(mvc.perform(patch("/api/v1/chatrooms/room")), 405, "INVALID_ARGUMENT");
+        check(mvc.perform(patch("/api/v1/rooms/room")), 405, "INVALID_ARGUMENT");
     }
 }

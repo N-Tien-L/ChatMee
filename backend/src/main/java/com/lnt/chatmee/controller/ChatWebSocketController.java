@@ -40,7 +40,7 @@ public class ChatWebSocketController {
         try {
             ChatMessageResponse response = messageService.sendMessage(request, principal.getName());
 
-            messagingTemplate.convertAndSend("/topic/public/" + request.getRoomId(), response);
+            messagingTemplate.convertAndSend("/topic/rooms/" + request.getRoomId(), response);
         } catch (com.lnt.chatmee.exception.ForbiddenActionException e) {
             sendError(request, principal, ErrorCode.FORBIDDEN_ACTION, "Room membership required");
         } catch (Exception e) {

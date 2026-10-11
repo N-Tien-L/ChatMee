@@ -123,7 +123,7 @@ class StompMessagingIT {
     void sendMessage_memberWithForgedSender_broadcastsAndPersistsPrincipalIdentity() throws Exception {
         User member = seedUser(true);
         StompSession session = connect(issueToken(member), new ProtocolEvents());
-        BlockingQueue<String> broadcasts = subscribeReady(session, "/topic/public/" + roomId, null);
+        BlockingQueue<String> broadcasts = subscribeReady(session, "/topic/rooms/" + roomId, null);
         String tempId = UUID.randomUUID().toString();
         sendJson(session, payload(tempId, "Integration message", "forged-user"));
         JsonNode response = mapper.readTree(take(broadcasts));
@@ -153,7 +153,7 @@ class StompMessagingIT {
         seedUser(true);
         ProtocolEvents events = new ProtocolEvents();
         StompSession session = connect(issueToken(seedUser(false)), events);
-        session.subscribe("/topic/public/" + roomId, new ProtocolEvents());
+        session.subscribe("/topic/rooms/" + roomId, new ProtocolEvents());
         events.assertRejected();
     }
 
@@ -165,8 +165,8 @@ class StompMessagingIT {
         StompSession observerSession = connect(issueToken(observer), new ProtocolEvents());
         BlockingQueue<String> senderErrors = subscribeReady(senderSession, "/user/queue/errors", sender.getId());
         BlockingQueue<String> observerErrors = subscribeReady(observerSession, "/user/queue/errors", observer.getId());
-        BlockingQueue<String> senderRoom = subscribeReady(senderSession, "/topic/public/" + roomId, null);
-        BlockingQueue<String> observerRoom = subscribeReady(observerSession, "/topic/public/" + roomId, null);
+        BlockingQueue<String> senderRoom = subscribeReady(senderSession, "/topic/rooms/" + roomId, null);
+        BlockingQueue<String> observerRoom = subscribeReady(observerSession, "/topic/rooms/" + roomId, null);
         String tempId = UUID.randomUUID().toString();
         sendJson(senderSession, payload(tempId, "x".repeat(5001), observer.getId()));
         JsonNode error = mapper.readTree(take(senderErrors));

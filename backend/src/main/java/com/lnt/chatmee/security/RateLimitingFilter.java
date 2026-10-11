@@ -32,7 +32,6 @@ public class RateLimitingFilter extends OncePerRequestFilter {
     // cheap and needed before login (or by health probes), so they are not counted.
     private static final List<String> EXEMPT_PATHS = List.of(
             "/actuator/health", "/actuator/health/**",
-            "/api/v1/auth/status",
             "/oauth2/authorization/**", "/login/oauth2/code/**");
     private static final AntPathMatcher PATH_MATCHER = new AntPathMatcher();
 

@@ -77,7 +77,7 @@ class ChatWebSocketControllerValidationTest {
         doAnswer(invocation -> invocation.getArgument(0)).when(messages).persistMessage(any());
         dispatch("/app/chat.sendMessage", 5000);
         verify(messages).persistMessage(argThat(message -> message.getContent().length() == 5000));
-        verify(messaging).convertAndSend(eq("/topic/public/test-room"), any(ChatMessageResponse.class));
+        verify(messaging).convertAndSend(eq("/topic/rooms/test-room"), any(ChatMessageResponse.class));
         verifyNoMoreInteractions(messaging);
     }
 

@@ -137,7 +137,7 @@ describe('chatRoomsStore', () => {
         expect(result).toBe(false);
         
         // joinRoom success
-        vi.mocked(chatRoomApi.joinChatRoom).mockResolvedValueOnce({ success: true, data: 'joined' });
+        vi.mocked(chatRoomApi.joinChatRoom).mockResolvedValueOnce(undefined);
         vi.mocked(chatRoomApi.getChatRooms).mockResolvedValueOnce({ success: true, data: [mockRoom] });
         result = await useChatRoomsStore.getState().joinRoom('r1');
         expect(result).toBe(true);

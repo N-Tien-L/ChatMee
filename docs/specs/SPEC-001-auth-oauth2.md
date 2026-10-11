@@ -38,7 +38,7 @@ Users sign in with Google or GitHub, without a ChatMee password. The backend cre
 - The WebSocket is authenticated separately with a single-use token (ADR-0004, SPEC-004).
 
 ## 7. Non-functional
-- The OAuth endpoints, `/api/v1/auth/status` and health probes are not rate limited (CM-057), because every anonymous visitor shares the Vercel egress address.
+- The OAuth endpoints and health probes are not rate limited (CM-057), because every anonymous visitor shares the Vercel egress address.
 
 ## 8. Related APIs / Protocols
 docs/design/error-handling.md, docs/design/websocket-protocol.md, OpenAPI at `/v3/api-docs` (dev/local profiles only).
