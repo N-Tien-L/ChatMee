@@ -152,7 +152,7 @@ vi.mock('@/lib/stores/authStore', () => ({
     useAuthStore: () => ({ user: { id: 'u1', name: 'Alice' } }),
 }));
 vi.mock('@/lib/api/messageApi', () => ({
-    messageApi: { get50RecentMessages: vi.fn().mockResolvedValue({ success: true, data: [] }) },
+    messageApi: { getMessages: vi.fn().mockResolvedValue({ success: true, data: { messages: [], nextCursor: null, hasMore: false } }) },
 }));
 
 describe('useRoomMessages delivery timeout', () => {
@@ -224,7 +224,7 @@ describe('useRoomMessages delivery timeout', () => {
         const missed: MessageResponse = {
             ...baseMessage, id: 'missed', chatRoomId: roomId, senderId: 'u2', createdAt: '2026-10-09T10:00:00Z',
         };
-        vi.mocked(messageApi.get50RecentMessages).mockResolvedValueOnce({ success: true, message: 'ok', data: [missed] });
+        vi.mocked(messageApi.getMessages).mockResolvedValueOnce({ success: true, message: 'ok', data: { messages: [missed], nextCursor: null, hasMore: false } });
         const reconnected = transport.onReconnect.mock.calls.at(-1)![0];
         await act(async () => { reconnected(); });
         expect(result.current.messages.map(m => m.id)).toEqual(['missed', pending.id]);

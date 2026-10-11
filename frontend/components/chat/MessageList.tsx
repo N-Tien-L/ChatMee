@@ -1,10 +1,13 @@
 "use client";
 
 import { Message } from "@/lib/types";
-import React, { useEffect } from "react";
+import React, { useLayoutEffect, useRef } from "react";
 import { AlertCircle, MessageSquare, RotateCw } from "lucide-react";
 import { Skeleton } from "../ui/skeleton";
 import { Button } from "../ui/button";
+
+/** Distance from the top of the list at which the next older page is requested. */
+const LOAD_OLDER_THRESHOLD_PX = 48;
 
 interface MessageListProps {
   messages: Message[];
@@ -18,9 +21,53 @@ interface MessageListProps {
   onResend?: (tempId: string) => void;
   onDiscard?: (tempId: string) => void;
   canResend?: boolean;
+  /** Older history exists before the first message (CM-044). */
+  hasMore?: boolean;
+  loadingOlder?: boolean;
+  olderError?: string | null;
+  /** Requests the next older page; called when scrolled to the top and by Retry. */
+  onLoadOlder?: () => void;
 }
 
-const MessageList: React.FC<MessageListProps> = ({
+const MessageList: React.FC<MessageListProps> = (props) => {
+  const { messages, messagesEndRef, hasMore = false, loadingOlder = false, olderError = null, onLoadOlder } = props;
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const edgesRef = useRef<{ first?: string; last?: string; scrollHeight: number }>({ scrollHeight: 0 });
+
+  useLayoutEffect(() => {
+    const el = scrollRef.current;
+    const previous = edgesRef.current;
+    const first = messages[0]?.id;
+    const last = messages[messages.length - 1]?.id;
+    if (el && previous.last !== undefined && last === previous.last && first !== previous.first) {
+      // An older page was prepended: keep the message the user was reading where it was.
+      el.scrollTop += el.scrollHeight - previous.scrollHeight;
+    } else if (last !== previous.last) {
+      // A first load jumps straight to the bottom, so its scroll never passes the load-older threshold.
+      messagesEndRef.current?.scrollIntoView({ behavior: previous.last === undefined ? "auto" : "smooth" });
+    }
+    edgesRef.current = { first, last, scrollHeight: el?.scrollHeight ?? 0 };
+  }, [messages, messagesEndRef]);
+
+  const handleScroll = () => {
+    const el = scrollRef.current;
+    if (!el || !onLoadOlder || !hasMore || loadingOlder || olderError) return;
+    if (el.scrollTop <= LOAD_OLDER_THRESHOLD_PX) onLoadOlder();
+  };
+
+  return (
+    // Scroll anchoring is off because the prepend adjustment above already keeps the position.
+    <div
+      ref={scrollRef}
+      onScroll={handleScroll}
+      className="h-full overflow-y-auto [overflow-anchor:none]"
+    >
+      <MessageListContent {...props} />
+    </div>
+  );
+};
+
+const MessageListContent: React.FC<MessageListProps> = ({
   messages,
   onlineUsers,
   formatDate,
@@ -32,11 +79,11 @@ const MessageList: React.FC<MessageListProps> = ({
   onResend,
   onDiscard,
   canResend = true,
+  hasMore = false,
+  loadingOlder = false,
+  olderError = null,
+  onLoadOlder,
 }) => {
-  useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages, messagesEndRef]);
-
   if (loading && messages.length === 0) {
     return (
       <div
@@ -97,6 +144,36 @@ const MessageList: React.FC<MessageListProps> = ({
             </Button>
           )}
         </div>
+      )}
+      {loadingOlder && (
+        <div
+          className="flex items-center justify-center gap-2 pt-3 text-xs text-gray-500"
+          role="status"
+          aria-live="polite"
+        >
+          <RotateCw className="w-3.5 h-3.5 animate-spin" aria-hidden="true" />
+          Loading older messages…
+        </div>
+      )}
+      {olderError && (
+        <div
+          className="mx-3 sm:mx-4 mt-3 flex flex-wrap items-center gap-2 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm"
+          role="alert"
+        >
+          <AlertCircle className="w-4 h-4 text-red-500 flex-shrink-0" aria-hidden="true" />
+          <p className="flex-1 min-w-0 break-words text-red-700">
+            Could not load older messages: {olderError}
+          </p>
+          {onLoadOlder && (
+            <Button variant="outline" size="sm" onClick={onLoadOlder}>
+              <RotateCw className="w-4 h-4 mr-2" aria-hidden="true" />
+              Retry
+            </Button>
+          )}
+        </div>
+      )}
+      {onLoadOlder && !hasMore && !loading && !error && messages.length > 0 && (
+        <p className="pt-3 text-center text-xs text-gray-400">Beginning of conversation</p>
       )}
       <div
         className="p-3 sm:p-4 space-y-3 sm:space-y-4"
