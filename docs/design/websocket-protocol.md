@@ -143,7 +143,7 @@ fans out presence, not room messages. This change revokes delivery on remote soc
 instances but does not introduce distributed room-event delivery. Reliable room
 and terminal-event fan-out across instances remains a separate follow-up.
 
-Spring contracts covered by the new tests (execution pending): the actual executor channel invokes
+Spring contracts covered by the new tests: the actual executor channel invokes
 `beforeHandle` at handler time; the wire integration tests obtain receiving identity
 from real connection events and preserve the internal deletion audience through
 the real broker without changing the client payload. Execution is delegated to
@@ -265,7 +265,7 @@ topic names are retained for compatibility.
 - `SubscriptionRevocationIT`: REST leave/delete with live STOMP subscribers,
   two sessions per member, deletion SYSTEM event followed by silence, unaffected
   members/rooms/presence/private errors, and shared-database removal without a
-  local invalidation hook (CM-058; orchestrator verification pending).
+  local invalidation hook (CM-058).
 - `RoomSubscriptionInterceptorTest`: receiver identity, every-frame authorization,
   session cleanup, database failure, server-only deletion exception and queued-frame
   filtering through an actual `ExecutorSubscribableChannel` (CM-058).
