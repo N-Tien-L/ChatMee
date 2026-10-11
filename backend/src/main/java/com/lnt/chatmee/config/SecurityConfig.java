@@ -1,9 +1,9 @@
 package com.lnt.chatmee.config;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.ObjectMapper;
 import com.lnt.chatmee.exception.GlobalExceptionHandler;
 import com.lnt.chatmee.exception.ErrorCode;
-import org.springframework.security.web.util.matcher.AntPathRequestMatcher;
+import org.springframework.security.web.servlet.util.matcher.PathPatternRequestMatcher;
 import org.springframework.security.web.authentication.LoginUrlAuthenticationEntryPoint;
 import org.springframework.security.web.util.matcher.AnyRequestMatcher;
 
@@ -71,14 +71,14 @@ public class SecurityConfig {
                         .defaultAuthenticationEntryPointFor((request, response, exception) ->
                                 GlobalExceptionHandler.writeProblem(objectMapper, request, response,
                                         ErrorCode.UNAUTHENTICATED, "Authentication required"),
-                                new AntPathRequestMatcher("/api/**"))
+                                PathPatternRequestMatcher.pathPattern("/api/**"))
                         .defaultAuthenticationEntryPointFor(
                                 new LoginUrlAuthenticationEntryPoint("/login"),
                                 AnyRequestMatcher.INSTANCE)
                         .defaultAccessDeniedHandlerFor((request, response, exception) ->
                                 GlobalExceptionHandler.writeProblem(objectMapper, request, response,
                                         ErrorCode.FORBIDDEN_ACTION, "Access denied"),
-                                new AntPathRequestMatcher("/api/**")))
+                                PathPatternRequestMatcher.pathPattern("/api/**")))
                 .oauth2Login(oauth2 -> oauth2
                         .userInfoEndpoint(userInfo -> userInfo
                                 .userService(customOAuth2UserService))

@@ -11,7 +11,7 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.context.support.StaticApplicationContext;
-import org.springframework.messaging.converter.MappingJackson2MessageConverter;
+import org.springframework.messaging.converter.JacksonJsonMessageConverter;
 import org.springframework.messaging.simp.SimpMessageHeaderAccessor;
 import org.springframework.messaging.simp.SimpMessageType;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
@@ -37,7 +37,7 @@ class TypingControllerTest {
                 new ExecutorSubscribableChannel(), new ExecutorSubscribableChannel(), messaging);
         handler.setApplicationContext(context);
         handler.setDestinationPrefixes(List.of("/app"));
-        handler.setMessageConverter(new MappingJackson2MessageConverter());
+        handler.setMessageConverter(new JacksonJsonMessageConverter());
         handler.afterPropertiesSet();
     }
 

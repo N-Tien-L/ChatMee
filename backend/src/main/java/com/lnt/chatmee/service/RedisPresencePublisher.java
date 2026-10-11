@@ -1,7 +1,7 @@
 package com.lnt.chatmee.service;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.core.JacksonException;
+import tools.jackson.databind.ObjectMapper;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 
@@ -24,7 +24,7 @@ public class RedisPresencePublisher {
             Map<String, Object> message = Map.of("userId", userId, "online", isOnline);
             String jsonMessage = objectMapper.writeValueAsString(message);
             redisTemplate.convertAndSend(PRESENCE_CHANNEL, jsonMessage);
-        } catch (JsonProcessingException e) {
+        } catch (JacksonException e) {
             // In a real application, you'd want to handle this error more gracefully
             throw new RuntimeException("Could not serialize presence update to JSON", e);
         }

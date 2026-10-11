@@ -238,13 +238,13 @@ class MessageServiceTest {
 
     @Test
     void serialize_messageResponse_usesUtcInstantAndFrontendFlagNames() throws Exception {
-        var mapper = new com.fasterxml.jackson.databind.ObjectMapper().findAndRegisterModules();
+        var mapper = new tools.jackson.databind.ObjectMapper();
         var instant = Instant.parse("2026-10-08T12:34:56Z");
         var response = ChatMessageResponse.builder().createdAt(instant).updatedAt(instant)
                 .isUpdated(true).isDeleted(false).build();
         var json = mapper.readTree(mapper.writeValueAsString(response));
-        assertThat(json.path("createdAt").asText()).isEqualTo("2026-10-08T12:34:56Z");
-        assertThat(json.path("updatedAt").asText()).isEqualTo("2026-10-08T12:34:56Z");
+        assertThat(json.path("createdAt").asString()).isEqualTo("2026-10-08T12:34:56Z");
+        assertThat(json.path("updatedAt").asString()).isEqualTo("2026-10-08T12:34:56Z");
         assertThat(json.path("isUpdated").asBoolean()).isTrue();
         assertThat(json.has("isDeleted")).isTrue();
         assertThat(json.has("updated")).isFalse();

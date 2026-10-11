@@ -16,10 +16,9 @@ import java.util.concurrent.TimeoutException;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.autoconfigure.ImportAutoConfiguration;
-import org.springframework.boot.autoconfigure.web.servlet.DispatcherServletAutoConfiguration;
-import org.springframework.boot.autoconfigure.web.servlet.ServletWebServerFactoryAutoConfiguration;
-import org.springframework.boot.autoconfigure.web.servlet.WebMvcAutoConfiguration;
-import org.springframework.boot.autoconfigure.websocket.servlet.WebSocketServletAutoConfiguration;
+import org.springframework.boot.webmvc.autoconfigure.DispatcherServletAutoConfiguration;
+import org.springframework.boot.tomcat.autoconfigure.servlet.TomcatServletWebServerAutoConfiguration;
+import org.springframework.boot.webmvc.autoconfigure.WebMvcAutoConfiguration;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.server.LocalServerPort;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -207,9 +206,9 @@ class AuthChannelInterceptorTest {
             webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
             properties = "app.client.url=http://localhost")
     @ActiveProfiles("actuator-test")
-    @ImportAutoConfiguration({ServletWebServerFactoryAutoConfiguration.class,
-            DispatcherServletAutoConfiguration.class, WebMvcAutoConfiguration.class,
-            WebSocketServletAutoConfiguration.class})
+    // Boot 4: the Tomcat auto-configuration also carries the WebSocket container setup.
+    @ImportAutoConfiguration({TomcatServletWebServerAutoConfiguration.class,
+            DispatcherServletAutoConfiguration.class, WebMvcAutoConfiguration.class})
     class WireConnect {
         @LocalServerPort
         private int port;
@@ -251,9 +250,9 @@ class AuthChannelInterceptorTest {
                 assertTrue(bothReady.isDone(), "Both private subscriptions must be active");
                 wireMessaging.convertAndSendToUser("user-a", "/queue/errors",
                         StompError.builder().tempId("temp-a").message("sender-error").build());
-                var error = new com.fasterxml.jackson.databind.ObjectMapper().readTree(receivedA.get(5, TimeUnit.SECONDS));
-                assertEquals("sender-error", error.get("message").asText());
-                assertEquals("temp-a", error.get("tempId").asText());
+                var error = new tools.jackson.databind.ObjectMapper().readTree(receivedA.get(5, TimeUnit.SECONDS));
+                assertEquals("sender-error", error.get("message").asString());
+                assertEquals("temp-a", error.get("tempId").asString());
                 assertThrows(TimeoutException.class, () -> receivedB.get(300, TimeUnit.MILLISECONDS));
             } finally {
                 if (sessionA != null && sessionA.isConnected()) sessionA.disconnect();

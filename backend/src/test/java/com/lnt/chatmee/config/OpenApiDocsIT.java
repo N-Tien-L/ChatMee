@@ -9,14 +9,14 @@ import java.util.List;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
+import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
 import com.lnt.chatmee.support.ContainersConfig;
 
 @SpringBootTest(properties = { "springdoc.api-docs.enabled=true", "springdoc.swagger-ui.enabled=true" })
@@ -35,7 +35,7 @@ class OpenApiDocsIT {
     void apiDocs_authenticated_listsEveryRestEndpoint() throws Exception {
         JsonNode paths = apiDocs().path("paths");
 
-        assertThat(paths.fieldNames()).toIterable().contains(
+        assertThat(paths.propertyNames()).contains(
                 "/api/v1/auth/ws-token", "/api/v1/auth/me",
                 "/api/v1/rooms", "/api/v1/rooms/{roomId}",
                 "/api/v1/rooms/{roomId}/members", "/api/v1/rooms/{roomId}/members/me",
@@ -49,12 +49,12 @@ class OpenApiDocsIT {
         JsonNode createResponses = docs.at("/paths/~1api~1v1~1rooms/post/responses");
 
         for (String status : List.of("400", "401", "403", "404", "409", "429", "500")) {
-            assertThat(createResponses.at("/" + status + "/content/application~1problem+json/schema/$ref").asText())
+            assertThat(createResponses.at("/" + status + "/content/application~1problem+json/schema/$ref").asString())
                     .as("response %s", status)
                     .isEqualTo("#/components/schemas/" + OpenApiConfig.PROBLEM_SCHEMA);
         }
         JsonNode problem = docs.at("/components/schemas/" + OpenApiConfig.PROBLEM_SCHEMA + "/properties");
-        assertThat(problem.fieldNames()).toIterable().contains("type", "title", "status", "detail", "code", "errors");
+        assertThat(problem.propertyNames()).contains("type", "title", "status", "detail", "code", "errors");
     }
 
     @Test

@@ -1,6 +1,7 @@
 package com.lnt.chatmee.security;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.json.JsonMapper;
 import com.lnt.chatmee.service.RateLimitingService;
 import jakarta.servlet.FilterChain;
 import org.junit.jupiter.api.AfterEach;
@@ -21,9 +22,9 @@ import static org.mockito.Mockito.*;
 
 class RateLimitingFilterTest {
 
-    private final ObjectMapper mapper = new ObjectMapper().findAndRegisterModules()
+    private final ObjectMapper mapper = JsonMapper.builder()
             .addMixIn(org.springframework.http.ProblemDetail.class,
-                    org.springframework.http.converter.json.ProblemDetailJacksonMixin.class);
+                    org.springframework.http.converter.json.ProblemDetailJacksonMixin.class).build();
     private final RateLimitingService limit = mock(RateLimitingService.class);
     private final RateLimitingFilter filter = new RateLimitingFilter(mapper, limit);
 
@@ -72,13 +73,13 @@ class RateLimitingFilterTest {
         assertThat(response.getHeader("X-RateLimit-Limit")).isEqualTo("20");
         assertThat(response.getHeader("X-RateLimit-Remaining")).isEqualTo("0");
         var body = mapper.readTree(response.getContentAsString());
-        assertThat(body.path("code").asText()).isEqualTo("RATE_LIMITED");
+        assertThat(body.path("code").asString()).isEqualTo("RATE_LIMITED");
         assertThat(body.path("status").asInt()).isEqualTo(429);
         assertThat(body.path("errors").isArray()).isTrue();
-        assertThat(body.path("instance").asText()).isEqualTo("/api/v1/users");
-        assertThat(body.path("type").asText()).isNotBlank();
-        assertThat(body.path("title").asText()).isNotBlank();
-        assertThat(body.path("detail").asText()).isEqualTo("Too many requests");
+        assertThat(body.path("instance").asString()).isEqualTo("/api/v1/users");
+        assertThat(body.path("type").asString()).isNotBlank();
+        assertThat(body.path("title").asString()).isNotBlank();
+        assertThat(body.path("detail").asString()).isEqualTo("Too many requests");
         verifyNoInteractions(chain);
     }
 

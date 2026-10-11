@@ -1,7 +1,7 @@
 package com.lnt.chatmee.service;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.core.JacksonException;
+import tools.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
@@ -30,7 +30,7 @@ class RedisPresencePublisherTest {
     private RedisPresencePublisher publisher;
 
     @Test
-    void publishPresenceUpdate_successful_sendsToRedis() throws JsonProcessingException {
+    void publishPresenceUpdate_successful_sendsToRedis() {
         when(objectMapper.writeValueAsString(any(Map.class))).thenReturn("{\"userId\":\"user1\",\"online\":true}");
 
         publisher.publishPresenceUpdate("user1", true);
@@ -39,8 +39,8 @@ class RedisPresencePublisherTest {
     }
 
     @Test
-    void publishPresenceUpdate_jsonException_throwsRuntimeException() throws JsonProcessingException {
-        when(objectMapper.writeValueAsString(any(Map.class))).thenThrow(new JsonProcessingException("error") {});
+    void publishPresenceUpdate_jsonException_throwsRuntimeException() {
+        when(objectMapper.writeValueAsString(any(Map.class))).thenThrow(new JacksonException("error") {});
 
         assertThatThrownBy(() -> publisher.publishPresenceUpdate("user1", true))
                 .isInstanceOf(RuntimeException.class)
