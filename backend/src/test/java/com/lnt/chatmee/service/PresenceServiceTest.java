@@ -1,44 +1,76 @@
 package com.lnt.chatmee.service;
 
-import org.junit.jupiter.api.BeforeEach;
+import static org.assertj.core.api.Assertions.*;
+import static org.mockito.ArgumentMatchers.*;
+import static org.mockito.Mockito.*;
+import java.util.List;
 import org.junit.jupiter.api.Test;
-
-import java.util.Set;
-
-import static org.assertj.core.api.Assertions.assertThat;
+import org.springframework.dao.DataAccessResourceFailureException;
+import org.springframework.data.redis.core.StringRedisTemplate;
+import org.springframework.data.redis.core.script.RedisScript;
 
 class PresenceServiceTest {
+    private final StringRedisTemplate redis = mock(StringRedisTemplate.class);
+    private final PresenceService service = new PresenceService(redis, "instance", "presence:{test}:", 30000, 10000);
 
-    private PresenceService presenceService;
-
-    @BeforeEach
-    void setUp() {
-        presenceService = new PresenceService();
+    @Test
+    void getOnlineUsers_sharedRegistry_returnsImmutableSnapshot() {
+        when(redis.execute(any(RedisScript.class), anyList(), any(Object[].class))).thenReturn(List.of("remote"));
+        assertThat(service.getOnlineUsers()).containsExactly("remote");
+        assertThat(service.isUserOnline("remote")).isTrue();
+        assertThatThrownBy(() -> service.getOnlineUsers().add("other")).isInstanceOf(UnsupportedOperationException.class);
     }
 
     @Test
-    void userConnected_addsUserToOnlineSet() {
-        presenceService.userConnected("user1");
-
-        assertThat(presenceService.isUserOnline("user1")).isTrue();
-        assertThat(presenceService.getOnlineUsers()).containsExactly("user1");
+    void sessions_redisDown_failOpenAndKeepOtherTabs() {
+        when(redis.execute(any(RedisScript.class), anyList(), any(Object[].class)))
+                .thenThrow(new DataAccessResourceFailureException("unavailable"));
+        service.userConnected("user", "tab1");
+        service.userConnected("user", "tab2");
+        service.userDisconnected("user", "tab1");
+        assertThat(service.getOnlineUsers()).containsExactly("user");
+        service.heartbeat("user", "tab2");
+        service.sweep();
+        service.userDisconnected("user", "tab2");
+        service.userDisconnected("user", "tab2");
+        assertThat(service.getOnlineUsers()).isEmpty();
     }
 
     @Test
-    void userDisconnected_removesUserFromOnlineSet() {
-        presenceService.userConnected("user1");
-        presenceService.userDisconnected("user1");
-
-        assertThat(presenceService.isUserOnline("user1")).isFalse();
-        assertThat(presenceService.getOnlineUsers()).isEmpty();
+    void heartbeat_unknownSession_cannotCreatePresence() {
+        service.heartbeat("victim", "forged");
+        service.userConnected(null, "session");
+        service.userConnected("", "session");
+        service.userConnected("user", null);
+        service.userConnected("user", "");
+        service.userDisconnected(null, null);
+        verifyNoInteractions(redis);
     }
 
     @Test
-    void getOnlineUsers_returnsUnmodifiableSet() {
-        presenceService.userConnected("user1");
-        Set<String> onlineUsers = presenceService.getOnlineUsers();
-        
-        org.assertj.core.api.Assertions.assertThatThrownBy(() -> onlineUsers.add("user2"))
-                .isInstanceOf(UnsupportedOperationException.class);
+    void refresh_missingResult_recoversOwnSessionsAndHandlesEmptyInstanceId() {
+        PresenceService generated = new PresenceService(redis, "", "presence:{test}:", 30000, 10000);
+        generated.userConnected("user", "tab");
+        generated.refresh();
+        assertThat(generated.getOnlineUsers()).containsExactly("user");
+        generated.userDisconnected("user", "tab");
+        assertThat(generated.getOnlineUsers()).isEmpty();
     }
+    @Test
+    void sweep_noLocalSessions_usesAtomicIdleCheck() {
+        service.sweep();
+        verify(redis).execute(any(RedisScript.class), eq(List.of("presence:{test}:online", "presence:{test}:pending")),
+                eq("presence:{test}:"), eq("idle-sweep"), eq("instance"), eq("30000"), eq("10000"));
+        verifyNoMoreInteractions(redis);
+    }
+
+    @Test
+    void sweep_localSession_keepsFullSweep() {
+        service.userConnected("user", "tab");
+        clearInvocations(redis);
+        service.sweep();
+        verify(redis).execute(any(RedisScript.class), anyList(),
+                eq("presence:{test}:"), eq("sweep"), eq("instance"), eq("30000"), eq("10000"));
+    }
+
 }
