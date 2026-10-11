@@ -46,7 +46,8 @@ describe('messageReducer', () => {
         expect(nextState.messages[0].status).toBe('sent');
     });
 
-    it('FETCH_ERROR sets error and clears messages', () => {
+    // CM-046: a failed history load keeps live/own messages on screen (the list shows the error and Retry).
+    it('FETCH_ERROR sets error and keeps messages on screen', () => {
         const state: MessageState = { ...initialState, loading: true, messages: [{ ...baseMessage, id: '1' } as Message] };
         const nextState = messageReducer(state, {
             type: 'FETCH_ERROR',
@@ -54,7 +55,7 @@ describe('messageReducer', () => {
         });
         expect(nextState.loading).toBe(false);
         expect(nextState.error).toBe('fetch failed');
-        expect(nextState.messages).toEqual([]);
+        expect(nextState.messages.map((m) => m.id)).toEqual(['1']);
         expect(nextState.hasMoreMessages).toBe(false);
     });
 

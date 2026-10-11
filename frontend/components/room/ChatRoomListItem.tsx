@@ -63,6 +63,9 @@ const ChatRoomListItem: React.FC<ChatRoomListItemProps> = ({
   const [showInfoDialog, setShowInfoDialog] = useState(false);
   const [showSettingsDialog, setShowSettingsDialog] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
+  // Dialogs opened from the menu return focus here (the menu item is gone by then).
+  const actionsButtonRef = useRef<HTMLButtonElement>(null);
+  const roomName = room.displayName || room.roomName || "Direct Message";
   const { user } = useAuthStore();
   const { updateRoom } = useChatRoomsStore();
   const roomUI = roomTypeConfig[room.roomType] || roomTypeConfig.default;
@@ -84,12 +87,21 @@ const ChatRoomListItem: React.FC<ChatRoomListItemProps> = ({
       }
     };
 
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setShowActions(false);
+        actionsButtonRef.current?.focus();
+      }
+    };
+
     if (showActions) {
       document.addEventListener("mousedown", handleClickOutSide);
+      document.addEventListener("keydown", handleKeyDown);
     }
 
     return () => {
       document.removeEventListener("mousedown", handleClickOutSide);
+      document.removeEventListener("keydown", handleKeyDown);
     };
   }, [showActions]);
 
@@ -164,12 +176,22 @@ const ChatRoomListItem: React.FC<ChatRoomListItemProps> = ({
         {/* Room Info - Responsive */}
         <div className="flex-1 min-w-0">
           <div className="flex items-center justify-between mb-0.5 sm:mb-1 gap-2">
-            <h3 className="text-xs sm:text-sm md:text-sm font-medium text-gray-900 truncate">
-              {room.displayName || room.roomName}
+            <h3 className="text-xs sm:text-sm md:text-sm font-medium text-gray-900 truncate min-w-0">
+              {/* Keyboard entry point; the click bubbles to the row's onClick. */}
+              <button
+                type="button"
+                className="max-w-full truncate text-left rounded"
+                aria-current={isSelected ? "true" : undefined}
+              >
+                {room.displayName || room.roomName}
+              </button>
             </h3>
             {/* Room Type Badge - Show only on larger screens */}
             <div className="hidden sm:flex items-center space-x-1 flex-shrink-0">
-              <Icon className={`w-3.5 h-3.5 md:w-4 md:h-4 text-${color}-500`} />
+              <Icon
+                className={`w-3.5 h-3.5 md:w-4 md:h-4 text-${color}-500`}
+                aria-hidden="true"
+              />
               <span
                 className={`text-xs px-1.5 py-0.5 md:px-2 md:py-1 rounded-full ${color}`}
               >
@@ -185,7 +207,7 @@ const ChatRoomListItem: React.FC<ChatRoomListItemProps> = ({
               </p>
             )}
             <div className="flex items-center text-xs text-gray-400 flex-shrink-0">
-              <Users className="w-3 h-3 mr-1" />
+              <Users className="w-3 h-3 mr-1" aria-hidden="true" />
               <span className="hidden sm:inline">{room.maxUsers || "∞"}</span>
             </div>
           </div>
@@ -204,14 +226,20 @@ const ChatRoomListItem: React.FC<ChatRoomListItemProps> = ({
         <div className="flex-shrink-0 ml-1">
           <div className="relative" ref={dropdownRef}>
             <button
+              ref={actionsButtonRef}
+              type="button"
               onClick={(e) => {
                 e.stopPropagation();
                 setShowActions(!showActions);
               }}
-              className="p-1 sm:p-1.5 rounded-lg hover:bg-gray-200 opacity-0 group-hover:opacity-100 sm:group-hover:opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity touch-manipulation"
+              // Always visible on touch screens; on desktop shown on hover or keyboard focus.
+              className="p-1 sm:p-1.5 rounded-lg hover:bg-gray-200 opacity-100 md:opacity-0 md:group-hover:opacity-100 md:group-focus-within:opacity-100 md:focus-visible:opacity-100 transition-opacity touch-manipulation"
               disabled={isLoading}
+              aria-label={`Actions for ${roomName}`}
+              aria-haspopup="true"
+              aria-expanded={showActions}
             >
-              <MoreVertical className="w-4 h-4 text-gray-500" />
+              <MoreVertical className="w-4 h-4 text-gray-500" aria-hidden="true" />
             </button>
 
             {/* Dropdown Actions */}
@@ -310,6 +338,7 @@ const ChatRoomListItem: React.FC<ChatRoomListItemProps> = ({
         isOpen={showInfoDialog}
         onClose={() => setShowInfoDialog(false)}
         onOpenSettings={() => setShowSettingsDialog(true)}
+        returnFocusRef={actionsButtonRef}
       />
 
       {/* Room Settings Dialog */}
@@ -318,6 +347,7 @@ const ChatRoomListItem: React.FC<ChatRoomListItemProps> = ({
           roomId={room.id}
           isOpen={showSettingsDialog}
           onClose={() => setShowSettingsDialog(false)}
+          returnFocusRef={actionsButtonRef}
           onSaved={(updatedRoom) => {
             // Update the room in the store
             updateRoom(room.id, updatedRoom);

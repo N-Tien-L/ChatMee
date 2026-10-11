@@ -5,4 +5,6 @@ export interface Message extends MessageResponse {
     isOptimistic?: boolean;
     isOwn?: boolean;
     errorMessage?: string;
+    /** Server error code (e.g. RATE_LIMITED), or TIMEOUT / NOT_SENT for client-side failures. */
+    errorCode?: string;
 }

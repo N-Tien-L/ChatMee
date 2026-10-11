@@ -1,10 +1,11 @@
 import { useUsersStore } from "@/lib/stores";
 import { UserSummaryResponse } from "@/lib/types";
-import { Search, User } from "lucide-react";
+import { AlertCircle, RotateCw, Search, User } from "lucide-react";
 import React, { useEffect, useMemo, useState } from "react";
 import { useShallow } from "zustand/react/shallow";
 import { Input } from "../ui/input";
-import { Card, CardContent } from "../ui/card";
+import { Skeleton } from "../ui/skeleton";
+import { Button } from "../ui/button";
 import UserSearchItem from "./UserSearchItem";
 
 interface UserSearchListProps {
@@ -13,16 +14,20 @@ interface UserSearchListProps {
   placeHolder?: string;
 }
 
+// Stable default: a new [] on every render would re-run the excludeUserIds effect forever.
+const NO_EXCLUDED_USERS: string[] = [];
+
 const UserSearchList = ({
   onUserAdd,
-  excludeUserIds = [],
+  excludeUserIds = NO_EXCLUDED_USERS,
   placeHolder = "Search user by name...",
 }: UserSearchListProps) => {
-  const { users, loading, searchQuery, filteredUsers, setSearchQuery } =
+  const { users, loading, error, searchQuery, filteredUsers, setSearchQuery } =
     useUsersStore(
       useShallow((state) => ({
         users: state.users,
         loading: state.loading,
+        error: state.error,
         searchQuery: state.searchQuery,
         filteredUsers: state.filteredUsers,
         setSearchQuery: state.setSearchQuery,
@@ -74,9 +79,13 @@ const UserSearchList = ({
     <div className="space-y-4">
       {/* Search Input */}
       <div className="relative">
-        <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
+        <Search
+          className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400"
+          aria-hidden="true"
+        />
         <Input
-          type="text"
+          type="search"
+          aria-label="Search users"
           placeholder={placeHolder}
           value={searchQuery}
           onChange={handleSearchChange}
@@ -88,37 +97,65 @@ const UserSearchList = ({
       <div className="max-h-80 overflow-y-auto space-y-2">
         {loading ? (
           // Loading State
-          <div className="space-y-2">
-            {[...Array(3)].map((_, index) => (
-              <Card key={index} className="animate-pulse">
-                <CardContent className="p-3">
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 bg-gray-200 rounded-full"></div>
-                    <div className="flex-1">
-                      <div className="h-4 bg-gray-200 rounded mb-2"></div>
-                      <div className="h-3 bg-gray-200 rounded w-2/3"></div>
-                    </div>
-                    <div className="w-16 h-8 bg-gray-200 rounded"></div>
-                  </div>
-                </CardContent>
-              </Card>
+          <div
+            className="space-y-2"
+            role="status"
+            aria-busy="true"
+            aria-label="Searching users"
+          >
+            {[0, 1, 2].map((index) => (
+              <div
+                key={index}
+                className="flex items-center gap-3 rounded-xl border p-3"
+              >
+                <Skeleton className="w-10 h-10 rounded-full" />
+                <div className="flex-1 space-y-2">
+                  <Skeleton className="h-4" />
+                  <Skeleton className="h-3 w-2/3" />
+                </div>
+                <Skeleton className="w-16 h-8" />
+              </div>
             ))}
+          </div>
+        ) : error ? (
+          // Error State
+          <div className="text-center py-8 text-gray-500" role="alert">
+            <AlertCircle
+              className="w-10 h-10 mx-auto mb-3 text-red-400"
+              aria-hidden="true"
+            />
+            <p className="text-sm">{error}</p>
+            <Button
+              variant="outline"
+              size="sm"
+              className="mt-3"
+              onClick={() => fetchUsers(searchQuery)}
+            >
+              <RotateCw className="w-4 h-4 mr-2" aria-hidden="true" />
+              Retry
+            </Button>
           </div>
         ) : !searchQuery.trim() ? (
           // Initial State
           <div className="text-center py-8 text-gray-500">
-            <Search className="w-12 h-12 mx-auto mb-3 text-gray-300" />
+            <Search
+              className="w-12 h-12 mx-auto mb-3 text-gray-300"
+              aria-hidden="true"
+            />
             <p className="text-sm">Start typing to search for users</p>
           </div>
         ) : displayUsers.length === 0 ? (
           // No Results State
           <div className="text-center py-8 text-gray-500">
-            <User className="w-12 h-12 mx-auto mb-3 text-gray-300" />
+            <User
+              className="w-12 h-12 mx-auto mb-3 text-gray-300"
+              aria-hidden="true"
+            />
             <p className="text-sm">
               No users found matching &ldquo;{searchQuery}&rdquo;
             </p>
             <p className="text-xs text-gray-400 mt-1">
-              Try searching with a different name or email
+              Try searching with a different name
             </p>
           </div>
         ) : (
@@ -136,7 +173,7 @@ const UserSearchList = ({
 
       {/* Results Count */}
       {searchQuery.trim() && !loading && displayUsers.length > 0 && (
-        <div className="text-xs text-gray-500 text-center">
+        <div className="text-xs text-gray-500 text-center" role="status">
           Found {displayUsers.length} user{displayUsers.length !== 1 ? "s" : ""}
         </div>
       )}
