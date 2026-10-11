@@ -4,6 +4,9 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Optional;
 import org.springframework.dao.DuplicateKeyException;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import com.lnt.chatmee.dto.response.PublicRoomSummary;
 import com.lnt.chatmee.dto.response.UserSummaryResponse;
 import java.time.Instant;
 import java.time.LocalDateTime;
@@ -14,6 +17,8 @@ import java.util.Set;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
+import org.springframework.messaging.simp.SimpMessageHeaderAccessor;
+import org.springframework.messaging.simp.SimpMessageType;
 import org.springframework.stereotype.Service;
 
 import com.lnt.chatmee.dto.request.CreateChatRoomRequest;
@@ -31,6 +36,7 @@ import com.lnt.chatmee.service.policy.RoomTypePolicy;
 import com.lnt.chatmee.service.policy.RoomTypePolicyRegistry;
 import com.lnt.chatmee.repository.ChatRoomRepository;
 import com.lnt.chatmee.repository.UserRepository;
+import com.lnt.chatmee.security.RoomSubscriptionInterceptor;
 import com.lnt.chatmee.util.ValidationUtil;
 
 import lombok.RequiredArgsConstructor;
@@ -42,6 +48,9 @@ import lombok.RequiredArgsConstructor;
 @Service
 @RequiredArgsConstructor
 public class ChatRoomService {
+
+    static final int DEFAULT_PAGE_SIZE = 20;
+    static final int MAX_PAGE_SIZE = 50;
 
     static final String ROOM_DELETED_MESSAGE = "This room has been deleted";
 
@@ -129,7 +138,7 @@ public class ChatRoomService {
 
     /**
      * Soft-deletes the room: it is marked inactive, every membership is removed (blocking new STOMP
-     * authorization for the room; existing subscriptions await CM-058), and a SYSTEM message is broadcast to the room topic.
+     * authorization and ordinary outbound delivery), and a SYSTEM message reaches the pre-delete members.
      */
     public void deleteChatRoomById(String userId, String roomId) {
         User authenticatedUser = userRepository.findById(userId)
@@ -144,6 +153,7 @@ public class ChatRoomService {
             throw new UnauthorizedRoomActionException("Only room creator can delete the room");
         }
 
+        Set<String> deletedRecipients = Set.copyOf(participantService.getParticipantUserIds(roomId));
         if (chatRoomRepository.softDelete(roomId, LocalDateTime.now()) == 0) {
             throw new ChatRoomNotFoundException("Can't find chat room with id: " + roomId);
         }
@@ -160,8 +170,11 @@ public class ChatRoomService {
             .isUpdated(false)
             .isDeleted(false)
             .build();
+        SimpMessageHeaderAccessor headers = SimpMessageHeaderAccessor.create(SimpMessageType.MESSAGE);
+        headers.setHeader(RoomSubscriptionInterceptor.ROOM_DELETED_RECIPIENTS_HEADER, deletedRecipients);
+        headers.setLeaveMutable(true);
         messagingTemplate.convertAndSend("/topic/rooms/" + roomId,
-                ChatMessageResponse.from(deletionMessage, authenticatedUser.getName(), null));
+                ChatMessageResponse.from(deletionMessage, authenticatedUser.getName(), null), headers.getMessageHeaders());
 
         logger.info("Room {} soft-deleted by user {}, {} memberships removed", roomId, authenticatedUser.getId(), removed);
     }
@@ -175,6 +188,15 @@ public class ChatRoomService {
             return List.of();
         }
         return chatRoomRepository.findByIdInAndIsActiveTrue(roomIds);
+    }
+
+    /** Page is clamped to >= 0 and size to 1..MAX_PAGE_SIZE (non-positive size falls back to the default). */
+    public Page<PublicRoomSummary> discoverRooms(String userId, String query, int page, int size) {
+        String searchQuery = query == null ? "" : query.trim();
+        int pageSize = size <= 0 ? DEFAULT_PAGE_SIZE : Math.min(size, MAX_PAGE_SIZE);
+        List<String> joinedRoomIds = participantService.getRoomIdsOfUser(userId);
+        return chatRoomRepository.findDiscoverable(searchQuery, joinedRoomIds, PageRequest.of(Math.max(page, 0), pageSize))
+            .map(PublicRoomSummary::from);
     }
 
     public ChatRoom getChatRoomById(String userId, String roomId) {

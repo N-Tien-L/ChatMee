@@ -64,5 +64,13 @@ export interface MessageResponse {
     isDeleted: boolean;
 }
 
-
-
+/** Public metadata of a joinable room from GET /api/v1/rooms/discover (no participants). */
+export interface PublicRoomSummary {
+    id: string;
+    name: string;
+    description?: string;
+    memberCount: number;
+    /** <= 0 means unlimited. */
+    maxMembers: number;
+    createdAt?: string;
+}
