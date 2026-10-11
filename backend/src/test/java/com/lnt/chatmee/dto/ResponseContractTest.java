@@ -3,6 +3,7 @@ package com.lnt.chatmee.dto;
 import static org.assertj.core.api.Assertions.assertThat;
 import java.time.Instant;
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.Set;
 import org.junit.jupiter.api.Test;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -15,6 +16,16 @@ import com.lnt.chatmee.model.User;
 class ResponseContractTest {
     private final ObjectMapper json = new ObjectMapper().findAndRegisterModules()
             .disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS);
+
+    @Test
+    void messagePage_record_serializesFixedPaginationEnvelope() throws Exception {
+        var page = new MessagePageResponse(List.of(), null, false);
+        var pageJson = json.valueToTree(ApiResponse.success(page));
+        assertThat(pageJson).isEqualTo(json.readTree("""
+                {"success":true,"data":{"messages":[],"nextCursor":null,"hasMore":false}}
+                """));
+        assertThat(MessagePageResponse.class.isRecord()).isTrue();
+    }
 
     @Test void responseFactories_records_preserveJsonPropertiesAndTimestamps() throws Exception {
         var time = Instant.parse("2026-10-09T01:02:03Z");

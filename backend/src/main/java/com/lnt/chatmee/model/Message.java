@@ -4,6 +4,7 @@ import java.time.Instant;
 import java.util.List;
 
 import org.springframework.data.annotation.Id;
+import org.springframework.data.mongodb.core.index.CompoundIndex;
 import org.springframework.data.mongodb.core.mapping.Document;
 
 import lombok.AllArgsConstructor;
@@ -18,6 +19,7 @@ import lombok.Setter;
 @AllArgsConstructor
 @Builder
 @Document(collection = "messages")
+@CompoundIndex(name = "messages_room_created_id", def = "{'chatRoomId': 1, 'createdAt': -1, '_id': -1}")
 public class Message {
     
     @Id
