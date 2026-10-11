@@ -88,7 +88,7 @@ function setup(overrides: Partial<StompSessionOptions> = {}) {
     return { session, client: () => clients[clients.length - 1], clients, getToken };
 }
 
-const ROOM = "/topic/public/r1";
+const ROOM = "/topic/rooms/r1";
 
 describe("stompSession", () => {
     beforeEach(() => { vi.useFakeTimers(); });

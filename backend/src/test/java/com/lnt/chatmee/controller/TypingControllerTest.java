@@ -48,7 +48,7 @@ class TypingControllerTest {
     void handleTypingEvent_forgedIdentity_broadcastsPrincipalIdentity() {
         when(participants.isUserParticipant("room", "internal-user")).thenReturn(true);
         dispatch(() -> "internal-user", "{\"roomId\":\"room\",\"userId\":\"victim\",\"typing\":true}");
-        verify(messaging).convertAndSend(eq("/topic/typing/room"), argThat((TypingMessage message) ->
+        verify(messaging).convertAndSend(eq("/topic/rooms/room/typing"), argThat((TypingMessage message) ->
                 "internal-user".equals(message.getUserId()) && "room".equals(message.getRoomId()) && message.isTyping()));
         verify(participants).isUserParticipant("room", "internal-user");
         verifyNoMoreInteractions(messaging);
@@ -58,7 +58,7 @@ class TypingControllerTest {
     void handleTypingEvent_identityOmitted_broadcastsSameMessageShape() {
         when(participants.isUserParticipant("room", "internal-user")).thenReturn(true);
         dispatch(() -> "internal-user", "{\"roomId\":\"room\",\"typing\":false}");
-        verify(messaging).convertAndSend(eq("/topic/typing/room"), argThat((TypingMessage message) ->
+        verify(messaging).convertAndSend(eq("/topic/rooms/room/typing"), argThat((TypingMessage message) ->
                 "internal-user".equals(message.getUserId()) && !message.isTyping()));
     }
 

@@ -110,7 +110,7 @@ class AuthChannelInterceptorTest {
     @Test
     void preSend_memberSubscription_allowsRoomMessagesAndTyping() {
         when(participants.isUserParticipant("room", "internal-user")).thenReturn(true);
-        for (String destination : List.of("/topic/public/room", "/topic/typing/room")) {
+        for (String destination : List.of("/topic/rooms/room", "/topic/rooms/room/typing")) {
             Message<?> message = applicationFrame(StompCommand.SUBSCRIBE, destination, "internal-user");
             assertSame(message, interceptor.preSend(message, channel));
         }
@@ -119,7 +119,7 @@ class AuthChannelInterceptorTest {
 
     @Test
     void preSend_nonMemberSubscription_deniesRoomMessagesAndTyping() {
-        for (String destination : List.of("/topic/public/room", "/topic/typing/room")) {
+        for (String destination : List.of("/topic/rooms/room", "/topic/rooms/room/typing")) {
             assertThrows(AccessDeniedException.class, () -> interceptor.preSend(
                     applicationFrame(StompCommand.SUBSCRIBE, destination, "internal-user"), channel));
         }
@@ -138,8 +138,8 @@ class AuthChannelInterceptorTest {
     @Test
     void preSend_unknownOrMalformedSubscription_deniesByDefault() {
         for (String destination : List.of("/topic/unknown", "/topic/errors/room", "/queue/errors-user-other",
-                "/user/other/queue/errors", "/topic/public/", "/topic/typing/ ",
-                "/topic/public/room/nested", "/topic/presence/extra", "/app/chat.sendMessage")) {
+                "/user/other/queue/errors", "/topic/rooms/", "/topic/rooms/ /typing",
+                "/topic/rooms/room/nested", "/topic/presence/extra", "/app/chat.sendMessage")) {
             assertThrows(AccessDeniedException.class, () -> interceptor.preSend(
                     applicationFrame(StompCommand.SUBSCRIBE, destination, "internal-user"), channel));
         }
@@ -170,7 +170,7 @@ class AuthChannelInterceptorTest {
 
     @Test
     void preSend_brokerOrUnknownSend_deniesDirectPublication() {
-        for (String destination : List.of("/topic/public/room", "/topic/typing/room", "/topic/presence",
+        for (String destination : List.of("/topic/rooms/room", "/topic/rooms/room/typing", "/topic/presence",
                 "/queue/errors", "/user/internal-user/queue/errors", "/app/unknown", "/app/chat.addUser")) {
             assertThrows(AccessDeniedException.class, () -> interceptor.preSend(
                     applicationFrame(StompCommand.SEND, destination, "internal-user"), channel));
@@ -300,7 +300,7 @@ class AuthChannelInterceptorTest {
                             @Override
                             public void handleTransportError(StompSession session, Throwable exception) { closed.complete(exception); }
                         }).get(5, TimeUnit.SECONDS);
-                session.subscribe("/topic/public/room-a", new StompSessionHandlerAdapter() {});
+                session.subscribe("/topic/rooms/room-a", new StompSessionHandlerAdapter() {});
                 assertNotNull(error.get(5, TimeUnit.SECONDS).getFirst("message"));
                 assertNotNull(closed.get(5, TimeUnit.SECONDS));
                 verify(wireParticipants).isUserParticipant("room-a", "user-b");

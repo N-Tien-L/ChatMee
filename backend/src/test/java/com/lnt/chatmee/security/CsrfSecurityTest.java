@@ -94,7 +94,7 @@ class CsrfSecurityTest {
 
     @Test
     void getRequest_issuesXsrfCookie() throws Exception {
-        mvc.perform(get("/api/v1/auth/status")
+        mvc.perform(get("/actuator/info")
                 .with(authentication(authToken)))
                 .andExpect(status().isOk())
                 .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.cookie().exists("XSRF-TOKEN"));

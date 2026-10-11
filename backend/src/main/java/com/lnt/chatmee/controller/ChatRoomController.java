@@ -31,7 +31,7 @@ import lombok.RequiredArgsConstructor;
 
 @RestController
 @Tag(name = "Chat rooms", description = "Create, list, update and manage membership of chat rooms")
-@RequestMapping("/api/v1/chatrooms")
+@RequestMapping("/api/v1/rooms")
 @RequiredArgsConstructor
 public class ChatRoomController {
 
@@ -40,7 +40,7 @@ public class ChatRoomController {
     private final ParticipantService participantService;
 
     @Operation(summary = "Create a public, private or direct-message room")
-    @PostMapping("/create")
+    @PostMapping
     public ResponseEntity<ApiResponse<ChatRoomResponse>> createChatRoom(@Validated @RequestBody CreateChatRoomRequest request, @CurrentUser UserPrincipal user) {
         // One DM per pair (SPEC-003): asking again returns the existing room with 200.
         var existing = chatRoomService.findExistingDirectRoom(request, user.userId());
@@ -81,8 +81,8 @@ public class ChatRoomController {
         return ResponseEntity.ok(ApiResponse.success("Chat room deleted successfully"));
     }
 
-    @Operation(summary = "Join a public room")
-    @PostMapping("/{roomId}/join")
+    @Operation(summary = "Join a public room as the caller")
+    @PostMapping("/{roomId}/members/me")
     public ResponseEntity<ApiResponse<String>> joinChatRoom(
             @CurrentUser UserPrincipal user,
             @PathVariable String roomId) {
@@ -94,7 +94,7 @@ public class ChatRoomController {
     }
 
     @Operation(summary = "Add a participant (owner or admin only)")
-    @PostMapping("/{roomId}/add-participant")
+    @PostMapping("/{roomId}/members")
     public ResponseEntity<ApiResponse<String>> addParticipantToChatRoom(
             @CurrentUser UserPrincipal user,
             @PathVariable String roomId,
@@ -104,7 +104,7 @@ public class ChatRoomController {
     }
 
     @Operation(summary = "Leave a room")
-    @PostMapping("/{roomId}/leave")
+    @DeleteMapping("/{roomId}/members/me")
     public ResponseEntity<ApiResponse<String>> leaveChatRoom(
         @CurrentUser UserPrincipal user,
         @PathVariable String roomId

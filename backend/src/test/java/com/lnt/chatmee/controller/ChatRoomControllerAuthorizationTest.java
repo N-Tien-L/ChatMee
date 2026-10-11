@@ -52,7 +52,7 @@ class ChatRoomControllerAuthorizationTest {
     void joinRoom_privateRoom_returnsForbidden() throws Exception {
         when(rooms.findByIdAndIsActiveTrue("room")).thenReturn(Optional.of(ChatRoom.builder()
                 .id("room").type(RoomType.PRIVATE).isActive(true).build()));
-        mvc.perform(post("/api/v1/chatrooms/room/join").with(oauth2Login().oauth2User(com.lnt.chatmee.support.TestUsers.principal("actor"))).with(csrf()))
+        mvc.perform(post("/api/v1/rooms/room/members/me").with(oauth2Login().oauth2User(com.lnt.chatmee.support.TestUsers.principal("actor"))).with(csrf()))
                 .andExpect(status().isForbidden());
         verify(participants, never()).save(any());
         verify(rooms, never()).save(any());
@@ -74,7 +74,7 @@ class ChatRoomControllerAuthorizationTest {
         actor(Role.OWNER);
         when(rooms.findByIdAndIsActiveTrue("room")).thenReturn(Optional.of(ChatRoom.builder()
                 .id("room").type(RoomType.DIRECT_MESSAGE).isActive(true).build()));
-        mvc.perform(post("/api/v1/chatrooms/room/add-participant")
+        mvc.perform(post("/api/v1/rooms/room/members")
                 .with(oauth2Login().oauth2User(com.lnt.chatmee.support.TestUsers.principal("actor"))).with(csrf())
                 .contentType(MediaType.APPLICATION_JSON).content("{\"userId\":\"target\",\"role\":\"MEMBER\"}"))
                 .andExpect(status().isForbidden())
@@ -101,7 +101,7 @@ class ChatRoomControllerAuthorizationTest {
         when(rooms.findByIdAndIsActiveTrue("room")).thenReturn(Optional.of(ChatRoom.builder()
                 .id("room").type(RoomType.PUBLIC).isActive(true).build()));
         when(users.findById("actor")).thenReturn(Optional.of(User.builder().id("actor").build()));
-        mvc.perform(post("/api/v1/chatrooms/room/join").with(oauth2Login().oauth2User(com.lnt.chatmee.support.TestUsers.principal("actor"))).with(csrf()))
+        mvc.perform(post("/api/v1/rooms/room/members/me").with(oauth2Login().oauth2User(com.lnt.chatmee.support.TestUsers.principal("actor"))).with(csrf()))
                 .andExpect(status().isOk());
         verify(participants).save(argThat(p -> p.getUserId().equals("actor") && p.getRole() == Role.MEMBER));
     }
@@ -110,7 +110,7 @@ class ChatRoomControllerAuthorizationTest {
     void joinRoom_directMessageRoom_returnsForbidden() throws Exception {
         when(rooms.findByIdAndIsActiveTrue("room")).thenReturn(Optional.of(ChatRoom.builder()
                 .id("room").type(RoomType.DIRECT_MESSAGE).isActive(true).build()));
-        mvc.perform(post("/api/v1/chatrooms/room/join").with(oauth2Login().oauth2User(com.lnt.chatmee.support.TestUsers.principal("actor"))).with(csrf()))
+        mvc.perform(post("/api/v1/rooms/room/members/me").with(oauth2Login().oauth2User(com.lnt.chatmee.support.TestUsers.principal("actor"))).with(csrf()))
                 .andExpect(status().isForbidden());
         verify(participants, never()).save(any());
         verify(rooms, never()).save(any());
@@ -132,7 +132,7 @@ class ChatRoomControllerAuthorizationTest {
     }
 
     private void add(String role, int expectedStatus) throws Exception {
-        mvc.perform(post("/api/v1/chatrooms/room/add-participant").with(oauth2Login().oauth2User(com.lnt.chatmee.support.TestUsers.principal("actor"))).with(csrf())
+        mvc.perform(post("/api/v1/rooms/room/members").with(oauth2Login().oauth2User(com.lnt.chatmee.support.TestUsers.principal("actor"))).with(csrf())
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("{\"userId\":\"target\",\"role\":\"" + role + "\"}"))
                 .andExpect(status().is(expectedStatus));

@@ -26,7 +26,7 @@ public class TypingController {
             return;
         }
         message.setUserId(principal.getName());
-        String destination = "/topic/typing/" + message.getRoomId();
+        String destination = "/topic/rooms/" + message.getRoomId() + "/typing";
         messagingTemplate.convertAndSend(destination, message);
     }
 }

@@ -11,7 +11,7 @@ import { ConnectionStatus, createStompSession, StompSession } from "./stompSessi
 
 const PRESENCE_TOPIC = "/topic/presence";
 const PRESENCE_INTERVAL_MS = 30_000;
-const ROOM_TOPIC_PREFIXES = ["/topic/public/", "/topic/typing/"];
+const ROOM_TOPIC_PREFIXES = ["/topic/rooms/"];
 
 const StompContext = createContext<StompSession | null>(null);
 

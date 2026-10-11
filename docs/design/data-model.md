@@ -49,9 +49,9 @@ nearly full room may answer `ROOM_FULL` instead of `ALREADY_PARTICIPANT` for a d
 
 ## Soft delete
 
-`DELETE /api/v1/chatrooms/{roomId}` (creator only) calls `softDelete`, removes every
+`DELETE /api/v1/rooms/{roomId}` (creator only) calls `softDelete`, removes every
 participant row of the room (blocking new REST and STOMP access through the normal
-membership checks; existing broker subscriptions await CM-058), and broadcasts a SYSTEM message to `/topic/public/{roomId}`
+membership checks; existing broker subscriptions await CM-058), and broadcasts a SYSTEM message to `/topic/rooms/{roomId}`
 (`docs/design/websocket-protocol.md`). Inactive rooms are invisible to every read and
 cannot be joined. Messages of deleted rooms are kept.
 

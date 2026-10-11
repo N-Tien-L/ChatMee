@@ -65,7 +65,7 @@ class ChatRoomControllerValidationTest {
 
     @Test
     void createRoom_directMessageWithParticipantAndNoName_returnsCreated() throws Exception {
-        mvc.perform(post("/api/v1/chatrooms/create").with(oauth2Login().oauth2User(com.lnt.chatmee.support.TestUsers.principal("u1"))).with(csrf())
+        mvc.perform(post("/api/v1/rooms").with(oauth2Login().oauth2User(com.lnt.chatmee.support.TestUsers.principal("u1"))).with(csrf())
                 .contentType(MediaType.APPLICATION_JSON).content("{\"roomType\":\"DIRECT_MESSAGE\",\"participantId\":\"user-2\"}"))
                 .andExpect(status().isCreated());
         verify(rooms).createRoom(any(), any());
@@ -73,7 +73,7 @@ class ChatRoomControllerValidationTest {
 
     @Test
     void createRoom_validBoundaryRequest_returnsCreated() throws Exception {
-        mvc.perform(post("/api/v1/chatrooms/create").with(oauth2Login().oauth2User(com.lnt.chatmee.support.TestUsers.principal("u1"))).with(csrf())
+        mvc.perform(post("/api/v1/rooms").with(oauth2Login().oauth2User(com.lnt.chatmee.support.TestUsers.principal("u1"))).with(csrf())
                 .contentType(MediaType.APPLICATION_JSON).content(body("PUBLIC", "x".repeat(100), 2)))
                 .andExpect(status().isCreated());
         verify(rooms).createRoom(any(), any());
@@ -84,7 +84,7 @@ class ChatRoomControllerValidationTest {
     }
 
     private void rejectJson(String json) throws Exception {
-        mvc.perform(post("/api/v1/chatrooms/create").with(oauth2Login().oauth2User(com.lnt.chatmee.support.TestUsers.principal("u1"))).with(csrf())
+        mvc.perform(post("/api/v1/rooms").with(oauth2Login().oauth2User(com.lnt.chatmee.support.TestUsers.principal("u1"))).with(csrf())
                 .contentType(MediaType.APPLICATION_JSON).content(json))
                 .andExpect(status().isBadRequest());
         verifyNoInteractions(rooms, participants, users, participantRepository);

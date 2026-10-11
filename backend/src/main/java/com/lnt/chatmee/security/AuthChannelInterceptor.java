@@ -22,6 +22,8 @@ import lombok.RequiredArgsConstructor;
 public class AuthChannelInterceptor implements ChannelInterceptor {
     private static final Set<String> SEND_DESTINATIONS = Set.of(
             "/app/chat.sendMessage", "/app/typing", "/app/presence");
+    private static final String ROOM_TOPIC_PREFIX = "/topic/rooms/";
+    private static final String TYPING_SUFFIX = "/typing";
     private final WsTokenService wsTokenService;
     private final ParticipantService participantService;
 
@@ -63,16 +65,15 @@ public class AuthChannelInterceptor implements ChannelInterceptor {
         if ("/topic/presence".equals(destination) || "/user/queue/errors".equals(destination)) {
             return;
         }
-        if (destination != null) {
-            for (String prefix : new String[]{"/topic/public/", "/topic/typing/"}) {
-                if (destination.startsWith(prefix)) {
-                    String roomId = destination.substring(prefix.length());
-                    if (!roomId.isBlank() && !roomId.contains("/")
-                            && participantService.isUserParticipant(roomId, userId)) {
-                        return;
-                    }
-                    break;
-                }
+        if (destination != null && destination.startsWith(ROOM_TOPIC_PREFIX)) {
+            // /topic/rooms/{roomId} and /topic/rooms/{roomId}/typing share one membership rule.
+            String path = destination.substring(ROOM_TOPIC_PREFIX.length());
+            String roomId = path.endsWith(TYPING_SUFFIX)
+                    ? path.substring(0, path.length() - TYPING_SUFFIX.length())
+                    : path;
+            if (!roomId.isBlank() && !roomId.contains("/")
+                    && participantService.isUserParticipant(roomId, userId)) {
+                return;
             }
         }
         throw new AccessDeniedException("WebSocket subscription not allowed");

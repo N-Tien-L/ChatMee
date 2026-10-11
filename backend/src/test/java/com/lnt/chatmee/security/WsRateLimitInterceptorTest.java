@@ -94,7 +94,7 @@ class WsRateLimitInterceptorTest {
     @Test
     void preSend_nonSendFramesAndUnlistedDestinations_areNotCounted() {
         for (Message<byte[]> frame : List.of(
-                frame(StompCommand.SUBSCRIBE, "/topic/public/room", "user-1", ""),
+                frame(StompCommand.SUBSCRIBE, "/topic/rooms/room", "user-1", ""),
                 frame(StompCommand.CONNECT, null, "user-1", ""),
                 frame(StompCommand.SEND, "/app/unknown", "user-1", "{}"),
                 frame(StompCommand.SEND, null, "user-1", "{}"))) {

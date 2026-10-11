@@ -37,17 +37,16 @@ class OpenApiDocsIT {
 
         assertThat(paths.fieldNames()).toIterable().contains(
                 "/api/v1/auth/ws-token", "/api/v1/auth/me",
-                "/api/v1/chatrooms", "/api/v1/chatrooms/create", "/api/v1/chatrooms/{roomId}",
-                "/api/v1/chatrooms/{roomId}/join", "/api/v1/chatrooms/{roomId}/leave",
-                "/api/v1/chatrooms/{roomId}/add-participant",
-                "/api/v1/messages/room/{roomId}", "/api/v1/online-users",
+                "/api/v1/rooms", "/api/v1/rooms/{roomId}",
+                "/api/v1/rooms/{roomId}/members", "/api/v1/rooms/{roomId}/members/me",
+                "/api/v1/rooms/{roomId}/messages", "/api/v1/online-users",
                 "/api/v1/users", "/api/v1/users/{userId}");
     }
 
     @Test
     void apiDocs_authenticated_documentsProblemDetailErrors() throws Exception {
         JsonNode docs = apiDocs();
-        JsonNode createResponses = docs.at("/paths/~1api~1v1~1chatrooms~1create/post/responses");
+        JsonNode createResponses = docs.at("/paths/~1api~1v1~1rooms/post/responses");
 
         for (String status : List.of("400", "401", "403", "404", "409", "429", "500")) {
             assertThat(createResponses.at("/" + status + "/content/application~1problem+json/schema/$ref").asText())

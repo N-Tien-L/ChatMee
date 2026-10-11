@@ -16,7 +16,7 @@ Users create group rooms, see their rooms, discover and join public rooms, invit
 - US-5: As an owner, I edit or delete my room; as a member, I leave it.
 
 ## 4. Acceptance criteria
-Routes are written as the target from the audit; the current routes are `/api/v1/chatrooms/...` until CM-042.
+Routes follow the target from the audit and are implemented under `/api/v1/rooms/...` (CM-042).
 - AC-002-1: Creating a room: `name` 1-100 characters (Unicode letters, digits, spaces, `._-`), `description` <= 500, `maxMembers` 2-1000; the creator becomes `OWNER`. Invalid input returns 400 with field errors. -> Implemented (CM-007, CM-025). Test: `ChatRoomControllerValidationTest#createRoom_nameOf101Characters_returnsBadRequest`, `ChatRoomControllerValidationTest#createRoom_nameWithForbiddenCharacters_returnsBadRequest`, `ChatRoomControllerValidationTest#createRoom_oneMaxUser_returnsBadRequest`, `ChatRoomControllerWebMvcTest#createRoom_validPublicRoom_returns201WithRoom`
 - AC-002-2: `GET /rooms` returns only active rooms the caller is a member of. -> Implemented. Test: `ChatRoomControllerWebMvcTest#listRooms_authenticated_returnsCallerRooms`, `ChatRoomServiceTest#getList_returnsUserRooms`
 - AC-002-3: `GET /rooms/discover?query=` returns paged PUBLIC rooms the caller has not joined. -> Not implemented. Planned: CM-048

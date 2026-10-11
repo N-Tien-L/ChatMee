@@ -160,7 +160,7 @@ public class ChatRoomService {
             .isUpdated(false)
             .isDeleted(false)
             .build();
-        messagingTemplate.convertAndSend("/topic/public/" + roomId,
+        messagingTemplate.convertAndSend("/topic/rooms/" + roomId,
                 ChatMessageResponse.from(deletionMessage, authenticatedUser.getName(), null));
 
         logger.info("Room {} soft-deleted by user {}, {} memberships removed", roomId, authenticatedUser.getId(), removed);
