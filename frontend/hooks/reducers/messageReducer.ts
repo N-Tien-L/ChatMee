@@ -1,5 +1,5 @@
 import { Message, MessageResponse } from "@/lib/types"
-import { addIsOwnToMessages, mergeResyncedMessages } from "@/lib/utils/messageUtils";
+import { mergeResyncedMessages } from "@/lib/utils/messageUtils";
 
 export type MessageState = {
     messages: Message[];
@@ -10,6 +10,7 @@ export type MessageState = {
 }
 
 export type MessageAction =
+    | { type: "RESET" }
     | { type: "FETCH_START" }
     | { type: "FETCH_SUCCESS"; payload: { messages: MessageResponse[]; hasMore: boolean; userId?: string } }
     | { type: "FETCH_ERROR"; payload: string }
@@ -31,20 +32,26 @@ export const initialState: MessageState = {
 
 export function messageReducer(state: MessageState, action: MessageAction): MessageState {
     switch (action.type) {
+        case "RESET":
+            return initialState
+
         case "FETCH_START":
             return { ...state, loading: true, error: null }
 
         case "FETCH_SUCCESS":
-            const withIsOwn = addIsOwnToMessages(action.payload.messages, action.payload.userId)
+            // Live and own messages that arrived while history was loading (or after a failed load
+            // that is now retried) are kept, merged by id like a resync.
             return {
                 ...state,
                 loading: false,
-                messages: withIsOwn,
+                error: null,
+                messages: mergeResyncedMessages(state.messages, action.payload.messages, action.payload.userId),
                 hasMoreMessages: action.payload.hasMore
             }
 
         case "FETCH_ERROR":
-            return { ...state, loading: false, error: action.payload, messages: [], hasMoreMessages: false }
+            // Keep what is on screen; the list shows the error and a Retry next to it.
+            return { ...state, loading: false, error: action.payload, hasMoreMessages: false }
 
         case "ADD_OPTIMISTIC_MESSAGE":
             return {

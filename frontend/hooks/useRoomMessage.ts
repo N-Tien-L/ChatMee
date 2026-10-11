@@ -54,6 +54,8 @@ export const useRoomMessages = (roomId: string, options: RoomMessagesOptions = {
     }, []);
 
     useEffect(() => {
+        // History loads merge into what is on screen, so a new room must start empty.
+        dispatch({ type: "RESET" });
         const timers = pendingTimers.current;
         return () => {
             timers.forEach(clearTimeout);

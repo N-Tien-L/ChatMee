@@ -38,6 +38,17 @@ describe('MessageList states', () => {
         expect(onRetryLoad).toHaveBeenCalledTimes(1);
     });
 
+    it('render_loadErrorWithMessagesOnScreen_keepsErrorAndRetryVisible', () => {
+        const onRetryLoad = vi.fn();
+        const live: Message = { ...failed, id: 's3', tempId: undefined, senderId: 'u2', isOwn: false,
+            isOptimistic: false, status: 'sent', errorMessage: undefined, content: 'live one' };
+        render(<MessageList {...props} messages={[live]} error="Network Error" onRetryLoad={onRetryLoad} />);
+        expect(screen.getByRole('alert')).toHaveTextContent('Network Error');
+        expect(screen.getByRole('log', { name: 'Messages' })).toHaveTextContent('live one');
+        fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
+        expect(onRetryLoad).toHaveBeenCalledTimes(1);
+    });
+
     it('render_noMessages_showsEmptyStateInsideLiveLog', () => {
         render(<MessageList {...props} messages={[]} />);
         const log = screen.getByRole('log', { name: 'Messages' });
