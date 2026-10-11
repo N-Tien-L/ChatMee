@@ -1,20 +1,19 @@
-import { dirname } from "path";
-import { fileURLToPath } from "url";
-import { FlatCompat } from "@eslint/eslintrc";
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
-
-const compat = new FlatCompat({
-  baseDirectory: __dirname,
-});
+import coreWebVitals from "eslint-config-next/core-web-vitals";
+import typescript from "eslint-config-next/typescript";
 
 const eslintConfig = [
-  ...compat.extends("next/core-web-vitals", "next/typescript"),
+  ...coreWebVitals,
+  ...typescript,
   {
     // AGENTS.md: no console.log in committed code (warn/error stay for real failures)
     rules: {
       "no-console": ["error", { allow: ["warn", "error"] }],
+      // CM-052b: eslint-config-next 16 enables the React Compiler rules as errors. They flag
+      // existing patterns that work at runtime; keep them visible as warnings until a follow-up ticket fixes the code.
+      "react-hooks/set-state-in-effect": "warn",
+      "react-hooks/immutability": "warn",
+      "react-hooks/purity": "warn",
+      "react-hooks/preserve-manual-memoization": "warn",
     },
   },
   {
