@@ -143,7 +143,7 @@ class SubscriptionRevocationIT {
         BlockingQueue<JsonNode> presence = subscribeReady(memberSession, "/topic/presence", null);
 
         mvc.perform(delete("/api/v1/rooms/" + roomId).with(oauth2Login().oauth2User(principal(owner)))
-                .with(csrf())).andExpect(status().isOk());
+                .with(csrf().asHeader())).andExpect(status().isOk());
         publishRoomAndTyping("after-delete");
         messaging.convertAndSend("/topic/presence", Map.of("marker", "connection-alive"));
 
@@ -208,14 +208,14 @@ class SubscriptionRevocationIT {
         StompSession ownerSession = connect(owner);
         BlockingQueue<JsonNode> room = subscribeReady(ownerSession, topic(roomId), null);
         mvc.perform(delete("/api/v1/rooms/" + roomId).with(oauth2Login().oauth2User(principal(owner)))
-                .with(csrf())).andExpect(status().isOk());
+                .with(csrf().asHeader())).andExpect(status().isOk());
         assertThat(take(room).path("type").asText()).isEqualTo("SYSTEM");
         assertSilent(revoked);
     }
 
     private void leave(User user) throws Exception {
         mvc.perform(delete("/api/v1/rooms/" + roomId + "/members/me")
-                .with(oauth2Login().oauth2User(principal(user))).with(csrf())).andExpect(status().isOk());
+                .with(oauth2Login().oauth2User(principal(user))).with(csrf().asHeader())).andExpect(status().isOk());
     }
 
     private UserPrincipal principal(User user) {
