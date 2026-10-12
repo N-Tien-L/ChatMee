@@ -19,6 +19,11 @@ const sessionCache = new Map<
     { messages: MessageResponse[]; hasMoreMessages: boolean; nextCursor: string | null; lastLoaded: number }
 >();
 
+/** Drops every cached room page; called on logout so the next account never sees them. */
+export function resetRoomMessageCache(): void {
+    sessionCache.clear();
+}
+
 /** Where loadOlder continues for the open room; replaced on every room change. */
 type Paging = { roomId: string; nextCursor: string | null; hasMore: boolean; inFlight: boolean };
 

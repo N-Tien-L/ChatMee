@@ -3,16 +3,35 @@ import { persist } from 'zustand/middleware'
 import { authApi } from '../api/authApi'
 import { UserResponse } from "@/lib/types";
 import toast from 'react-hot-toast'
+import { resetRoomMessageCache } from '@/hooks/useRoomMessage'
+import { useChatRoomsStore } from './chatRoomsStore'
+import { useChatStore } from './chatStore'
+import { useDiscoverRoomsStore } from './discoverRoomsStore'
+import { useUsersStore } from './usersStore'
 
 interface AuthState {
     user: UserResponse | null
+    /** True only after GET /auth/me answered 200 in this page load; never restored from storage. */
     isAuthenticated: boolean
     loading: boolean
 
     login: (provider?: string) => void
-    logout: () => void
+    /** Resolves true when the server ended the session; false (state untouched) when it did not. */
+    logout: () => Promise<boolean>
     checkAuthStatus: (showToast?: boolean) => Promise<void>
     setLoading: (loading: boolean) => void
+}
+
+/** Drops everything the previous account could still see. */
+function clearSessionCaches() {
+    resetRoomMessageCache()
+    useChatRoomsStore.setState({
+        rooms: [], filteredRooms: [], searchQuery: "", roomTypeFilter: "ALL",
+        error: null, usersCache: new Map(), isCreateRoomModalOpen: false,
+    })
+    useChatStore.setState({ onlineUsers: new Set(), typingUsers: {} })
+    useUsersStore.setState({ users: [], filteredUsers: [], usersCache: new Map(), searchQuery: "", error: null })
+    useDiscoverRoomsStore.setState({ isOpen: false, query: "", results: [], page: 0, hasMore: false, error: null, joinError: null })
 }
 
 export const useAuthStore = create<AuthState>()(
@@ -28,13 +47,17 @@ export const useAuthStore = create<AuthState>()(
                 authApi.login(provider)
             },
 
-            logout: () => {
-                authApi.logout()
-                set({
-                    user: null,
-                    isAuthenticated: false
-                })
-                toast.success('Logged out successfully')
+            logout: async () => {
+                try {
+                    await authApi.logout()
+                } catch {
+                    toast.error('Could not sign out. Please try again.', { id: 'logout-error' })
+                    return false
+                }
+                set({ user: null, isAuthenticated: false })
+                clearSessionCaches()
+                authApi.redirectToLogin()
+                return true
             },
 
             checkAuthStatus: async (showToast = false) => {
@@ -54,17 +77,11 @@ export const useAuthStore = create<AuthState>()(
                             })
                         }
                     } else {
-                        set({
-                            isAuthenticated: false,
-                            user: null
-                        })
+                        set({ isAuthenticated: false, user: null })
                     }
-                } catch (error) {
-                    console.error("Auth check failed: ", error)
-                    set({
-                        isAuthenticated: false,
-                        user: null
-                    })
+                } catch {
+                    // 401 (no session) and network errors both mean "not signed in" here.
+                    set({ isAuthenticated: false, user: null })
                 } finally {
                     set({ loading: false })
                 }
@@ -76,9 +93,11 @@ export const useAuthStore = create<AuthState>()(
         }),
         {
             name: 'auth-storage',
-            partialize: (state) => ({
-                user: state.user,
-                isAuthenticated: state.isAuthenticated
+            partialize: (state) => ({ user: state.user }),
+            // Ignore a legacy stored isAuthenticated: only GET /auth/me may set it.
+            merge: (persisted, current) => ({
+                ...current,
+                user: (persisted as { user?: UserResponse | null } | undefined)?.user ?? null,
             }),
         }
     )
