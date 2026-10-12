@@ -40,6 +40,7 @@ class OpenApiDocsIT {
                 "/api/v1/rooms", "/api/v1/rooms/{roomId}",
                 "/api/v1/rooms/{roomId}/members", "/api/v1/rooms/{roomId}/members/me",
                 "/api/v1/rooms/{roomId}/members/me/read",
+                "/api/v1/rooms/{roomId}/members/{userId}",
                 "/api/v1/rooms/{roomId}/messages", "/api/v1/online-users",
                 "/api/v1/users", "/api/v1/users/{userId}");
     }
@@ -74,4 +75,15 @@ class OpenApiDocsIT {
                 .andReturn().getResponse().getContentAsString();
         return objectMapper.readTree(body);
     }
+
+    @Test
+    void apiDocs_membershipEndpoints_documentsListRemovalAndMemberSchema() throws Exception {
+        var docs = apiDocs();
+        assertThat(docs.at("/paths/~1api~1v1~1rooms~1{roomId}~1members/get").isMissingNode()).isFalse();
+        assertThat(docs.at("/paths/~1api~1v1~1rooms~1{roomId}~1members~1{userId}/delete/responses/204").isMissingNode()).isFalse();
+        var schema = docs.at("/components/schemas/MemberResponse/properties");
+        assertThat(schema.propertyNames()).containsExactlyInAnyOrder("id", "name", "avatarUrl", "role");
+        assertThat(schema.path("role").path("enum")).isEqualTo(objectMapper.valueToTree(List.of("OWNER", "ADMIN", "MEMBER")));
+    }
+
 }

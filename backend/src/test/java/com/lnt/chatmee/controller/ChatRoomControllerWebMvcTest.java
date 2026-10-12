@@ -293,4 +293,26 @@ class ChatRoomControllerWebMvcTest extends SecuredWebMvcTestSupport {
             .andExpect(jsonPath("$.data[0].lastMessage.preview").value("hello"));
     }
 
+
+    @Test
+    void getMembers_member_returnsMemberContractUsingPrincipal() throws Exception {
+        when(participantService.getMembers("room-1", "u1")).thenReturn(List.of(
+            new com.lnt.chatmee.dto.response.MemberResponse("u2", "Bob", "avatar", com.lnt.chatmee.model.Participant.Role.ADMIN)));
+        mvc.perform(get("/api/v1/rooms/room-1/members")
+            .with(oauth2Login().oauth2User(com.lnt.chatmee.support.TestUsers.principal("u1"))))
+            .andExpect(status().isOk()).andExpect(jsonPath("$.data[0].id").value("u2"))
+            .andExpect(jsonPath("$.data[0].name").value("Bob"))
+            .andExpect(jsonPath("$.data[0].avatarUrl").value("avatar"))
+            .andExpect(jsonPath("$.data[0].role").value("ADMIN"));
+        org.mockito.Mockito.verify(participantService).getMembers("room-1", "u1");
+    }
+
+    @Test
+    void getMembers_nonMember_returns404() throws Exception {
+        when(participantService.getMembers("room-1", "u1")).thenThrow(new ChatRoomNotFoundException("Room membership not found"));
+        mvc.perform(get("/api/v1/rooms/room-1/members")
+            .with(oauth2Login().oauth2User(com.lnt.chatmee.support.TestUsers.principal("u1"))))
+            .andExpect(status().isNotFound());
+    }
+
 }

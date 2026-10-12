@@ -340,6 +340,7 @@ CM-068 regression coverage:
 
 ## Per-user events (SPEC-008 AC-008-1, CM-060 implemented)
 CM-060 implements the queue, create/PUBLIC join, leave/delete, editable room updates and non-SYSTEM activity.
+CM-062 implements member listing/removal and persisted join/leave/removal SYSTEM announcements.
 CM-061 implements activity/read fields in `ChatRoomResponse` and shares the saved-message summary with `ROOM_ACTIVITY`.
 SPEC-009 extensions remain with the later tickets in the table.
 New DMs notify both initial members with their respective room views. Unchanged name/description/capacity emits no update event.
@@ -392,8 +393,8 @@ Full contracts are in the specs and in OpenAPI (`/v3/api-docs`, dev/local).
 | Method and path | Spec | Ticket |
 |---|---|---|
 | `PUT /api/v1/rooms/{roomId}/members/me/read` | AC-008-3: caller-only marker, 204; non-member or inactive room 404 | CM-061 implemented |
-| `GET /api/v1/rooms/{roomId}/members` | AC-008-5 | CM-062 |
-| `DELETE /api/v1/rooms/{roomId}/members/{userId}` | AC-008-6 | CM-062 |
+| `GET /api/v1/rooms/{roomId}/members` | AC-008-5: member data batched in two queries, plus active-room authorization | CM-062 implemented |
+| `DELETE /api/v1/rooms/{roomId}/members/{userId}` | AC-008-6: 204; OWNER removes others, ADMIN removes MEMBER; DMs 403; unknown member/non-member caller 404 | CM-062 implemented |
 | `POST /api/v1/rooms/{roomId}/invitations`, `GET /api/v1/rooms/{roomId}/invitations` | AC-009-1, -3 | CM-070 |
 | `GET /api/v1/invitations`, `POST /api/v1/invitations/{id}/accept`, `POST .../decline`, `DELETE /api/v1/invitations/{id}` | AC-009-2, -3 | CM-070 |
 | removed: `POST /api/v1/rooms/{roomId}/members` | AC-009-5 | CM-070 |
@@ -402,3 +403,14 @@ Full contracts are in the specs and in OpenAPI (`/v3/api-docs`, dev/local).
 | `POST /api/v1/reports` | AC-009-20 | CM-074 |
 | `POST /api/v1/rooms/{roomId}/hide` | AC-009-21 | CM-075 |
 | `PATCH /api/v1/rooms/{roomId}/members/{userId}/role` | AC-009-23 | CM-076 |
+
+## Membership announcements (CM-062 implemented)
+
+Successful group joins (including the shared add-member path), leaves and removals save a SYSTEM
+message before broadcasting it on /topic/rooms/{roomId}, with a generated id and UTC timestamps.
+Content is "X joined", "X left", or "A removed B". SYSTEM messages never increment unread,
+update lastActivityAt/lastMessage, or produce ROOM_ACTIVITY. Missing account names use "Deleted user".
+Removal checks participant roles rather than createdBy, deletes the membership and releases its seat,
+then sends ROOM_REMOVED with reason REMOVED to all sessions of the removed user. CM-058's existing
+live outbound guard blocks subsequent room and typing frames, including the removal announcement,
+for that user; their connection and other subscriptions remain usable.

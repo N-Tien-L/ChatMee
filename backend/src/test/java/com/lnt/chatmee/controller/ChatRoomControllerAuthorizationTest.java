@@ -37,6 +37,7 @@ import com.lnt.chatmee.service.policy.*;
 class ChatRoomControllerAuthorizationTest {
     @Autowired MockMvc mvc;
     @MockitoBean ChatRoomService chatRooms;
+    @MockitoBean com.lnt.chatmee.service.MessageService messageService;
     @MockitoBean com.lnt.chatmee.service.UserEventPublisher userEvents;
     @MockitoBean ChatRoomRepository rooms;
     @MockitoBean UserRepository users;
@@ -138,4 +139,52 @@ class ChatRoomControllerAuthorizationTest {
                 .content("{\"userId\":\"target\",\"role\":\"" + role + "\"}"))
                 .andExpect(status().is(expectedStatus));
     }
+
+    @Test
+    void removeMember_ownerRemovingMember_returns204() throws Exception { remove(Role.OWNER, Role.MEMBER, RoomType.PUBLIC, "target", 204); }
+    @Test
+    void removeMember_ownerRemovingAdmin_returns204() throws Exception { remove(Role.OWNER, Role.ADMIN, RoomType.PRIVATE, "target", 204); }
+    @Test
+    void removeMember_ownerRemovingOwner_returns204() throws Exception { remove(Role.OWNER, Role.OWNER, RoomType.PUBLIC, "target", 204); }
+    @Test
+    void removeMember_ownerRemovingSelf_returns403() throws Exception { remove(Role.OWNER, Role.OWNER, RoomType.PUBLIC, "actor", 403); }
+    @Test
+    void removeMember_adminRemovingMember_returns204() throws Exception { remove(Role.ADMIN, Role.MEMBER, RoomType.PUBLIC, "target", 204); }
+    @Test
+    void removeMember_adminRemovingAdmin_returns403() throws Exception { remove(Role.ADMIN, Role.ADMIN, RoomType.PUBLIC, "target", 403); }
+    @Test
+    void removeMember_adminRemovingOwner_returns403() throws Exception { remove(Role.ADMIN, Role.OWNER, RoomType.PUBLIC, "target", 403); }
+    @Test
+    void removeMember_memberRemovingMember_returns403() throws Exception { remove(Role.MEMBER, Role.MEMBER, RoomType.PUBLIC, "target", 403); }
+    @Test
+    void removeMember_directRoom_returns403() throws Exception { remove(Role.OWNER, Role.MEMBER, RoomType.DIRECT_MESSAGE, "target", 403); }
+    @Test
+    void removeMember_unknownTarget_returns404() throws Exception { remove(Role.OWNER, null, RoomType.PUBLIC, "target", 404); }
+    @Test
+    void removeMember_nonMemberCaller_returns404() throws Exception { remove(null, Role.MEMBER, RoomType.PUBLIC, "target", 404); }
+
+    private void remove(Role actorRole, Role targetRole, RoomType type, String target, int expected) throws Exception {
+        // createdBy deliberately differs: the participant role controls authorization.
+        when(rooms.findByIdAndIsActiveTrue("room")).thenReturn(Optional.of(ChatRoom.builder()
+            .id("room").createdBy("former-owner").type(type).isActive(true).build()));
+        if (actorRole != null) actor(actorRole);
+        if (targetRole != null && !target.equals("actor"))
+            when(participants.findByChatRoomIdAndUserId("room", target)).thenReturn(Optional.of(Participant.builder().userId(target).role(targetRole).build()));
+        if (expected == 204) {
+            when(participants.deleteByChatRoomIdAndUserId("room", target)).thenReturn(1L);
+            when(users.findById(target)).thenReturn(Optional.of(User.builder().id(target).name("Target").build()));
+        }
+        mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete("/api/v1/rooms/room/members/" + target)
+            .with(oauth2Login().oauth2User(com.lnt.chatmee.support.TestUsers.principal("actor"))).with(csrf()))
+            .andExpect(status().is(expected));
+        if (expected == 204) {
+            verify(participants).deleteByChatRoomIdAndUserId("room", target);
+            verify(rooms).releaseSeat(eq("room"), any());
+            verify(userEvents).roomRemoved(java.util.Set.of(target), "room", "REMOVED");
+        } else {
+            verify(participants, never()).deleteByChatRoomIdAndUserId(any(), any());
+            verifyNoInteractions(userEvents);
+        }
+    }
+
 }
