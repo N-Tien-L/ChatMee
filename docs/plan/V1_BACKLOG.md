@@ -49,6 +49,7 @@
 | CM-058 M1: two Mongo reads per recipient per frame (load-test, then cache or skip typing frames) | BOARD |
 | React Compiler lint rules back to error (9 sites); `RedisTemplate.expire` and `getValidationGroups` deprecations | BOARD (CM-052) |
 | E2E browser tests (Playwright), staging environment, load test | PROJECT_REVIEW_GUIDE §6, §9 |
+| Inbound frame ordering per session (WS-A14): `setPreserveReceiveOrder(true)` swallows interceptor rejections on Spring 7.0.9; needs another approach | CM-068 report, AC-008-16 |
 
 ## Other ideas from the review (not yet specified)
 - Rich DM request preview (show the first message and sender's profile) instead of plain text.
