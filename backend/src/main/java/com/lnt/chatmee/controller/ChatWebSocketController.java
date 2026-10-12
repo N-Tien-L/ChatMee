@@ -21,6 +21,7 @@ import com.lnt.chatmee.dto.request.ChatMessageRequest;
 import com.lnt.chatmee.dto.response.ChatMessageResponse;
 import com.lnt.chatmee.dto.StompError;
 import com.lnt.chatmee.exception.ErrorCode;
+import com.lnt.chatmee.service.BlockService;
 import com.lnt.chatmee.service.MessageService;
 
 import jakarta.validation.Valid;
@@ -50,7 +51,9 @@ public class ChatWebSocketController {
             sendError(sessionId, request, principal, ErrorCode.DM_REQUEST_PENDING, e.getMessage());
             return;
         } catch (com.lnt.chatmee.exception.ForbiddenActionException e) {
-            sendError(sessionId, request, principal, ErrorCode.FORBIDDEN_ACTION, "Room membership required");
+            // A block keeps its generic text (AC-009-18); every other refusal stays "Room membership required".
+            String message = BlockService.CANNOT_MESSAGE.equals(e.getMessage()) ? e.getMessage() : "Room membership required";
+            sendError(sessionId, request, principal, ErrorCode.FORBIDDEN_ACTION, message);
             return;
         } catch (Exception e) {
             // Exception messages in this path carry ids, never message content (security review NV-4).

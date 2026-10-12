@@ -34,7 +34,9 @@ public record ChatRoomResponse(
     long unreadCount,
     Role myRole,
     /** ACTIVE, or REQUESTED for a DM waiting for the recipient (shown to the sender only, AC-009-11). */
-    RoomState state
+    RoomState state,
+    /** DIRECT_MESSAGE rooms only: true when the caller blocked the other member; never shown to the blocked user (AC-009-19). */
+    boolean blocked
 ) {
     public static ChatRoomResponse from(com.lnt.chatmee.model.ChatRoom room, Set<String> participants) {
         return from(room, participants, null);
@@ -52,9 +54,14 @@ public record ChatRoomResponse(
 
     public static ChatRoomResponse from(com.lnt.chatmee.model.ChatRoom room, Set<String> participants,
             UserSummaryResponse counterpart, long unreadCount, Role myRole) {
+        return from(room, participants, counterpart, unreadCount, myRole, false);
+    }
+
+    public static ChatRoomResponse from(com.lnt.chatmee.model.ChatRoom room, Set<String> participants,
+            UserSummaryResponse counterpart, long unreadCount, Role myRole, boolean blocked) {
         return new ChatRoomResponse(room.getId(), room.getName(), room.getType(), room.getDescription(),
                 room.getCreatedBy(), room.getCreatedAt(), room.getLastActivity(), room.getMaxParticipants(),
                 room.getSettings(), participants, counterpart, activityAt(room), room.getLastMessage(), unreadCount, myRole,
-                room.getState());
+                room.getState(), blocked);
     }
 }

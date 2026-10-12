@@ -76,6 +76,7 @@ class InvitationControllerWebMvcTest extends SecuredWebMvcTestSupport {
     @MockitoBean ChatRoomService chatRoomService;
     @MockitoBean UserEventPublisher userEvents;
     @MockitoBean RateLimitingService rateLimitingService;
+    @MockitoBean com.lnt.chatmee.service.BlockService blockService;
 
     private ChatRoom room;
     private final ListAppender<ILoggingEvent> logs = new ListAppender<>();

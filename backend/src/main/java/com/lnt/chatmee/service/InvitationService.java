@@ -63,6 +63,7 @@ public class InvitationService {
     private final RoomTypePolicyRegistry policies;
     private final UserEventPublisher userEvents;
     private final RateLimitingService rateLimitingService;
+    private final BlockService blockService;
 
     public InvitationResponse invite(String roomId, String callerId, String inviteeId) {
         ChatRoom room = activeRoom(roomId);
@@ -165,10 +166,13 @@ public class InvitationService {
     }
 
     /**
-     * The single place for consent checks between inviter and invitee, on invite and on accept.
-     * Block checks (AC-009-4, "Cannot invite this user") are added here in CM-073.
+     * The single place for consent checks between inviter and invitee, on invite and on accept: a block in either
+     * direction answers the same generic 403 (AC-009-4, AC-009-18).
      */
     private void checkConsentAllowed(String inviterId, String inviteeId) {
+        if (blockService.isBlockedEitherWay(inviterId, inviteeId)) {
+            throw new ForbiddenActionException(BlockService.CANNOT_INVITE);
+        }
     }
 
     private void decide(MembershipRequest invitation, MembershipRequestStatus decision) {

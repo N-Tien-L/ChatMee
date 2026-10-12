@@ -49,7 +49,7 @@ public class DirectMessageRequestService {
     static final Duration DECLINE_COOLDOWN = Duration.ofDays(30);
 
     private static final Logger logger = LoggerFactory.getLogger(DirectMessageRequestService.class);
-    private static final String CANNOT_MESSAGE = "Cannot message this user";
+    private static final String CANNOT_MESSAGE = BlockService.CANNOT_MESSAGE;
     private static final String NOT_FOUND = "DM request not found";
 
     private final MembershipRequestRepository requests;
@@ -60,6 +60,7 @@ public class DirectMessageRequestService {
     // ChatRoomService creates DMs through this service; resolve it lazily, only to render room views.
     private final ObjectProvider<ChatRoomService> chatRooms;
     private final RateLimitingService rateLimitingService;
+    private final BlockService blockService;
 
     /**
      * Refuses a new request while a decline cooldown exists for the pair, in either direction (AC-009-9), and
@@ -75,10 +76,13 @@ public class DirectMessageRequestService {
     }
 
     /**
-     * The single place for consent checks between DM sender and recipient, on create and accept.
-     * Block checks (AC-009-16, AC-009-18, "Cannot message this user") are added here in CM-073.
+     * The single place for consent checks between DM sender and recipient, on create and accept (explicit, by reply
+     * or by creating the same DM): a block in either direction answers the cooldown's generic 403 (AC-009-16, -18).
      */
     private void checkConsentAllowed(String senderId, String recipientId) {
+        if (blockService.isBlockedEitherWay(senderId, recipientId)) {
+            throw new ForbiddenActionException(CANNOT_MESSAGE);
+        }
     }
 
     /** Stores the request of a new REQUESTED room and notifies the recipient; the room is closed if that fails. */
@@ -122,15 +126,19 @@ public class DirectMessageRequestService {
         return Optional.of(view(room, callerId));
     }
 
-    /** The caller's pending requests, newest first; expired rows found here are expired (AC-009-11, -13). */
+    /**
+     * The caller's pending requests, newest first; expired rows found here are expired (AC-009-11, -13). Requests
+     * from users blocked in either direction are left out (AC-009-11).
+     */
     public List<DmRequestResponse> listPending(String recipientId) {
         Instant now = Instant.now();
+        Set<String> blocked = blockService.blockedEitherWay(recipientId);
         List<MembershipRequest> open = new ArrayList<>();
         for (MembershipRequest row : requests.findByTargetUserIdAndKindAndStatusOrderByCreatedAtDesc(
                 recipientId, MembershipRequestKind.DM_REQUEST, MembershipRequestStatus.PENDING)) {
             if (isExpired(row, now)) {
                 expire(row, now);
-            } else {
+            } else if (!blocked.contains(row.getInviterId())) {
                 open.add(row);
             }
         }
@@ -262,7 +270,11 @@ public class DirectMessageRequestService {
         return chatRooms.getObject().toResponse(room, userId);
     }
 
+    /** No DM_REQUEST_RECEIVED while a block exists between the pair (websocket-protocol.md). */
     private void notifyRecipient(MembershipRequest request, ChatRoom room) {
+        if (blockService.isBlockedEitherWay(request.getInviterId(), request.getTargetUserId())) {
+            return;
+        }
         User sender = userRepository.findById(request.getInviterId()).orElse(null);
         userEvents.dmRequestReceived(request.getTargetUserId(),
             DmRequestResponse.from(request, summary(request.getInviterId(), sender), room));

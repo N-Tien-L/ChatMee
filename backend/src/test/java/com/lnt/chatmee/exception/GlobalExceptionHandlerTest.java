@@ -117,7 +117,8 @@ class GlobalExceptionHandlerTest {
     void getUser_missingUser_returns404InsteadOfSuccessEnvelope() throws Exception {
         var userService = mock(com.lnt.chatmee.service.UserService.class);
         when(userService.getUserSummary("missing")).thenThrow(new com.lnt.chatmee.exception.UserNotFoundException("Not found"));
-        var userMvc = MockMvcBuilders.standaloneSetup(new com.lnt.chatmee.controller.UserApiController(userService))
+        var userMvc = MockMvcBuilders.standaloneSetup(new com.lnt.chatmee.controller.UserApiController(userService,
+                mock(com.lnt.chatmee.service.BlockService.class)))
                 .setControllerAdvice(new GlobalExceptionHandler()).build();
         check(userMvc.perform(get("/api/v1/users/missing")), 404, "USER_NOT_FOUND");
     }

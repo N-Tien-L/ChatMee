@@ -32,6 +32,7 @@ class AuthControllerWebMvcTest extends SecuredWebMvcTestSupport {
 
     @MockitoBean UserRepository userRepository;
     @MockitoBean WsTokenService wsTokenService;
+    @MockitoBean com.lnt.chatmee.service.BlockService blockService;
 
     @Test
     void getCurrentUser_knownUser_returnsOwnProfile() throws Exception {

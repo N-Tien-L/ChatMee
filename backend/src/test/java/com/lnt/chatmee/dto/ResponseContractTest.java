@@ -59,7 +59,7 @@ class ResponseContractTest {
                  "createdBy":"user","createdAt":"2026-10-09T01:02:03","updatedAt":"2026-10-09T01:02:03",
                  "maxUsers":10,"settings":null,"participants":["user"],"counterpart":null,
                  "lastActivityAt":"2026-10-09T01:02:03Z","lastMessage":null,"unreadCount":0,"myRole":null,
-                 "state":"ACTIVE"}
+                 "state":"ACTIVE","blocked":false}
                 """));
         for (Class<?> type : new Class<?>[]{AuthResponse.class, UserResponse.class,
                 ChatRoomResponse.class, ChatMessageResponse.class}) assertThat(type.isRecord()).isTrue();

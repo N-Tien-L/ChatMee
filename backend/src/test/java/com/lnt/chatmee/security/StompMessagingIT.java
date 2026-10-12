@@ -56,6 +56,8 @@ class StompMessagingIT {
     @MockitoSpyBean private WsTokenService tokenService;
     @Autowired private SimpMessagingTemplate messaging;
     @Autowired private ObjectMapper mapper;
+    @Autowired private com.lnt.chatmee.service.BlockService blockService;
+    @Autowired private com.lnt.chatmee.service.MessageService messageService;
     @Value("${app.client.url}") private String clientUrl;
 
     private final List<User> users = new ArrayList<>();
@@ -85,6 +87,8 @@ class StompMessagingIT {
         mongo.remove(Query.query(Criteria.where("chatRoomId").is(roomId)), Participant.class);
         mongo.remove(Query.query(Criteria.where("roomId").is(roomId)), com.lnt.chatmee.model.MembershipRequest.class);
         mongo.remove(Query.query(Criteria.where("id").is(roomId)), ChatRoom.class);
+        List<String> userIds = users.stream().map(User::getId).toList();
+        mongo.remove(Query.query(Criteria.where("blockerId").in(userIds)), com.lnt.chatmee.model.UserBlock.class);
         for (User user : users) mongo.remove(user);
         for (String token : issuedTokens) redis.delete("ws-token:" + token);
     }
@@ -193,6 +197,50 @@ class StompMessagingIT {
         assertThat(mongo.exists(Query.query(Criteria.where("chatRoomId").is(roomId).and("userId").is(recipient.getId())),
                 Participant.class)).isTrue();
         assertThat(senderErrors.poll(1, TimeUnit.SECONDS)).isNull();
+    }
+
+    // CM-073 AC3: a block makes the DM read-only both ways with one generic error; unblock restores sending
+
+    @Test
+    void sendMessage_blockedDm_bothGetForbiddenActionHistoryReadableAndUnblockRestores() throws Exception {
+        User blocker = seedUser(true);
+        User blocked = seedUser(true);
+        mongo.updateFirst(Query.query(Criteria.where("id").is(roomId)), new org.springframework.data.mongodb.core.query.Update()
+                .set("type", ChatRoom.RoomType.DIRECT_MESSAGE).set("maxParticipants", 2).set("memberCount", 2)
+                .set("memberKey", com.lnt.chatmee.service.policy.DirectRoomPolicy.memberKey(blocker.getId(), blocked.getId())),
+                ChatRoom.class);
+        StompSession blockedSession = connect(issueToken(blocked), new ProtocolEvents());
+        StompSession blockerSession = connect(issueToken(blocker), new ProtocolEvents());
+        BlockingQueue<String> blockedErrors = subscribeReady(blockedSession, "/user/queue/errors", blocked.getId());
+        BlockingQueue<String> blockerErrors = subscribeReady(blockerSession, "/user/queue/errors", blocker.getId());
+        BlockingQueue<String> roomFrames = subscribeReady(blockedSession, "/topic/rooms/" + roomId, null);
+        sendJson(blockedSession, payload(UUID.randomUUID().toString(), "Before the block", blocked.getId()));
+        assertThat(mapper.readTree(take(roomFrames)).path("content").asString()).isEqualTo("Before the block");
+
+        blockService.block(blocker.getId(), blocked.getId());
+        String blockedTempId = UUID.randomUUID().toString();
+        sendJson(blockedSession, payload(blockedTempId, "Are you there?", blocked.getId()));
+        String blockerTempId = UUID.randomUUID().toString();
+        sendJson(blockerSession, payload(blockerTempId, "Go away", blocker.getId()));
+
+        JsonNode blockedError = mapper.readTree(take(blockedErrors));
+        JsonNode blockerError = mapper.readTree(take(blockerErrors));
+        assertThat(blockedError.path("code").asString()).isEqualTo("FORBIDDEN_ACTION");
+        assertThat(blockedError.path("message").asString()).isEqualTo("Cannot message this user");
+        assertThat(blockedError.path("tempId").asString()).isEqualTo(blockedTempId);
+        assertThat(blockerError.path("code").asString()).isEqualTo("FORBIDDEN_ACTION");
+        assertThat(blockerError.path("message").asString()).isEqualTo(blockedError.path("message").asString());
+        assertThat(roomFrames.poll(1, TimeUnit.SECONDS)).isNull();
+        assertThat(mongo.count(Query.query(Criteria.where("chatRoomId").is(roomId)), Message.class)).isEqualTo(1);
+        assertThat(messageService.getMessages(roomId, blocked.getId(), null, 50).messages())
+                .extracting(com.lnt.chatmee.dto.response.ChatMessageResponse::content).containsExactly("Before the block");
+        assertThat(messageService.getMessages(roomId, blocker.getId(), null, 50).messages()).hasSize(1);
+
+        blockService.unblock(blocker.getId(), blocked.getId());
+        sendJson(blockedSession, payload(UUID.randomUUID().toString(), "Thanks", blocked.getId()));
+
+        assertThat(mapper.readTree(take(roomFrames)).path("content").asString()).isEqualTo("Thanks");
+        assertThat(blockedErrors.poll(1, TimeUnit.SECONDS)).isNull();
     }
 
     @Test

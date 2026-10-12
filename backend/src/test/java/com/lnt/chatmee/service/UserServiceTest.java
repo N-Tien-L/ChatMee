@@ -7,6 +7,7 @@ import static org.mockito.Mockito.*;
 
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -31,8 +32,24 @@ class UserServiceTest {
     private UserRepository userRepository;
 
 
+    @Mock
+    private BlockService blockService;
+
     @InjectMocks
     private UserService userService;
+
+    @Test
+    void searchUsers_blockedEitherWay_excludesBlockedUsersAndCaller() {
+        when(blockService.blockedEitherWay("caller-id")).thenReturn(Set.of("blocked-1", "blocker-2"));
+        when(userRepository.findByNameContainingIgnoreCaseAndIdNotIn(any(), any(), any(Pageable.class)))
+                .thenReturn(Page.empty());
+
+        userService.searchUsers("alice", "caller-id", 0, 20);
+
+        verify(userRepository).findByNameContainingIgnoreCaseAndIdNotIn("alice",
+                Set.of("caller-id", "blocked-1", "blocker-2"), PageRequest.of(0, 20));
+        verify(userRepository, never()).findByNameContainingIgnoreCaseAndIdNot(any(), any(), any(Pageable.class));
+    }
 
     @Test
     void searchUsers_matchingUsers_mapsToSummaryWithoutEmail() {
