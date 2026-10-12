@@ -54,21 +54,21 @@ Lanes: BE-core is sequential (060 -> 061 -> 062 -> 076 -> 070 -> 072 -> 075 -> 0
 | Ticket | Title | Lane | Depends on | Owner | Branch | Status | Verification | Merge commit |
 |---|---|---|---|---|---|---|---|---|
 | CM-060 | Per-user event queue | BE-core | — | codex | feat/CM-060-user-event-queue | done | verify 376+76 green (rebased on CM-068) | 4ebac72 |
-| CM-061 | Room activity, read marker, unread count | BE-core | 060 | | | todo | | |
-| CM-062 | Member list, removal, SYSTEM messages | BE-core | 061 | | | todo | | |
+| CM-061 | Room activity, read marker, unread count | BE-core | 060 | codex | feat/CM-061-room-activity-unread | done | verify 386+79 green | 8162826 |
+| CM-062 | Member list, removal, SYSTEM messages | BE-core | 061 | codex | feat/CM-062-members-removal | done | verify 405+82 green | 0cd5750 |
 | CM-063 | UI foundation and app shell | FE-A | — | sonnet-w | refactor/CM-063-ui-foundation | done | FE gate green (144 tests) | 20cb4bf |
-| CM-064 | Real-time sidebar (+ presence snapshot) | FE-A | 060, 061, 063, 068, 069 | | | todo | | |
-| CM-065 | Conversation view (+ U-3..U-8) | FE-B | 062, 063 | | | todo | | |
+| CM-064 | Real-time sidebar (+ presence snapshot) | FE-A | 060, 061, 063, 068, 069 | sonnet-w | feat/CM-064-realtime-sidebar | done | FE gate green (201 tests) | 1bd320c |
+| CM-065 | Conversation view (+ U-3..U-8) | FE-B | 062, 063 | opus-w | feat/CM-065-conversation-view | done | FE gate green (220 tests) | 806b207 |
 | CM-066 | Room dialogs and flows (invite, roles) | FE-A | 062, 064, 070, 076 | | | todo | | |
 | CM-067 | Release v0 | Release | all | master + owner | | todo | | |
 | CM-068 | Realtime robustness (+ W-1, W-2) | BE-side | — | opus-w | fix/CM-068-realtime-robustness | done (WS-A14 -> v1) | verify 349+72, FE 121 green | 6c3aa1f |
-| CM-069 | Auth flows: login redirect, logout | FE-A | 063 | | | todo | | |
+| CM-069 | Auth flows: login redirect, logout | FE-A | 063 | sonnet-w | fix/CM-069-auth-flows | done | FE gate green (170 tests) | d7404db |
 | CM-070 | Invitations (replaces direct add) | BE-core | 062, 076 | | | todo | | |
 | CM-072 | DM requests | BE-core | 070 | | | todo | | |
 | CM-073 | Blocking | BE-core | 070, 072, 075 | | | todo | | |
 | CM-074 | Reports (store only) | BE-side | — | haiku-w | feat/CM-074-reports-store | done | verify 68 IT green | c70c08e |
 | CM-075 | Hide DMs, DELETE on DM forbidden | BE-core | 072 | | | todo | | |
-| CM-076 | Roles, owner auto-transfer | BE-core | 062 | | | todo | | |
+| CM-076 | Roles, owner auto-transfer | BE-core | 062 | opus-w (codex at capacity) | feat/CM-076-roles-owner-transfer | done | verify 425+84 green (RoomOwnershipIT) | 72b2e61 |
 | CM-077 | "Deleted user" label | BE-core | 062, 073 | | | todo | | |
 | CM-078 | Daily action limits | BE-side | 070, 072, 074 | | | todo | | |
 | CM-079 | Requests inbox (frontend) | FE-B | 064, 065, 070, 072 | | | todo | | |
@@ -77,6 +77,9 @@ Lanes: BE-core is sequential (060 -> 061 -> 062 -> 076 -> 070 -> 072 -> 075 -> 0
 Owner actions O-1..O-6 (secrets, single Render instance, Vercel Node 22.x, backfill dry run, decisions review, docs merge) are listed in the plan.
 
 ## Notes
+- 2026-10-12 M2: CM-061, 062, 064, 065, 069, 076 merged. Master decisions: AC-008-5 "two queries" counts member data only (participants once,
+  users batch once); active-room and membership guards are separate. CM-076: room delete is OWNER-only (AC-002-6 + its amendment), update OWNER/ADMIN.
+  CM-076 moved from codex to opus-w (OpenAI capacity errors on Sol high and medium; owner approved).
 - 2026-10-12 M1: CM-060, CM-063, CM-068, CM-074 merged into develop. Owner decision: WS-A14 (inbound ordering, AC-008-16) is a v0 known gap;
   `setPreserveReceiveOrder(true)` on Spring 7.0.9 swallows the ERROR frame and close for rejected CONNECT/SUBSCRIBE. Tracked in V1_BACKLOG.
 - 2026-10-12: v0 decisions D-01..D-23 recorded in `MVP_V0_PLAN.md`; SPEC-001/003/005/006/007/009 Approved, ADR-0006 Accepted. Review
