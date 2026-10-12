@@ -4,7 +4,7 @@ import { userApi } from "../api/userApi";
 import {
     RoomType,
 } from "@/lib/types";
-import { ChatRoom, UserSummaryResponse } from "@/lib/types";
+import { ChatRoom, LastMessageSummary, UserSummaryResponse } from "@/lib/types";
 import { useAuthStore } from "./authStore";
 import toast from "react-hot-toast";
 import Fuse from "fuse.js";
@@ -19,7 +19,16 @@ interface chatRoomState {
     error: string | null;
     usersCache: Map<string, UserSummaryResponse>;
     isCreateRoomModalOpen: boolean;
+    /** The room open in the conversation pane, or null. Drives the unread rules. */
+    activeRoomId: string | null;
 
+    setActiveRoom: (roomId: string | null) => void;
+    upsertRoom: (room: ChatRoom) => void;
+    removeRoom: (roomId: string) => void;
+    applyActivity: (roomId: string, lastMessage: LastMessageSummary) => void;
+    markRoomRead: (roomId: string) => Promise<void>;
+    handleUserEvent: (event: unknown) => Promise<void>;
+    getUnreadTotal: () => number;
     setRooms: (rooms: ChatRoom[]) => void;
     addRoom: (room: ChatRoom) => void;
     updateRoom: (id: string, updates: Partial<ChatRoom>) => void;
@@ -37,6 +46,30 @@ interface chatRoomState {
     closeCreateRoomModal: () => void;
 }
 
+const activityTime = (room: ChatRoom): number => {
+    const time = Date.parse(room.lastActivityAt || room.createdAt || "");
+    return Number.isNaN(time) ? 0 : time;
+};
+
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+    typeof value === "object" && value !== null;
+
+const isRoom = (value: unknown): value is ChatRoom =>
+    isRecord(value) && typeof value.id === "string";
+
+const isLastMessage = (value: unknown): value is LastMessageSummary =>
+    isRecord(value) && typeof value.senderId === "string" && typeof value.createdAt === "string";
+
+/** Room ids whose GET /rooms/{id} is in flight, so an event burst fetches each unknown room once. */
+const fetchingRooms = new Set<string>();
+
+const withDisplayName = (room: ChatRoom): ChatRoom =>
+    room.roomType === RoomType.DIRECT_MESSAGE && room.counterpart?.name
+        ? { ...room, displayName: room.counterpart.name }
+        : room;
+
+const tabIsVisible = () => typeof document === "undefined" || document.visibilityState === "visible";
+
 export const useChatRoomsStore = create<chatRoomState>((set, get) => ({
     // Initial state
     rooms: [],
@@ -47,8 +80,98 @@ export const useChatRoomsStore = create<chatRoomState>((set, get) => ({
     error: null,
     usersCache: new Map(),
     isCreateRoomModalOpen: false,
+    activeRoomId: null,
 
     // Actions
+    setActiveRoom: (roomId) => set({ activeRoomId: roomId }),
+
+    upsertRoom: (room) => {
+        const next = withDisplayName(room);
+        set((state) => ({
+            rooms: state.rooms.some((r) => r.id === next.id)
+                ? state.rooms.map((r) => (r.id === next.id ? { ...r, ...next } : r))
+                : [...state.rooms, next],
+        }));
+        get().applyFilters();
+    },
+
+    removeRoom: (roomId) => {
+        set((state) => ({
+            rooms: state.rooms.filter((room) => room.id !== roomId),
+            activeRoomId: state.activeRoomId === roomId ? null : state.activeRoomId,
+        }));
+        get().applyFilters();
+    },
+
+    markRoomRead: async (roomId) => {
+        const room = get().rooms.find((r) => r.id === roomId);
+        if (room && room.unreadCount) get().updateRoom(roomId, { unreadCount: 0 });
+        try {
+            await chatRoomApi.markRoomRead(roomId);
+        } catch {
+            // The marker is retried by the next open or refetch; the list keeps working.
+        }
+    },
+
+    applyActivity: (roomId, lastMessage) => {
+        const currentUserId = useAuthStore.getState().user?.id;
+        const isOpenAndVisible = get().activeRoomId === roomId && tabIsVisible();
+        const fromMe = lastMessage.senderId === currentUserId;
+        set((state) => ({
+            rooms: state.rooms.map((room) =>
+                room.id === roomId
+                    ? {
+                          ...room,
+                          lastMessage,
+                          lastActivityAt: lastMessage.createdAt,
+                          unreadCount: fromMe || isOpenAndVisible ? room.unreadCount ?? 0 : (room.unreadCount ?? 0) + 1,
+                      }
+                    : room
+            ),
+        }));
+        get().applyFilters();
+        if (isOpenAndVisible && !fromMe) void get().markRoomRead(roomId);
+    },
+
+    handleUserEvent: async (event) => {
+        if (!isRecord(event) || typeof event.type !== "string" || !isRecord(event.payload)) return;
+        const payload = event.payload;
+        const fetchUnknown = async (roomId: string) => {
+            if (fetchingRooms.has(roomId)) return;
+            fetchingRooms.add(roomId);
+            try {
+                const response = await chatRoomApi.getChatRoomById(roomId);
+                if (response.success) get().upsertRoom(response.data);
+            } catch {
+                // The next reconnect refetch recovers the room.
+            } finally {
+                fetchingRooms.delete(roomId);
+            }
+        };
+        switch (event.type) {
+            case "ROOM_ADDED":
+            case "ROOM_UPDATED":
+                if (isRoom(payload.room)) get().upsertRoom(payload.room);
+                break;
+            case "ROOM_REMOVED":
+                if (typeof payload.roomId === "string") get().removeRoom(payload.roomId);
+                break;
+            case "ROOM_ACTIVITY": {
+                const roomId = payload.roomId;
+                if (typeof roomId !== "string" || !isLastMessage(payload.lastMessage)) break;
+                if (get().rooms.some((r) => r.id === roomId)) {
+                    get().applyActivity(roomId, payload.lastMessage);
+                } else {
+                    await fetchUnknown(roomId);
+                }
+                break;
+            }
+            default:
+                break;
+        }
+    },
+
+    getUnreadTotal: () => get().rooms.reduce((sum, room) => sum + (room.unreadCount ?? 0), 0),
     setRooms: (rooms) => {
         set({ rooms });
         get().applyFilters();
@@ -188,7 +311,8 @@ export const useChatRoomsStore = create<chatRoomState>((set, get) => ({
 
     applyFilters: () => {
         const { rooms, searchQuery, roomTypeFilter } = get();
-        let filtered = [...rooms];
+        // Newest activity first; Array.sort is stable, so equal times keep their order.
+        let filtered = [...rooms].sort((a, b) => activityTime(b) - activityTime(a));
 
         // Apply room type filter
         if (roomTypeFilter !== "ALL") {

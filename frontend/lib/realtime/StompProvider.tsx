@@ -4,11 +4,12 @@ import { createContext, useContext, useEffect, useState, useSyncExternalStore } 
 import type { ReactNode } from "react";
 import axios from "axios";
 import { authApi } from "@/lib/api/authApi";
+import { chatRoomApi } from "@/lib/api/chatRoomApi";
 import { useAuthStore } from "@/lib/stores/authStore";
 import { useChatRoomsStore } from "@/lib/stores/chatRoomsStore";
 import { PresenceMessage, useChatStore } from "@/lib/stores/chatStore";
 import { createStompClientFactory } from "./stompClient";
-import { ConnectionStatus, createStompSession, StompSession, WsUnauthorizedError } from "./stompSession";
+import { ConnectionStatus, createStompSession, EVENTS_QUEUE, StompSession, WsUnauthorizedError } from "./stompSession";
 
 const PRESENCE_TOPIC = "/topic/presence";
 const PRESENCE_INTERVAL_MS = 30_000;
@@ -70,6 +71,33 @@ export function StompProvider({ children }: { children: ReactNode }) {
             removeListener();
             clearInterval(interval);
         };
+    }, [session, userId]);
+
+    // Room lifecycle and activity events for this user. The session keeps the subscription across
+    // reconnects, so it is registered once per provider.
+    useEffect(() => session.subscribe(EVENTS_QUEUE, message => {
+        let event: unknown;
+        try {
+            event = JSON.parse(message.body);
+        } catch {
+            return; // Ignore malformed event frames.
+        }
+        void useChatRoomsStore.getState().handleUserEvent(event);
+    }), [session]);
+
+    // Events are not replayed, so every connect (first and reconnect) refetches the room list and
+    // the presence snapshot.
+    useEffect(() => {
+        if (!userId) return;
+        const refetch = () => {
+            void useChatRoomsStore.getState().fetchRooms();
+            chatRoomApi.getOnlineUsers()
+                .then(users => useChatStore.getState().setOnlineUsers(users))
+                .catch(() => {
+                    // Presence dots stay as they were; the next connect retries.
+                });
+        };
+        return session.onConnected(refetch);
     }, [session, userId]);
 
     // A denied room SUBSCRIBE means the membership is gone: refresh the room list so the room view

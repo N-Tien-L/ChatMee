@@ -107,5 +107,16 @@ export const chatRoomApi = {
             console.error(`Error leaving chat room with ID ${roomId}: `, error)
             throw error
         }
+    },
+
+    // mark a room as read for the caller (204 No Content)
+    markRoomRead: async (roomId: string): Promise<void> => {
+        await apiClient.put(`/api/v1/rooms/${roomId}/members/me/read`)
+    },
+
+    // ids of the users that are online right now (a plain JSON array, not wrapped in ApiResponse)
+    getOnlineUsers: async (): Promise<string[]> => {
+        const response = await apiClient.get<string[]>('/api/v1/online-users')
+        return response.data;
     }
 }

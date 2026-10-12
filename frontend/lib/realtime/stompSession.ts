@@ -88,6 +88,7 @@ export interface StompSession {
 }
 
 export const ERROR_QUEUE = "/user/queue/errors";
+export const EVENTS_QUEUE = "/user/queue/events";
 const TOKEN_HEADER = "X-WS-Token";
 
 function isStompError(value: unknown): value is StompError {

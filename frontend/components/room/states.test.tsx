@@ -42,8 +42,9 @@ describe('ChatRoomsList states', () => {
     it('render_iconOnlyControls_haveAccessibleNames', () => {
         useChatRoomsStore.setState({ loading: false, error: null, filteredRooms: [] });
         render(<ChatRoomsList />);
-        expect(screen.getByRole('button', { name: 'Create new chat room' })).toBeInTheDocument();
-        expect(screen.getByRole('button', { name: 'Public', pressed: false })).toBeInTheDocument();
+        expect(screen.getByRole('button', { name: 'New message' })).toBeInTheDocument();
+        expect(screen.getByRole('button', { name: 'New group' })).toBeInTheDocument();
+        expect(screen.getByRole('button', { name: 'Direct', pressed: false })).toBeInTheDocument();
         expect(screen.getByRole('searchbox', { name: 'Search chats' })).toBeInTheDocument();
     });
 });

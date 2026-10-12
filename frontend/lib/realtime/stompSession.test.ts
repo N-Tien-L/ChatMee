@@ -3,6 +3,7 @@ import type { IFrame, IMessage, StompHeaders, StompSubscription } from "@stomp/s
 import {
     createStompSession,
     ERROR_QUEUE,
+    EVENTS_QUEUE,
     MessageHandler,
     StompClientCallbacks,
     StompClientLike,
@@ -117,6 +118,22 @@ describe("stompSession", () => {
         client().deliver(ROOM, { id: "m1" });
         expect(handler).toHaveBeenCalledTimes(1);
         expect(session.getStatus()).toBe("connected");
+    });
+
+    it("keeps the user events queue subscribed once per connection across reconnects", async () => {
+        const { session, client } = setup();
+        const handler = vi.fn();
+        session.subscribe(EVENTS_QUEUE, handler);
+        await client().connect();
+        expect(client().live(EVENTS_QUEUE)).toHaveLength(1);
+
+        client().drop();
+        await vi.advanceTimersByTimeAsync(1000);
+        await client().connect();
+
+        expect(client().live(EVENTS_QUEUE)).toHaveLength(1);
+        client().deliver(EVENTS_QUEUE, { type: "ROOM_ADDED" });
+        expect(handler).toHaveBeenCalledTimes(1);
     });
 
     it("stops delivery when unsubscribed after a reconnect", async () => {

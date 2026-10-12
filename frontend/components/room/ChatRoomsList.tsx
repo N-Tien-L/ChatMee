@@ -1,13 +1,12 @@
 "use client";
-import React, { Suspense } from "react";
+import React, { Suspense, useEffect } from "react";
 import { RoomType } from "@/lib/types";
 import {
   Search,
-  Plus,
   MessageSquare,
+  MessageSquarePlus,
   Users,
-  Lock,
-  Globe,
+  UsersRound,
   AlertCircle,
   RotateCw,
   Compass,
@@ -20,13 +19,9 @@ import { DiscoverRoomsDialog } from "./DiscoverRoomsDialog";
 import { useShallow } from "zustand/react/shallow";
 import { useRouter, useSearchParams } from "next/navigation";
 
-interface ChatRoomsListProps {
-  onCloseSidebar?: () => void;
-}
+const APP_TITLE = "ChatMee";
 
-const ChatRoomsListContent: React.FC<ChatRoomsListProps> = ({
-  onCloseSidebar,
-}) => {
+const ChatRoomsListContent: React.FC = () => {
   const router = useRouter();
   const searchParams = useSearchParams();
   const selectedRoomId = searchParams.get("roomId");
@@ -39,11 +34,13 @@ const ChatRoomsListContent: React.FC<ChatRoomsListProps> = ({
     roomTypeFilter,
     setSearchQuery,
     setRoomTypeFilter,
-    joinRoom,
     leaveRoom,
     deleteRoomById,
     openCreateRoomModal,
     fetchRooms,
+    setActiveRoom,
+    markRoomRead,
+    unreadTotal,
   } = useChatRoomsStore(
     useShallow((state) => ({
       filteredRooms: state.filteredRooms,
@@ -53,11 +50,13 @@ const ChatRoomsListContent: React.FC<ChatRoomsListProps> = ({
       roomTypeFilter: state.roomTypeFilter,
       setSearchQuery: state.setSearchQuery,
       setRoomTypeFilter: state.setRoomTypeFilter,
-      joinRoom: state.joinRoom,
       leaveRoom: state.leaveRoom,
       deleteRoomById: state.deleteRoomById,
       openCreateRoomModal: state.openCreateRoomModal,
       fetchRooms: state.fetchRooms,
+      setActiveRoom: state.setActiveRoom,
+      markRoomRead: state.markRoomRead,
+      unreadTotal: state.rooms.reduce((sum, r) => sum + (r.unreadCount ?? 0), 0),
     }))
   );
 
@@ -65,13 +64,35 @@ const ChatRoomsListContent: React.FC<ChatRoomsListProps> = ({
 
   const handleRoomClick = (roomId: string) => {
     router.push(`/dashboard?roomId=${roomId}`, { scroll: false });
-    if (onCloseSidebar) onCloseSidebar(); // Close sidebar on mobile
   };
+
+  // The open room drives the unread rules; opening it (or returning to the tab) marks it read.
+  useEffect(() => {
+    setActiveRoom(selectedRoomId);
+    if (selectedRoomId && document.visibilityState === "visible") {
+      void markRoomRead(selectedRoomId);
+    }
+    const onVisible = () => {
+      if (selectedRoomId && document.visibilityState === "visible") {
+        void markRoomRead(selectedRoomId);
+      }
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => {
+      document.removeEventListener("visibilitychange", onVisible);
+      setActiveRoom(null);
+    };
+  }, [selectedRoomId, setActiveRoom, markRoomRead]);
+
+  useEffect(() => {
+    document.title = unreadTotal > 0 ? `(${unreadTotal}) ${APP_TITLE}` : APP_TITLE;
+    return () => {
+      document.title = APP_TITLE;
+    };
+  }, [unreadTotal]);
 
   const roomTypeOptions = [
     { value: "ALL", label: "All", icon: MessageSquare },
-    { value: RoomType.PUBLIC, label: "Public", icon: Globe },
-    { value: RoomType.PRIVATE, label: "Private", icon: Lock },
     { value: RoomType.DIRECT_MESSAGE, label: "Direct", icon: Users },
   ];
 
@@ -94,12 +115,22 @@ const ChatRoomsListContent: React.FC<ChatRoomsListProps> = ({
               <Compass className="w-4 h-4 sm:w-5 sm:h-5" aria-hidden="true" />
             </button>
             <button
+              type="button"
+              onClick={() => openCreateRoomModal()}
+              className="p-1.5 sm:p-2 rounded-lg border border-gray-300 text-gray-700 hover:bg-gray-100 transition-colors flex-shrink-0"
+              title="New group"
+              aria-label="New group"
+            >
+              <UsersRound className="w-4 h-4 sm:w-5 sm:h-5" aria-hidden="true" />
+            </button>
+            <button
+              type="button"
               onClick={() => openCreateRoomModal()}
               className="p-1.5 sm:p-2 rounded-lg bg-blue-500 text-white hover:bg-blue-600 transition-colors flex-shrink-0"
-              title="Create new chat room"
-              aria-label="Create new chat room"
+              title="New message"
+              aria-label="New message"
             >
-              <Plus className="w-4 h-4 sm:w-5 sm:h-5" aria-hidden="true" />
+              <MessageSquarePlus className="w-4 h-4 sm:w-5 sm:h-5" aria-hidden="true" />
             </button>
           </div>
         </div>
@@ -122,7 +153,7 @@ const ChatRoomsListContent: React.FC<ChatRoomsListProps> = ({
 
         {/* Filter Tabs */}
         <div
-          className="mt-2 sm:mt-3 grid grid-cols-4 gap-1"
+          className="mt-2 sm:mt-3 grid grid-cols-2 gap-1"
           role="group"
           aria-label="Filter by room type"
         >
@@ -221,7 +252,6 @@ const ChatRoomsListContent: React.FC<ChatRoomsListProps> = ({
               <ChatRoomListItem
                 key={room.id}
                 room={room}
-                onJoin={() => joinRoom(room.id)}
                 onLeave={() => leaveRoom(room.id)}
                 onDelete={() => deleteRoomById(room.id)}
                 onClick={() => handleRoomClick(room.id)}
@@ -243,7 +273,7 @@ const ChatRoomsListContent: React.FC<ChatRoomsListProps> = ({
   );
 };
 
-const ChatRoomsList = (props: ChatRoomsListProps) => (
+const ChatRoomsList = () => (
   <Suspense
     fallback={
       <div className="border-r bg-white h-full flex items-center justify-center text-gray-500">
@@ -251,7 +281,7 @@ const ChatRoomsList = (props: ChatRoomsListProps) => (
       </div>
     }
   >
-    <ChatRoomsListContent {...props} />
+    <ChatRoomsListContent />
   </Suspense>
 );
 
