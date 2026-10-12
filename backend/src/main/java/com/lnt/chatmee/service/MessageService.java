@@ -28,6 +28,7 @@ import com.lnt.chatmee.exception.ChatRoomNotFoundException;
 import com.lnt.chatmee.exception.DatabaseOperationException;
 import com.lnt.chatmee.exception.DmRequestPendingException;
 import com.lnt.chatmee.exception.ForbiddenActionException;
+import com.lnt.chatmee.model.ChatRoom;
 import com.lnt.chatmee.model.Message;
 import com.lnt.chatmee.model.RoomState;
 import com.lnt.chatmee.model.User;
@@ -52,6 +53,7 @@ public class MessageService {
     private final UserEventPublisher userEvents;
     private final DirectMessageRequestService dmRequests;
     private final ParticipantRepository participantRepository;
+    private final BlockService blockService;
 
     public ChatMessageResponse sendMessage(ChatMessageRequest request, String userId) {
         User user = userRepository.findById(userId)
@@ -61,6 +63,11 @@ public class MessageService {
         if (!member && !dmRequests.acceptByReply(request.getRoomId(), userId)) {
             throw new ForbiddenActionException("Room membership required");
         }
+        // A reply that accepted a request was block-checked by acceptByReply. SYSTEM messages come from the server
+        // only (clients may send TEXT alone) and never read the room.
+        Optional<ChatRoom> room = member && request.getMessageType() != Message.MessageType.SYSTEM
+                ? chatRoomRepository.findByIdAndIsActiveTrue(request.getRoomId()) : Optional.empty();
+        room.ifPresent(current -> checkNotBlocked(current, userId));
         Message message = Message.builder()
                 .id(UUID.randomUUID().toString())
                 .chatRoomId(request.getRoomId()).senderId(userId)
@@ -69,8 +76,7 @@ public class MessageService {
                 .createdAt(Instant.now()).updatedAt(Instant.now())
                 .isUpdated(false).isDeleted(false).build();
         // SYSTEM messages never write the activity summary, so they never take the request-message slot.
-        boolean requestMessage = member && message.getType() != Message.MessageType.SYSTEM
-                && claimRequestMessage(message, user.getName());
+        boolean requestMessage = room.isPresent() && claimRequestMessage(room.get(), message, user.getName());
         // Only the successfully persisted message may be acknowledged to the room.
         Message saved;
         try {
@@ -119,11 +125,9 @@ public class MessageService {
      *
      * @return true if this message is the request message (its slot must be released if the save fails)
      */
-    private boolean claimRequestMessage(Message message, String senderName) {
+    private boolean claimRequestMessage(ChatRoom room, Message message, String senderName) {
         String roomId = message.getChatRoomId();
-        boolean requested = chatRoomRepository.findByIdAndIsActiveTrue(roomId)
-                .map(room -> room.getState() == RoomState.REQUESTED).orElse(false);
-        if (!requested || findStoredDuplicate(message).isPresent()) {
+        if (room.getState() != RoomState.REQUESTED || findStoredDuplicate(message).isPresent()) {
             return false;
         }
         if (dmRequests.expireIfDue(roomId)) {
@@ -133,12 +137,39 @@ public class MessageService {
             return true;
         }
         boolean stillRequested = chatRoomRepository.findByIdAndIsActiveTrue(roomId)
-                .map(room -> room.getState() == RoomState.REQUESTED).orElse(false);
+                .map(current -> current.getState() == RoomState.REQUESTED).orElse(false);
         if (stillRequested) {
             throw new DmRequestPendingException("Wait until the recipient accepts your request");
         }
         // Accepted meanwhile: an ordinary message.
         return false;
+    }
+
+    /**
+     * A DM is read-only in both directions while either member blocks the other (AC-009-16, AC-009-19): one indexed
+     * lookup, for DM rooms only. The refusal is the generic text, so the blocked user cannot tell (AC-009-18).
+     */
+    private void checkNotBlocked(ChatRoom room, String senderId) {
+        if (room.getType() != ChatRoom.RoomType.DIRECT_MESSAGE) {
+            return;
+        }
+        if (blockService.isBlockedEitherWay(senderId, otherMember(room, senderId))) {
+            throw new ForbiddenActionException(BlockService.CANNOT_MESSAGE);
+        }
+    }
+
+    /** The other member of a DM, from the pair key, or from the participants for a DM stored without one. */
+    private String otherMember(ChatRoom room, String userId) {
+        if (room.getMemberKey() != null) {
+            for (String id : room.getMemberKey().split(":", 2)) {
+                if (!id.equals(userId)) {
+                    return id;
+                }
+            }
+            return null;
+        }
+        return participantService.getParticipantUserIds(room.getId()).stream()
+                .filter(id -> !id.equals(userId)).findFirst().orElse(null);
     }
 
     private static LastMessageSummary summary(Message message, String senderName) {

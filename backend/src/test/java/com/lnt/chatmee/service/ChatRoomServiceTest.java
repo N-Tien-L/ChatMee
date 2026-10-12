@@ -70,6 +70,7 @@ class ChatRoomServiceTest {
     @Mock DirectMessageRequestService dmRequests;
     @Mock RateLimitingService rateLimitingService;
     @Mock com.lnt.chatmee.repository.ParticipantRepository participantRepository;
+    @Mock BlockService blocks;
 
     @InjectMocks
     private ChatRoomService chatRoomService;
@@ -877,6 +878,35 @@ class ChatRoomServiceTest {
         assertThat(responses.get(0).counterpart().id()).isEqualTo("user2");
         assertThat(responses.get(0).counterpart().name()).isEqualTo("Bob");
         assertThat(responses.get(1).counterpart()).isNull();
+    }
+
+    // CM-073: blocked is true only in the blocker's view of the DM (AC-009-19)
+
+    @Test
+    void toResponses_dmBlockedByCaller_flagsBlockedForBlockerOnly() {
+        ChatRoom dm = ChatRoom.builder().id("dm").type(ChatRoom.RoomType.DIRECT_MESSAGE).memberKey("user1:user2").build();
+        ChatRoom group = ChatRoom.builder().id("group").type(ChatRoom.RoomType.PUBLIC).build();
+        when(participantService.getParticipantUserIds(List.of("dm", "group")))
+                .thenReturn(Map.of("dm", Set.of("user1", "user2"), "group", Set.of("user1", "user2")));
+        when(participantService.getParticipantUserIds(List.of("dm"))).thenReturn(Map.of("dm", Set.of("user1", "user2")));
+        when(blocks.blockedBy("user1", Set.of("user2"))).thenReturn(Set.of("user2"));
+
+        List<ChatRoomResponse> blockerView = chatRoomService.toResponses(List.of(dm, group), "user1");
+        ChatRoomResponse blockedView = chatRoomService.toResponse(dm, "user2");
+
+        assertThat(blockerView.get(0).blocked()).isTrue();
+        assertThat(blockerView.get(1).blocked()).isFalse();
+        assertThat(blockedView.blocked()).isFalse();
+    }
+
+    @Test
+    void toResponses_requestedDmBlockedBySender_flagsBlockedFromMemberKey() {
+        ChatRoom dm = ChatRoom.builder().id("dm").type(ChatRoom.RoomType.DIRECT_MESSAGE).memberKey("user1:user2")
+                .state(RoomState.REQUESTED).build();
+        when(participantService.getParticipantUserIds(List.of("dm"))).thenReturn(Map.of("dm", Set.of("user1")));
+        when(blocks.blockedBy("user1", Set.of("user2"))).thenReturn(Set.of("user2"));
+
+        assertThat(chatRoomService.toResponse(dm, "user1").blocked()).isTrue();
     }
 
     @Test

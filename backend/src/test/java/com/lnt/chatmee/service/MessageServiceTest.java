@@ -59,6 +59,8 @@ class MessageServiceTest {
 
     @Mock ParticipantRepository participantRepository;
 
+    @Mock BlockService blocks;
+
     @InjectMocks
     private MessageService messageService;
 
@@ -534,6 +536,77 @@ class MessageServiceTest {
         assertThatThrownBy(() -> messageService.sendMessage(textRequest("client-1"), "user1"))
                 .isInstanceOf(ForbiddenActionException.class);
         verify(messageRepository, never()).save(any());
+    }
+
+    // CM-073 AC3: DM sends refused while a block exists either way; group rooms unaffected; history readable (AC-009-19)
+
+    @Test
+    void sendMessage_dmMemberBlockedEitherWay_throwsCannotMessageWithoutSaving() {
+        when(participantService.isUserParticipant("room1", "user1")).thenReturn(true);
+        when(chatRoomRepository.findByIdAndIsActiveTrue("room1")).thenReturn(Optional.of(activeDm()));
+        when(blocks.isBlockedEitherWay("user1", "user2")).thenReturn(true);
+
+        assertThatThrownBy(() -> messageService.sendMessage(textRequest("client-1"), "user1"))
+                .isInstanceOf(ForbiddenActionException.class)
+                .hasMessage("Cannot message this user");
+        verify(messageRepository, never()).save(any());
+        verify(chatRoomRepository, never()).claimRequestMessage(anyString(), any(), any());
+        verifyNoInteractions(userEvents);
+    }
+
+    @Test
+    void sendMessage_dmWithoutMemberKey_checksBlockAgainstOtherParticipant() {
+        com.lnt.chatmee.model.ChatRoom legacy = activeDm();
+        legacy.setMemberKey(null);
+        when(participantService.isUserParticipant("room1", "user1")).thenReturn(true);
+        when(chatRoomRepository.findByIdAndIsActiveTrue("room1")).thenReturn(Optional.of(legacy));
+        when(participantService.getParticipantUserIds("room1")).thenReturn(Set.of("user1", "user2"));
+        when(blocks.isBlockedEitherWay("user1", "user2")).thenReturn(true);
+
+        assertThatThrownBy(() -> messageService.sendMessage(textRequest("client-1"), "user1"))
+                .isInstanceOf(ForbiddenActionException.class)
+                .hasMessage("Cannot message this user");
+        verify(messageRepository, never()).save(any());
+    }
+
+    @Test
+    void sendMessage_dmAfterUnblock_savesMessage() {
+        when(participantService.isUserParticipant("room1", "user1")).thenReturn(true);
+        when(chatRoomRepository.findByIdAndIsActiveTrue("room1")).thenReturn(Optional.of(activeDm()));
+        when(blocks.isBlockedEitherWay("user1", "user2")).thenReturn(false);
+        when(messageRepository.save(any())).thenAnswer(call -> call.getArgument(0));
+
+        assertThat(messageService.sendMessage(textRequest("client-1"), "user1").content()).isEqualTo("hello");
+        verify(messageRepository).save(any());
+    }
+
+    @Test
+    void sendMessage_groupRoom_doesNotCheckBlocks() {
+        when(participantService.isUserParticipant("room1", "user1")).thenReturn(true);
+        when(chatRoomRepository.findByIdAndIsActiveTrue("room1")).thenReturn(Optional.of(
+                com.lnt.chatmee.model.ChatRoom.builder().id("room1")
+                        .type(com.lnt.chatmee.model.ChatRoom.RoomType.PUBLIC).isActive(true).build()));
+        when(messageRepository.save(any())).thenAnswer(call -> call.getArgument(0));
+
+        messageService.sendMessage(textRequest("client-1"), "user1");
+
+        verifyNoInteractions(blocks);
+        verify(messageRepository).save(any());
+    }
+
+    @Test
+    void getMessages_blockedDm_historyStaysReadableWithoutBlockCheck() {
+        allowHistory();
+        when(messageRepository.findPage(eq("room1"), any(Pageable.class))).thenReturn(List.of());
+
+        assertThat(messageService.getMessages("room1", "user1", null, 50).messages()).isEmpty();
+        verifyNoInteractions(blocks);
+    }
+
+    private static com.lnt.chatmee.model.ChatRoom activeDm() {
+        return com.lnt.chatmee.model.ChatRoom.builder().id("room1")
+                .type(com.lnt.chatmee.model.ChatRoom.RoomType.DIRECT_MESSAGE).memberKey("user1:user2")
+                .state(com.lnt.chatmee.model.RoomState.ACTIVE).isActive(true).build();
     }
 
     private static com.lnt.chatmee.model.ChatRoom requestedRoom() {

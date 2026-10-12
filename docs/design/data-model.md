@@ -228,9 +228,13 @@ the document is not needed back. An expired `PENDING` row found by an invite for
 partial unique index admits the new invitation. Inviting checks `memberCount < maxParticipants` (409) as a fast path; the seat
 reservation on accept stays the authority.
 
-### user_blocks (new, CM-073)
+### user_blocks (new, CM-073 implemented)
 - `{blockerId, blockedId, createdAt}`; unique `{blockerId: 1, blockedId: 1}`; `{blockedId: 1, blockerId: 1}` for the reverse check.
   "Blocked either way" is one `$or` query on these two indexes.
+- CM-073: `UserBlock` declares both indexes (`user_blocks_blocker_blocked_unique`, `user_blocks_blocked_blocker`), created by
+  auto-index creation. `existsEitherWay` is the block check; `findInvolving` (the same `$or` on one user) feeds search exclusion and
+  the DM request filter; `findByBlockerIdAndBlockedIdIn` feeds `ChatRoomResponse.blocked`. A concurrent duplicate block hits the
+  unique index and is treated as already blocked.
 
 ### reports (new, CM-074)
 - `{reporterId, targetType, targetId, reason, note (<= 500), createdAt}`; unique `{reporterId: 1, targetType: 1, targetId: 1}`;

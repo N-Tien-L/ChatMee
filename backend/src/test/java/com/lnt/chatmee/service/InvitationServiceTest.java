@@ -68,6 +68,7 @@ class InvitationServiceTest {
     @Mock ChatRoomService chatRooms;
     @Mock UserEventPublisher userEvents;
     @Mock RateLimitingService rateLimitingService;
+    @Mock BlockService blocks;
     @Spy RoomTypePolicyRegistry policies = new RoomTypePolicyRegistry(List.of(
         new PublicRoomPolicy(), new PrivateRoomPolicy(), new DirectRoomPolicy()));
 
@@ -472,6 +473,35 @@ class InvitationServiceTest {
         when(participants.findMembership("room", "owner")).thenReturn(Optional.empty());
 
         assertThrows(ChatRoomNotFoundException.class, () -> service.listForRoom("room", "owner"));
+    }
+
+    // CM-073: blocks (AC-009-4, AC-009-18)
+
+    @Test
+    void invite_blockEitherWay_throwsCannotInviteWithoutInsertOrEvent() {
+        caller("owner", Role.OWNER);
+        when(blocks.isBlockedEitherWay("owner", "bob")).thenReturn(true);
+
+        ForbiddenActionException ex = assertThrows(ForbiddenActionException.class,
+            () -> service.invite("room", "owner", "bob"));
+
+        assertEquals(ErrorCode.FORBIDDEN_ACTION, ex.getErrorCode());
+        assertEquals("Cannot invite this user", ex.getMessage());
+        verify(requests, never()).insert(any(MembershipRequest.class));
+        verifyNoInteractions(userEvents);
+    }
+
+    @Test
+    void accept_inviterBlockedEitherWay_throwsSameCannotInviteWithoutDecision() {
+        stored(MembershipRequestStatus.PENDING, Instant.now().plusSeconds(60));
+        when(blocks.isBlockedEitherWay("owner", "bob")).thenReturn(true);
+
+        ForbiddenActionException ex = assertThrows(ForbiddenActionException.class,
+            () -> service.accept("inv-1", "bob"));
+
+        assertEquals("Cannot invite this user", ex.getMessage());
+        verify(requests, never()).decidePending(any(), any(), any());
+        verifyNoInteractions(participants, userEvents);
     }
 
     private void rejectAccept(MembershipRequestStatus status) {

@@ -1,5 +1,6 @@
 package com.lnt.chatmee.service;
 
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Comparator;
 import com.lnt.chatmee.model.Participant;
@@ -78,6 +79,7 @@ public class ChatRoomService {
     private final DirectMessageRequestService dmRequests;
     private final RateLimitingService rateLimitingService;
     private final ParticipantRepository participantRepository;
+    private final BlockService blockService;
 
     public ChatRoomResponse createRoom(CreateChatRoomRequest request, String userId) {
 
@@ -142,7 +144,8 @@ public class ChatRoomService {
 
     /**
      * Maps several rooms with one participants query and one user query; DM rooms carry the other member
-     * as {@code counterpart} so the client needs no per-room lookup.
+     * as {@code counterpart} so the client needs no per-room lookup, and {@code blocked} when the caller blocked that
+     * member (one block query; the blocked user's view never shows it, AC-009-19).
      */
     public List<ChatRoomResponse> toResponses(List<ChatRoom> rooms, String callerId) {
         Map<String, Set<String>> members = participantService.getParticipantUserIds(
@@ -156,6 +159,16 @@ public class ChatRoomService {
                     .ifPresent(id -> counterpartIds.put(room.getId(), id));
             }
         }
+        Map<String, String> otherMembers = new HashMap<>(counterpartIds);
+        for (ChatRoom room : rooms) {
+            // A REQUESTED DM has only the sender's row: its pair key names the other member.
+            if (room.getType() == ChatRoom.RoomType.DIRECT_MESSAGE && !otherMembers.containsKey(room.getId())
+                    && room.getMemberKey() != null) {
+                Arrays.stream(room.getMemberKey().split(":", 2)).filter(id -> !id.equals(callerId)).findFirst()
+                    .ifPresent(id -> otherMembers.put(room.getId(), id));
+            }
+        }
+        Set<String> blockedByCaller = blockService.blockedBy(callerId, new HashSet<>(otherMembers.values()));
         Map<String, UserSummaryResponse> summaries = new HashMap<>();
         if (!counterpartIds.isEmpty()) {
             userRepository.findAllById(new HashSet<>(counterpartIds.values())).forEach(user ->
@@ -166,7 +179,8 @@ public class ChatRoomService {
         return rooms.stream()
             .map(room -> ChatRoomResponse.from(room, members.getOrDefault(room.getId(), Set.of()),
                 summaries.get(counterpartIds.get(room.getId())), unreadCount(room.getId(), callerId, memberships.get(room.getId())),
-                memberships.containsKey(room.getId()) ? memberships.get(room.getId()).getRole() : null))
+                memberships.containsKey(room.getId()) ? memberships.get(room.getId()).getRole() : null,
+                otherMembers.containsKey(room.getId()) && blockedByCaller.contains(otherMembers.get(room.getId()))))
             .toList();
     }
 

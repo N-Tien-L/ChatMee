@@ -345,6 +345,7 @@ CM-061 implements activity/read fields in `ChatRoomResponse` and shares the save
 CM-070 implements `INVITATION_RECEIVED`, `INVITATION_CHANGED` and `ROOM_ADDED` on an accepted invitation (see "Invitations" below).
 CM-072 implements `DM_REQUEST_RECEIVED`, `ROOM_ADDED`/`ROOM_UPDATED` on an accepted DM request and `ROOM_REMOVED` with `DECLINED`/`EXPIRED`
 (see "DM requests" below). A new DM notifies only its sender with `ROOM_ADDED`; the recipient gets `DM_REQUEST_RECEIVED`.
+CM-073 implements the block filter on `DM_REQUEST_RECEIVED` and `blocked` in `ChatRoomResponse` (see "Blocking" below).
 Other SPEC-009 extensions remain with the later tickets in the table.
 New rooms notify their creator with the room view (a new DM: the sender only). Unchanged name/description/capacity emits no update event.
 Delivery failures log metadata only and do not stop other recipients; clients recover missed events by refetching after reconnect.
@@ -365,7 +366,7 @@ that user (with `myRole`, `unreadCount`, `lastMessage`, `state`, `blocked`).
 | `ROOM_ACTIVITY` | `{roomId, lastMessage: {id, senderId, senderName, preview, createdAt}}` | every member, after persist | non-SYSTEM message persisted; `preview` <= 100 chars; a member whose `hiddenAt` is cleared by this message receives it too | CM-060, CM-061 (shared persisted summary), CM-075 implemented |
 | `INVITATION_RECEIVED` | `{invitation: {id, room: {id, name, memberCount}, inviter: {id, name, avatarUrl}, invitee: {id, name, avatarUrl}, createdAt, expiresAt}}` | invitee | invitation created | CM-070 implemented |
 | `INVITATION_CHANGED` | `{invitationId, roomId, status}` | invitee and inviter | accepted, declined, revoked | CM-070 implemented |
-| `DM_REQUEST_RECEIVED` | `{request: {roomId, sender: {id, name, avatarUrl}, preview, createdAt, expiresAt}}` | recipient (not when a block exists) | DM request created; `preview` is updated by the one allowed message with a second `DM_REQUEST_RECEIVED` for the same `roomId` (client upserts by `roomId`); `preview` is null before that message | CM-072 implemented (block filter: CM-073) |
+| `DM_REQUEST_RECEIVED` | `{request: {roomId, sender: {id, name, avatarUrl}, preview, createdAt, expiresAt}}` | recipient (not when a block exists) | DM request created; `preview` is updated by the one allowed message with a second `DM_REQUEST_RECEIVED` for the same `roomId` (client upserts by `roomId`); `preview` is null before that message | CM-072 implemented, block filter CM-073 implemented |
 
 Rules:
 - An event for a room that is not in the client's list makes the client fetch `GET /api/v1/rooms/{id}` once and insert it.
@@ -388,7 +389,8 @@ Rules:
   be processed out of order (WS-A14). Options are in the CM-068 report; the owner decides.
 
 New STOMP error codes (SPEC-009): `DM_REQUEST_PENDING` (second message in a REQUESTED DM by the sender; CM-072 implemented), `FORBIDDEN_ACTION` with the
-generic message "Cannot message this user" (block, CM-073). Both go to `/user/queue/errors` of the sending session.
+generic message "Cannot message this user" (block, CM-073 implemented). Both go to `/user/queue/errors` of the sending session. Other
+`FORBIDDEN_ACTION` refusals on `/app/chat.sendMessage` keep the message "Room membership required".
 
 ## REST endpoints added in v0 (summary)
 Full contracts are in the specs and in OpenAPI (`/v3/api-docs`, dev/local).
@@ -402,7 +404,7 @@ Full contracts are in the specs and in OpenAPI (`/v3/api-docs`, dev/local).
 | `GET /api/v1/invitations`, `POST /api/v1/invitations/{id}/accept`, `POST .../decline`, `DELETE /api/v1/invitations/{id}` | AC-009-2, -3 | CM-070 implemented |
 | removed: `POST /api/v1/rooms/{roomId}/members` | AC-009-5 | CM-070 implemented (405) |
 | `GET /api/v1/dm-requests`, `POST /api/v1/rooms/{roomId}/dm-request/accept`, `POST .../dm-request/decline` | AC-009-11, -12 | CM-072 implemented |
-| `PUT` / `DELETE /api/v1/users/{userId}/block`, `GET /api/v1/users/me/blocks` | AC-009-15 | CM-073 |
+| `PUT` / `DELETE /api/v1/users/{userId}/block`, `GET /api/v1/users/me/blocks` | AC-009-15: 204 / 204 / list; idempotent; self 400; unknown user 404 | CM-073 implemented |
 | `POST /api/v1/reports` | AC-009-20 | CM-074 |
 | `POST /api/v1/rooms/{roomId}/hide` | AC-009-21: 204; DM members only; group rooms 400; non-member 404; per user | CM-075 implemented |
 | `PATCH /api/v1/rooms/{roomId}/members/{userId}/role` | AC-009-23 | CM-076 |
@@ -424,7 +426,8 @@ Full contracts are in the specs and in OpenAPI (`/v3/api-docs`, dev/local).
   (ADR-0005). If the seat or insert fails (room full 409, room deleted 404), the invitation goes back to `PENDING`. On success:
   "X joined" SYSTEM message, `INVITATION_CHANGED` to invitee and inviter, `ROOM_ADDED` to the invitee. Decline and revoke send
   `INVITATION_CHANGED` to both.
-- Block checks (AC-009-4) are added in CM-073 at `InvitationService.checkConsentAllowed`, which runs on invite and on accept.
+- Block checks (AC-009-4): `InvitationService.checkConsentAllowed` runs on invite and on accept; a block in either direction
+  answers 403 `FORBIDDEN_ACTION` "Cannot invite this user" (CM-073 implemented).
 
 ## DM requests (SPEC-009 AC-009-9..13, CM-072 implemented)
 
@@ -453,7 +456,26 @@ Full contracts are in the specs and in OpenAPI (`/v3/api-docs`, dev/local).
   `memberKey`) and the sender's row removed; the sender gets `ROOM_REMOVED {reason: DECLINED}`.
 - Expiry: on access (create, list, accept, decline, send) and by `MembershipRequestExpiryJob` (hourly, batches of 100; it also
   expires INVITE rows). The room is soft-deleted, `memberKey` cleared, the sender gets `ROOM_REMOVED {reason: EXPIRED}`; no cooldown.
-- Block checks (AC-009-16) are added in CM-073 at `DirectMessageRequestService.checkConsentAllowed`, which runs on create and accept.
+- Block checks (AC-009-16): `DirectMessageRequestService.checkConsentAllowed` runs on create and on every accept path (endpoint,
+  reply, recipient creating the same DM); a block in either direction answers 403 `FORBIDDEN_ACTION` "Cannot message this user",
+  the same response as the decline cooldown (CM-073 implemented).
+
+## Blocking (SPEC-009 AC-009-15..19, CM-073 implemented)
+
+- `PUT /api/v1/users/{userId}/block` and `DELETE /api/v1/users/{userId}/block` answer 204 and are idempotent (blocking twice keeps one
+  row; unblocking without a block succeeds). The blocker is always the caller; the blocked user is the path variable. Blocking
+  yourself answers 400 `INVALID_ARGUMENT`; an unknown user answers 404 `USER_NOT_FOUND` (a block of a since-deleted user can still be
+  removed). `GET /api/v1/users/me/blocks` lists the caller's own blocks, newest first, as `{id, name, avatarUrl, blockedAt}`
+  (wrapped in `ApiResponse`, like the other list endpoints; a missing account is "Deleted user").
+- One check, `BlockService.isBlockedEitherWay(a, b)` (one `$or` query on the two `user_blocks` indexes), runs on invite, invitation
+  accept, DM create, every DM request accept path, and every `/app/chat.sendMessage` to a DIRECT_MESSAGE room. Group rooms are not checked.
+- A blocked DM send answers `FORBIDDEN_ACTION` "Cannot message this user" on `/user/queue/errors` in both directions; nothing is
+  stored or broadcast. History stays readable for both members (D-05); unblocking restores sending and the DM is not recreated.
+- `ChatRoomResponse.blocked` is true only in the blocker's view of the DM (`GET /rooms`, `GET /rooms/{id}`, and room events built from
+  that view); the blocked user always sees `false`. Group rooms are always `false`.
+- `GET /api/v1/dm-requests` leaves out requests from users blocked in either direction, and `DM_REQUEST_RECEIVED` is not sent while
+  a block exists. User search (`GET /api/v1/users`) leaves out users blocked in either direction (AC-009-17).
+- Responses never say who blocked whom; logs carry ids only.
 
 ## Role changes and owner transfer (CM-076 implemented)
 

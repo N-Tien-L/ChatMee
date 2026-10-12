@@ -61,6 +61,7 @@ class DirectMessageRequestServiceTest {
     @Mock ObjectProvider<ChatRoomService> chatRoomProvider;
     @Mock ChatRoomService chatRooms;
     @Mock RateLimitingService rateLimiting;
+    @Mock BlockService blocks;
 
     @InjectMocks DirectMessageRequestService service;
 
@@ -356,6 +357,89 @@ class DirectMessageRequestServiceTest {
 
         verify(userEvents).dmRequestReceived(eq("bob"), argThat((DmRequestResponse request) ->
             request.roomId().equals("dm") && "hi there".equals(request.preview())));
+    }
+
+    // CM-073 AC2: blocks refuse create and accept with the cooldown's text, both directions (AC-009-16, AC-009-18)
+
+    @Test
+    void checkCanRequest_blockEitherWay_throwsSameCannotMessageTextBothDirections() {
+        when(blocks.isBlockedEitherWay("alice", "bob")).thenReturn(true);
+        when(blocks.isBlockedEitherWay("bob", "alice")).thenReturn(true);
+
+        ForbiddenActionException fromAlice = assertThrows(ForbiddenActionException.class,
+            () -> service.checkCanRequest("alice", "bob"));
+        ForbiddenActionException fromBob = assertThrows(ForbiddenActionException.class,
+            () -> service.checkCanRequest("bob", "alice"));
+
+        assertEquals("Cannot message this user", fromAlice.getMessage());
+        assertEquals(fromAlice.getMessage(), fromBob.getMessage());
+        assertEquals(ErrorCode.FORBIDDEN_ACTION, fromBob.getErrorCode());
+        verifyNoInteractions(rateLimiting);
+        verify(requests, never()).insert(any(MembershipRequest.class));
+    }
+
+    @Test
+    void accept_blockEitherWay_throwsCannotMessageWithoutDeciding() {
+        pendingForRoom(Instant.now().plusSeconds(600));
+        when(blocks.isBlockedEitherWay("alice", "bob")).thenReturn(true);
+
+        ForbiddenActionException ex = assertThrows(ForbiddenActionException.class, () -> service.accept("dm", "bob"));
+
+        assertEquals("Cannot message this user", ex.getMessage());
+        verify(requests, never()).decidePending(anyString(), any(), any());
+        verifyNoInteractions(participants, userEvents);
+    }
+
+    @Test
+    void acceptByReply_blockEitherWay_throwsCannotMessageWithoutDeciding() {
+        pendingForRoom(Instant.now().plusSeconds(600));
+        when(blocks.isBlockedEitherWay("alice", "bob")).thenReturn(true);
+
+        ForbiddenActionException ex = assertThrows(ForbiddenActionException.class,
+            () -> service.acceptByReply("dm", "bob"));
+
+        assertEquals("Cannot message this user", ex.getMessage());
+        verify(requests, never()).decidePending(anyString(), any(), any());
+    }
+
+    @Test
+    void resolveRequested_recipientCreatesSamePairWhileBlocked_throwsCannotMessage() {
+        pendingForRoom(Instant.now().plusSeconds(600));
+        when(blocks.isBlockedEitherWay("alice", "bob")).thenReturn(true);
+
+        ForbiddenActionException ex = assertThrows(ForbiddenActionException.class,
+            () -> service.resolveRequested(room, "bob"));
+
+        assertEquals("Cannot message this user", ex.getMessage());
+        verify(requests, never()).decidePending(anyString(), any(), any());
+    }
+
+    @Test
+    void listPending_requestFromUserBlockedEitherWay_isHidden() {
+        Instant now = Instant.now();
+        MembershipRequest fromAlice = pending(now.plusSeconds(600));
+        MembershipRequest fromCarol = MembershipRequest.builder().id("req-2").kind(MembershipRequestKind.DM_REQUEST)
+            .roomId("dm2").inviterId("carol").targetUserId("bob").status(MembershipRequestStatus.PENDING)
+            .createdAt(now).expiresAt(now.plusSeconds(600)).build();
+        when(requests.findByTargetUserIdAndKindAndStatusOrderByCreatedAtDesc("bob", MembershipRequestKind.DM_REQUEST,
+            MembershipRequestStatus.PENDING)).thenReturn(List.of(fromCarol, fromAlice));
+        when(blocks.blockedEitherWay("bob")).thenReturn(Set.of("carol"));
+        when(rooms.findAllById(Set.of("dm"))).thenReturn(List.of(room));
+        when(users.findAllById(Set.of("alice"))).thenReturn(List.of(alice));
+
+        List<DmRequestResponse> listed = service.listPending("bob");
+
+        assertThat(listed).extracting(DmRequestResponse::roomId).containsExactly("dm");
+    }
+
+    @Test
+    void previewChanged_blockEitherWay_sendsNoDmRequestReceived() {
+        pendingForRoom(Instant.now().plusSeconds(600));
+        when(blocks.isBlockedEitherWay("alice", "bob")).thenReturn(true);
+
+        service.previewChanged("dm");
+
+        verify(userEvents, never()).dmRequestReceived(anyString(), any());
     }
 
     private void acceptSucceeds() {
