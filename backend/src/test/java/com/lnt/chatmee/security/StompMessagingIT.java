@@ -2,6 +2,7 @@ package com.lnt.chatmee.security;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.Mockito.doThrow;
 
 import java.lang.reflect.Type;
 import java.util.ArrayList;
@@ -29,6 +30,8 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.server.LocalServerPort;
 import org.springframework.context.annotation.Import;
 import org.springframework.data.mongodb.core.MongoTemplate;
+import org.springframework.data.redis.RedisConnectionFailureException;
+import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
 import org.springframework.data.mongodb.core.query.Criteria;
 import org.springframework.data.mongodb.core.query.Query;
 import org.springframework.data.redis.core.StringRedisTemplate;
@@ -50,6 +53,7 @@ class StompMessagingIT {
     @Autowired private MongoTemplate mongo;
     @Autowired private StringRedisTemplate redis;
     @Autowired private WsTokenService tokens;
+    @MockitoSpyBean private WsTokenService tokenService;
     @Autowired private SimpMessagingTemplate messaging;
     @Autowired private ObjectMapper mapper;
     @Value("${app.client.url}") private String clientUrl;
@@ -180,6 +184,33 @@ class StompMessagingIT {
         assertThat(observerSession.isConnected()).isTrue();
     }
 
+    @Test
+    void sendMessage_twoSessionsOfOneUser_privateErrorReachesOnlySendingSession() throws Exception {
+        User sender = seedUser(true);
+        StompSession firstTab = connect(issueToken(sender), new ProtocolEvents());
+        StompSession secondTab = connect(issueToken(sender), new ProtocolEvents());
+        BlockingQueue<String> firstTabErrors = subscribeReady(firstTab, "/user/queue/errors", sender.getId());
+        BlockingQueue<String> secondTabErrors = subscribeReady(secondTab, "/user/queue/errors", sender.getId());
+        String tempId = UUID.randomUUID().toString();
+        sendJson(firstTab, payload(tempId, "x".repeat(5001), sender.getId()));
+        JsonNode error = mapper.readTree(take(firstTabErrors));
+        assertThat(error.path("tempId").asString()).isEqualTo(tempId);
+        assertThat(secondTabErrors.poll(1, TimeUnit.SECONDS)).isNull();
+        assertThat(firstTab.isConnected()).isTrue();
+        assertThat(secondTab.isConnected()).isTrue();
+    }
+
+    @Test
+    void connect_redisUnavailableDuringTokenCheck_receivesErrorWithoutToken() throws Exception {
+        String token = issueToken(seedUser(false));
+        doThrow(new RedisConnectionFailureException("Unable to connect to Redis"))
+                .when(tokenService).consumeToken(token);
+        ProtocolEvents events = new ProtocolEvents();
+        client.connectAsync(url(), new WebSocketHttpHeaders(), headers(token), events);
+        events.assertRejected();
+        assertThat(events.errorHeaders().getFirst("message")).isNotBlank().doesNotContain(token);
+    }
+
     private User seedUser(boolean member) {
         String id = UUID.randomUUID().toString();
         User user = mongo.insert(User.builder().id(id).name("Integration user")
@@ -277,6 +308,10 @@ class StompMessagingIT {
         void assertRejected() throws Exception {
             assertThat(error.get(10, TimeUnit.SECONDS).getFirst("message")).isNotBlank();
             assertThat(closed.get(10, TimeUnit.SECONDS)).isNotNull();
+        }
+
+        StompHeaders errorHeaders() throws Exception {
+            return error.get(10, TimeUnit.SECONDS);
         }
     }
 }

@@ -247,9 +247,10 @@ export const useRoomMessages = (roomId: string, options: RoomMessagesOptions = {
         };
     }, [roomId, subscribeRoom, user?.id, subscribeErrors, clearPendingTimer]);
 
-    const createOptimisticMessage = useCallback((content: string): Message | null => {
+    // A new send gets a new client id; a Resend passes the failed message's id so the server can
+    // recognise a retry of a send it already stored (SPEC-008 AC-008-13).
+    const createOptimisticMessage = useCallback((content: string, tempId = `temp-${Date.now()}-${Math.random()}`): Message | null => {
         if (!user) return null;
-        const tempId = `temp-${Date.now()}-${Math.random()}`;
         const now = new Date().toISOString();
         return {
             id: `optimistic-${tempId}`,
@@ -304,14 +305,14 @@ export const useRoomMessages = (roomId: string, options: RoomMessagesOptions = {
         deliver(optimisticMessage);
     }, [connected, createOptimisticMessage, deliver]);
 
-    /** Sends a failed message again as a new attempt that replaces the failed copy. */
+    /** Sends a failed message again as a new attempt with the same client id, replacing the failed copy. */
     const resendMessage = useCallback((tempId: string) => {
         if (!connected) return;
         const failed = messagesRef.current.find(
             (m) => m.isOptimistic && m.tempId === tempId && m.status === "failed"
         );
         if (!failed) return;
-        const retry = createOptimisticMessage(failed.content);
+        const retry = createOptimisticMessage(failed.content, tempId);
         if (!retry) return;
         dispatch({ type: "RESEND_MESSAGE", payload: { tempId, message: retry } });
         deliver(retry);

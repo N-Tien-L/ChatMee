@@ -68,7 +68,9 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
     public void configureWebSocketTransport(WebSocketTransportRegistration registration) {
         registration.setMessageSizeLimit(128 * 1024) // 128 KB
                     .setSendBufferSizeLimit(512 * 1024) // 512 KB
-                    .setSendTimeLimit(20000); // 20 seconds
+                    .setSendTimeLimit(20000) // 20 seconds
+                    // A socket that never sends CONNECT is closed after 60 s (WS-A10).
+                    .setTimeToFirstMessage(60_000);
     }
 
     @Bean

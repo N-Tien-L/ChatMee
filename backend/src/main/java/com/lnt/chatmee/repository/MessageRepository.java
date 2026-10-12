@@ -2,6 +2,7 @@ package com.lnt.chatmee.repository;
 
 import java.time.Instant;
 import java.util.List;
+import java.util.Optional;
 import org.bson.types.ObjectId;
 
 import org.springframework.data.domain.Pageable;
@@ -31,6 +32,10 @@ public interface MessageRepository extends MongoRepository<Message, String> {
             sort = "{ 'createdAt': -1, '_id': -1 }")
     List<Message> findPageBeforeKey(String roomId, Instant beforeCreatedAt, Object beforeId, Pageable pageable);
     
+    /** Idempotency lookup for a send retried with the same client id (SPEC-008 AC-008-13). */
+    Optional<Message> findFirstByChatRoomIdAndSenderIdAndClientMessageId(String chatRoomId, String senderId,
+            String clientMessageId);
+
     // Retrieve message for a specific chat room, ordered by creation time in descending order
     // use for loading older messages with pagination (e.g.: infinite roll in chat history)
     Page<Message> findByChatRoomIdOrderByCreatedAtDesc(String chatRoomId, Pageable pageable);

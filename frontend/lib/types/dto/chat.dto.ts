@@ -52,6 +52,8 @@ export interface ChatRoomResponse {
 export interface MessageResponse {
     id: string;
     tempId?: string;
+    /** The sender's client id as stored by the server; history carries it so a resync can match a pending copy. */
+    clientMessageId?: string;
     chatRoomId: string;
     senderId: string;
     senderName?: string;

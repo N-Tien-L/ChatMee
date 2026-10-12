@@ -5,6 +5,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.time.Instant;
@@ -13,6 +14,7 @@ import com.lnt.chatmee.exception.UserNotFoundException;
 import java.util.stream.Collectors;
 
 import org.springframework.dao.DataAccessException;
+import org.springframework.dao.DuplicateKeyException;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 
@@ -48,6 +50,7 @@ public class MessageService {
         Message message = Message.builder()
                 .id(UUID.randomUUID().toString())
                 .chatRoomId(request.getRoomId()).senderId(userId)
+                .clientMessageId(clientMessageId(request.getTempId()))
                 .type(request.getMessageType()).content(request.getContent())
                 .createdAt(Instant.now()).updatedAt(Instant.now())
                 .isUpdated(false).isDeleted(false).build();
@@ -56,6 +59,11 @@ public class MessageService {
         ChatMessageResponse response = ChatMessageResponse.from(saved, user.getName(), request.getTempId());
 
         return response;
+    }
+
+    /** A blank tempId is no idempotency key, so the message is stored without a client id. */
+    private static String clientMessageId(String tempId) {
+        return tempId == null || tempId.isBlank() ? null : tempId;
     }
 
     public List<ChatMessageResponse> getRecentMessages(String roomId, String userId) {
@@ -105,12 +113,26 @@ public class MessageService {
         }
     }
 
-    /** Persist synchronously; callers may broadcast only the returned saved message. */
+    /**
+     * Persist synchronously; callers may broadcast only the returned saved message. A repeat of a stored
+     * client id returns the stored message instead of a second row (idempotent retry and Resend).
+     */
     public Message persistMessage(Message message) {
         try {
             return messageRepository.save(message);
+        } catch (DuplicateKeyException ex) {
+            return findStoredDuplicate(message)
+                    .orElseThrow(() -> new DatabaseOperationException("Failed to save message", ex));
         } catch (DataAccessException ex) {
             throw new DatabaseOperationException("Failed to save message", ex);
         }
+    }
+
+    private Optional<Message> findStoredDuplicate(Message message) {
+        if (message.getClientMessageId() == null) {
+            return Optional.empty();
+        }
+        return messageRepository.findFirstByChatRoomIdAndSenderIdAndClientMessageId(
+                message.getChatRoomId(), message.getSenderId(), message.getClientMessageId());
     }
 }

@@ -2,12 +2,13 @@
 
 import { createContext, useContext, useEffect, useState, useSyncExternalStore } from "react";
 import type { ReactNode } from "react";
+import axios from "axios";
 import { authApi } from "@/lib/api/authApi";
 import { useAuthStore } from "@/lib/stores/authStore";
 import { useChatRoomsStore } from "@/lib/stores/chatRoomsStore";
 import { PresenceMessage, useChatStore } from "@/lib/stores/chatStore";
 import { createStompClientFactory } from "./stompClient";
-import { ConnectionStatus, createStompSession, StompSession } from "./stompSession";
+import { ConnectionStatus, createStompSession, StompSession, WsUnauthorizedError } from "./stompSession";
 
 const PRESENCE_TOPIC = "/topic/presence";
 const PRESENCE_INTERVAL_MS = 30_000;
@@ -15,13 +16,30 @@ const ROOM_TOPIC_PREFIXES = ["/topic/rooms/"];
 
 const StompContext = createContext<StompSession | null>(null);
 
+/**
+ * Fetches a ws-token. The API client turns an HTTP 401 into an Error whose cause is the axios error,
+ * so the rejection is mapped to WsUnauthorizedError, which stops the session instead of retrying.
+ */
+async function fetchWsToken(): Promise<string> {
+    try {
+        return await authApi.getWsToken();
+    } catch (error) {
+        const cause = error instanceof Error ? error.cause : undefined;
+        if (axios.isAxiosError(cause) && cause.response?.status === 401) {
+            throw new WsUnauthorizedError();
+        }
+        throw error;
+    }
+}
+
 /** Owns the app's single STOMP session; mount once around the authenticated area. */
 export function StompProvider({ children }: { children: ReactNode }) {
     const isAuthenticated = useAuthStore(state => state.isAuthenticated);
     const userId = useAuthStore(state => state.user?.id);
     const [session] = useState(() => createStompSession({
         clientFactory: createStompClientFactory(process.env.NEXT_PUBLIC_WS_URL || "http://localhost:8080/ws"),
-        getToken: authApi.getWsToken,
+        getToken: fetchWsToken,
+        onUnauthorized: () => window.location.replace("/login"),
     }));
 
     useEffect(() => {

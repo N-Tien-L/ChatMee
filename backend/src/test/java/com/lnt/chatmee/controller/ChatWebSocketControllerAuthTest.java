@@ -126,7 +126,8 @@ class ChatWebSocketControllerAuthTest {
 
     private void assertPrivateError() {
         verify(messaging).convertAndSendToUser(eq("internal-user"), eq("/queue/errors"),
-                argThat((StompError error) -> "temp".equals(error.getTempId()) && !error.getMessage().isBlank()));
+                argThat((StompError error) -> "temp".equals(error.getTempId()) && !error.getMessage().isBlank()),
+                argThat((Map<String, Object> headers) -> "session".equals(headers.get(SimpMessageHeaderAccessor.SESSION_ID_HEADER))));
         verifyNoMoreInteractions(messaging);
     }
 
