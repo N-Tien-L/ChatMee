@@ -340,9 +340,11 @@ CM-068 regression coverage:
 
 ## Per-user events (SPEC-008 AC-008-1, CM-060 implemented)
 CM-060 implements the queue, create/PUBLIC join, leave/delete, editable room updates and non-SYSTEM activity.
-It uses the current `ChatRoomResponse`; activity/read fields and SPEC-009 extensions remain with the later tickets in the table.
+CM-061 implements activity/read fields in `ChatRoomResponse` and shares the saved-message summary with `ROOM_ACTIVITY`.
+SPEC-009 extensions remain with the later tickets in the table.
 New DMs notify both initial members with their respective room views. Unchanged name/description/capacity emits no update event.
 Delivery failures log metadata only and do not stop other recipients; clients recover missed events by refetching after reconnect.
+CM-061 also isolates activity-update and recipient-lookup failures after persistence: they do not fail the saved message send.
 Destination `/user/queue/events`, server to client, SUBSCRIBE by any authenticated Principal for its own user destination. The
 `/user/queue/*` SUBSCRIBE allowlist becomes exactly `/user/queue/events` and `/user/queue/errors`. Events go to **every** session of the
 user (`convertAndSendToUser`), unlike private errors (see below). Events are not replayed: after a reconnect the client refetches
@@ -356,7 +358,7 @@ that user (with `myRole`, `unreadCount`, `lastMessage`, `state`, `blocked`).
 | `ROOM_ADDED` | `{room}` | the user who entered | create, PUBLIC join, invitation accepted, DM request accepted (recipient) | CM-060, CM-070, CM-072 |
 | `ROOM_REMOVED` | `{roomId, reason}`; `reason` = `LEFT` \| `REMOVED` \| `DELETED` \| `HIDDEN` \| `DECLINED` \| `EXPIRED` | the affected user | leave; removed by owner/admin; room deleted (every member); DM hidden (caller's other sessions); DM request declined or expired (sender) | CM-060, CM-062, CM-072, CM-075 |
 | `ROOM_UPDATED` | `{room}` | every member, or only the affected user | name/description/capacity change (all members); role change or owner transfer (affected user); DM request accepted (sender) | CM-060, CM-072, CM-076 |
-| `ROOM_ACTIVITY` | `{roomId, lastMessage: {id, senderId, senderName, preview, createdAt}}` | every member, after persist | non-SYSTEM message persisted; `preview` <= 100 chars; a member whose `hiddenAt` is cleared by this message receives it too | CM-060, CM-075 |
+| `ROOM_ACTIVITY` | `{roomId, lastMessage: {id, senderId, senderName, preview, createdAt}}` | every member, after persist | non-SYSTEM message persisted; `preview` <= 100 chars; a member whose `hiddenAt` is cleared by this message receives it too | CM-060, CM-061 (shared persisted summary), CM-075 |
 | `INVITATION_RECEIVED` | `{invitation: {id, room: {id, name, memberCount}, inviter: {id, name, avatarUrl}, createdAt, expiresAt}}` | invitee | invitation created | CM-070 |
 | `INVITATION_CHANGED` | `{invitationId, roomId, status}` | invitee and inviter | accepted, declined, revoked | CM-070 |
 | `DM_REQUEST_RECEIVED` | `{request: {roomId, sender: {id, name, avatarUrl}, preview, createdAt, expiresAt}}` | recipient (not when a block exists) | DM request created; `preview` is updated by the one allowed message with a second `DM_REQUEST_RECEIVED` for the same `roomId` (client upserts by `roomId`) | CM-072 |
@@ -389,7 +391,7 @@ Full contracts are in the specs and in OpenAPI (`/v3/api-docs`, dev/local).
 
 | Method and path | Spec | Ticket |
 |---|---|---|
-| `PUT /api/v1/rooms/{roomId}/members/me/read` | AC-008-3 | CM-061 |
+| `PUT /api/v1/rooms/{roomId}/members/me/read` | AC-008-3: caller-only marker, 204; non-member or inactive room 404 | CM-061 implemented |
 | `GET /api/v1/rooms/{roomId}/members` | AC-008-5 | CM-062 |
 | `DELETE /api/v1/rooms/{roomId}/members/{userId}` | AC-008-6 | CM-062 |
 | `POST /api/v1/rooms/{roomId}/invitations`, `GET /api/v1/rooms/{roomId}/invitations` | AC-009-1, -3 | CM-070 |

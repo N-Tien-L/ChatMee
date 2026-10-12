@@ -51,9 +51,9 @@ SPEC-009 (invitations, DM requests, blocking, reporting, hiding DMs, owner auto-
 ### Room list
 - AC-008-2: `GET /api/v1/rooms` returns per room `lastActivityAt`, `lastMessage` (same shape as above, or null), `unreadCount` and `myRole`;
   the list is sorted by `lastActivityAt` descending (rooms without messages use `createdAt`). SPEC-009 adds `state` (`ACTIVE|REQUESTED`,
-  CM-072), `blocked` (CM-073) and excludes DMs hidden by the caller (CM-075). -> Test: planned (CM-061)
+  CM-072), `blocked` (CM-073) and excludes DMs hidden by the caller (CM-075). -> Implemented. Test: ChatRoomControllerWebMvcTest#getRooms_activityOrder_includesSummaryUnreadAndMyRole; ChatRoomServiceTest#getList_activityAndCreatedAtFallback_sortsDescending; MessageServiceTest#sendMessage_savedText_updatesActivityWithSameSummaryAsEvent; ChatRoomRepositoryIT#updateActivity_olderOrEqualWrite_keepsLatestSummaryAndOtherFields
 - AC-008-3: `PUT /api/v1/rooms/{roomId}/members/me/read` sets the caller's read marker to now; afterwards `unreadCount` is 0.
-  Own messages never count as unread. Non-members get 404. -> Test: planned (CM-061)
+  Own messages never count as unread. Non-members get 404. -> Implemented. Test: ChatRoomControllerWebMvcTest#markRead_nonMember_returns404; ChatRoomControllerWebMvcTest#markRead_member_usesPrincipalAndReturns204; ChatRoomServiceTest#toResponses_readMarker_countsUnreadAndIncludesRole; ChatRoomServiceTest#toResponses_missingReadMarker_returnsZeroWithoutCounting; RoomUnreadIT#unreadCount_mixedMessages_excludesOwnSystemDeletedAndResetsAfterRead; RoomUnreadIT#createParticipant_newMember_initializesReadMarker
 - AC-008-4: The client keeps the list live from AC-008-1: a new room appears, a removed room disappears (and if it is open, the view shows
   "You are no longer a member" / "This room was deleted"), activity moves the room to the top and increments its badge unless the room is open
   and the tab is visible. The document title shows the total unread count. -> Test: planned (CM-064)

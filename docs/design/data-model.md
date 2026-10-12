@@ -155,7 +155,7 @@ room-event fan-out limitation and the per-recipient database-read cost.
 ## MVP v0 additions (SPEC-008, planned)
 Status: Approved design, implemented by the tickets named below.
 
-### chat_rooms: activity summary (CM-061)
+### chat_rooms: activity summary (CM-061 implemented)
 - `lastActivityAt` (`Instant`, new): set with one atomic `$set` after a non-SYSTEM message insert. Missing on old rooms: readers fall
   back to `createdAt`, so no backfill is needed.
 - `lastMessage` (embedded, new): `{id, senderId, senderName, preview (<= 100 chars), createdAt}`, written in the same `$set`.
@@ -164,8 +164,8 @@ Status: Approved design, implemented by the tickets named below.
   (not shown in the UI, not used for sorting) and removed with the `Instant` cleanup in v1.
 - SYSTEM messages never update `lastActivityAt`/`lastMessage` (SPEC-008 AC-008-7).
 
-### participants: read marker (CM-061)
-- `lastReadAt` (`Instant`, new) is the read marker. `PUT /rooms/{id}/members/me/read` sets it to now. A new member gets `lastReadAt = now`.
+### participants: read marker (CM-061 implemented)
+- `lastReadAt` (`Instant`, new) is the read marker. An atomic `$max` keeps concurrent requests from moving it backwards. `PUT /rooms/{id}/members/me/read` sets it to now. A new member gets `lastReadAt = now`.
 - `lastSeenAt` is **not** reused: it is a `LocalDateTime`, which Spring converts with the server time zone, so comparing it with
   `messages.createdAt` (`Instant`, UTC) would shift by the zone offset on any non-UTC machine.
 - `unreadCount` = count of messages with `chatRoomId = room`, `createdAt > lastReadAt`, `senderId != caller`, `type != SYSTEM`,

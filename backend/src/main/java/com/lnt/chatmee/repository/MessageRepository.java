@@ -48,6 +48,10 @@ public interface MessageRepository extends MongoRepository<Message, String> {
     // Retrieve all message send by a specific user in a given chat room
     List<Message> findBySenderIdAndChatRoomId(String senderId, String chatRoomId);
 
+    @Query(value = "{ 'chatRoomId': ?0, 'senderId': { '$ne': ?1 }, 'createdAt': { '$gt': ?2 },"
+            + " 'type': { '$ne': 'SYSTEM' }, 'isDeleted': false }", count = true)
+    long countUnread(String roomId, String callerId, Instant lastReadAt);
+
     // Count the total number of messages in a specific chat room
     Long countByChatRoomId(String chatRoomId);
 

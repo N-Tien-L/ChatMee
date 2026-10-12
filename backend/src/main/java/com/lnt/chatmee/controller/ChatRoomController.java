@@ -117,6 +117,13 @@ public class ChatRoomController {
         return ResponseEntity.noContent().build();
     }
 
+    @Operation(summary = "Mark the caller's room messages as read")
+    @PutMapping("/{roomId}/members/me/read")
+    public ResponseEntity<Void> markRead(@CurrentUser UserPrincipal user, @PathVariable String roomId) {
+        participantService.markRead(roomId, user.userId());
+        return ResponseEntity.noContent().build();
+    }
+
     @Operation(summary = "Add a participant (owner or admin only)")
     @PostMapping("/{roomId}/members")
     public ResponseEntity<ApiResponse<String>> addParticipantToChatRoom(

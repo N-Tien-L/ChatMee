@@ -1,5 +1,8 @@
 package com.lnt.chatmee.repository;
 
+import java.time.Instant;
+import org.springframework.data.mongodb.repository.Query;
+import org.springframework.data.mongodb.repository.Update;
 import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
@@ -22,6 +25,11 @@ public interface ParticipantRepository extends MongoRepository<Participant, Stri
     Optional<Participant> findByChatRoomIdAndUserId(String chatRoomId, String userId);
 
     boolean existsByChatRoomIdAndUserId(String chatRoomId, String userId);
+
+    /** Use $max so delayed concurrent mark-read requests cannot move the marker backwards. */
+    @Query("{ 'chatRoomId': ?0, 'userId': ?1 }")
+    @Update("{ '$max': { 'lastReadAt': ?2 } }")
+    long markRead(String roomId, String userId, Instant now);
 
     long countByChatRoomId(String chatRoomId);
 

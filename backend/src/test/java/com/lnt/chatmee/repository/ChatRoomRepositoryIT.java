@@ -57,4 +57,20 @@ class ChatRoomRepositoryIT {
     private static ChatRoom room(String id, String name, RoomType type, boolean active) {
         return ChatRoom.builder().id(id).name(name).type(type).isActive(active).build();
     }
+
+    @Test
+    void updateActivity_olderOrEqualWrite_keepsLatestSummaryAndOtherFields() {
+        var time = java.time.Instant.parse("2026-10-12T10:00:00Z");
+        var newest = new com.lnt.chatmee.dto.event.LastMessageSummary("m2", "u2", "Bob", "latest", time);
+        var older = new com.lnt.chatmee.dto.event.LastMessageSummary("m1", "u1", "Alice", "older", time.minusSeconds(1));
+        assertThat(chatRoomRepository.updateActivity("r1", time, newest)).isEqualTo(1);
+        assertThat(chatRoomRepository.updateActivity("r1", older.createdAt(), older)).isZero();
+        assertThat(chatRoomRepository.updateActivity("r1", time, older)).isZero();
+        var room = chatRoomRepository.findById("r1").orElseThrow();
+        assertThat(room.getLastActivityAt()).isEqualTo(time);
+        assertThat(room.getLastMessage()).isEqualTo(newest);
+        assertThat(room.getName()).isEqualTo("General Chat");
+        assertThat(chatRoomRepository.updateActivity("r5", time, newest)).isZero();
+    }
+
 }

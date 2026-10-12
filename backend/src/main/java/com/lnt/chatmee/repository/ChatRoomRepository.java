@@ -1,6 +1,8 @@
 package com.lnt.chatmee.repository;
 
 import java.time.LocalDateTime;
+import java.time.Instant;
+import com.lnt.chatmee.dto.event.LastMessageSummary;
 import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
@@ -66,6 +68,11 @@ public interface ChatRoomRepository extends MongoRepository<ChatRoom, String> {
     @Update("{ '$set': { 'name': ?1, 'description': ?2, 'maxParticipants': ?3, 'settings': ?4, 'lastActivity': ?5 } }")
     long updateEditableFields(String roomId, String name, String description, int maxParticipants,
             RoomSettings settings, LocalDateTime now);
+
+    /** A late writer cannot replace a newer activity timestamp or its matching summary. */
+    @Query("{ '_id': ?0, 'isActive': true, '$or': [ { 'lastActivityAt': null }, { 'lastActivityAt': { '$lt': ?1 } } ] }")
+    @Update("{ '$set': { 'lastActivityAt': ?1, 'lastMessage': ?2 } }")
+    long updateActivity(String roomId, Instant createdAt, LastMessageSummary summary);
 
     /** Soft-deletes an active room and resets its member counter. */
     @Query("{ '_id': ?0, 'isActive': true }")

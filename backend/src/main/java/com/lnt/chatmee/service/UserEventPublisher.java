@@ -49,7 +49,11 @@ public class UserEventPublisher {
         int end = content.offsetByCodePoints(0, Math.min(100, content.codePointCount(0, content.length())));
         var summary = new LastMessageSummary(message.id(), message.senderId(), message.senderName(),
             content.substring(0, end), message.createdAt());
-        var event = new UserEvent<>("ROOM_ACTIVITY", new RoomActivityPayload(message.chatRoomId(), summary), Instant.now());
+        roomActivity(userIds, message.chatRoomId(), summary);
+    }
+
+    public void roomActivity(Collection<String> userIds, String roomId, LastMessageSummary summary) {
+        var event = new UserEvent<>("ROOM_ACTIVITY", new RoomActivityPayload(roomId, summary), Instant.now());
         userIds.forEach(userId -> send(userId, event));
     }
 

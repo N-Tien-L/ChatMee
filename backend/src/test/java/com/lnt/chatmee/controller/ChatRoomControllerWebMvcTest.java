@@ -256,4 +256,41 @@ class ChatRoomControllerWebMvcTest extends SecuredWebMvcTestSupport {
                 .andExpect(jsonPath("$.data.id").value("dm-1"));
         org.mockito.Mockito.verify(chatRoomService, org.mockito.Mockito.never()).createRoom(any(), any());
     }
+
+    @Test
+    void markRead_nonMember_returns404() throws Exception {
+        doThrow(new ChatRoomNotFoundException("Room membership not found"))
+            .when(participantService).markRead("room-1", "u1");
+        mvc.perform(put("/api/v1/rooms/room-1/members/me/read")
+            .with(oauth2Login().oauth2User(com.lnt.chatmee.support.TestUsers.principal("u1"))).with(csrf().asHeader()))
+            .andExpect(status().isNotFound());
+    }
+
+    @Test
+    void markRead_member_usesPrincipalAndReturns204() throws Exception {
+        mvc.perform(put("/api/v1/rooms/room-1/members/me/read")
+            .with(oauth2Login().oauth2User(com.lnt.chatmee.support.TestUsers.principal("u1"))).with(csrf().asHeader()))
+            .andExpect(status().isNoContent());
+        org.mockito.Mockito.verify(participantService).markRead("room-1", "u1");
+    }
+
+    @Test
+    void getRooms_activityOrder_includesSummaryUnreadAndMyRole() throws Exception {
+        var now = java.time.Instant.parse("2026-10-12T10:00:00Z");
+        var rows = List.of(ChatRoom.builder().id("new").build(), ChatRoom.builder().id("old").build());
+        when(chatRoomService.getList("u1")).thenReturn(rows);
+        when(chatRoomService.toResponses(rows, "u1")).thenReturn(List.of(
+            ChatRoomResponse.builder().id("new").lastActivityAt(now).unreadCount(2)
+                .lastMessage(new com.lnt.chatmee.dto.event.LastMessageSummary("m1", "u2", "Bob", "hello", now))
+                .myRole(com.lnt.chatmee.model.Participant.Role.ADMIN).build(),
+            ChatRoomResponse.builder().id("old").myRole(com.lnt.chatmee.model.Participant.Role.MEMBER).build()));
+        mvc.perform(get(CREATE).with(oauth2Login().oauth2User(com.lnt.chatmee.support.TestUsers.principal("u1"))))
+            .andExpect(status().isOk()).andExpect(jsonPath("$.data[0].id").value("new"))
+            .andExpect(jsonPath("$.data[1].id").value("old"))
+            .andExpect(jsonPath("$.data[0].myRole").value("ADMIN"))
+            .andExpect(jsonPath("$.data[0].unreadCount").value(2))
+            .andExpect(jsonPath("$.data[0].lastActivityAt").value(now.toString()))
+            .andExpect(jsonPath("$.data[0].lastMessage.preview").value("hello"));
+    }
+
 }
