@@ -44,6 +44,12 @@ class GlobalExceptionHandlerTest {
     }
 
     @Test
+    void getRoom_dailyLimitReached_returns429ProblemWithRetryAfter() throws Exception {
+        roomFailure(new RateLimitExceededException(42), 429, "RATE_LIMITED")
+                .andExpect(header().string("Retry-After", "42"));
+    }
+
+    @Test
     void getRoom_missingRoom_returns404Problem() throws Exception {
         roomFailure(new ChatRoomNotFoundException("Room not found"), 404, "ROOM_NOT_FOUND");
     }

@@ -80,7 +80,7 @@ Nobody joins a private room or a direct conversation without consenting, a user 
 - AC-009-28: A message or member whose user no longer exists shows the label "Deleted user" and keeps its messages. The backend fallback name changes from today's "Unknown User" (`MessageService`) to "Deleted user" in history, `ROOM_ACTIVITY.senderName`, the member list and `counterpart`; the client renders it with a neutral avatar and no "Message" action. The rest of the room works as usual. -> Test: planned (CM-077)
 
 ### Rate limits — CM-078
-- AC-009-29: Per user per day (defaults, SPEC-007 AC-007-6): room creation 20, invitations 50, DM requests 20, reports 10. Exceeding returns 429 `RATE_LIMITED` with `Retry-After`. -> Test: planned (CM-078)
+- AC-009-29: Per user per day (defaults, SPEC-007 AC-007-6): room creation 20, invitations 50, DM requests 20, reports 10. Exceeding returns 429 `RATE_LIMITED` with `Retry-After`. -> Implemented. Test: `DirectMessageRequestServiceTest#checkCanRequest_dailyDmRequestLimitReached_throwsRateLimitExceeded`, `DirectMessageRequestServiceTest#resolveRequested_sameSenderAgain_doesNotConsumeDailyDmRequestLimit`, `ChatRoomServiceTest#createRoom_dailyRoomLimitReached_throwsRateLimitWithoutSaving`, `InvitationServiceTest#invite_dailyInvitationLimitReached_throwsRateLimitWithoutInsert`, `ReportServiceTest#createReport_dailyReportLimitReached_throwsRateLimitWithoutSaving`, `RateLimitingServiceTest#checkDailyAction_twentyFirstDmRequest_throwsRateLimitExceededWithRetryAfter`
 
 ## 6. Edge cases & Errors
 | Scenario | Expected Behavior | HTTP / STOMP |

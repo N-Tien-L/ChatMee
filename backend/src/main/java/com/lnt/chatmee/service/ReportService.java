@@ -33,6 +33,7 @@ public class ReportService {
     private final MessageRepository messageRepository;
     private final ChatRoomRepository chatRoomRepository;
     private final ParticipantService participantService;
+    private final RateLimitingService rateLimitingService;
 
     /**
      * Stores a report. A target the reporter cannot see is reported as not found, so the caller learns nothing
@@ -44,6 +45,7 @@ public class ReportService {
         userRepository.findById(reporterId)
                 .orElseThrow(() -> new UserNotFoundException("Authenticated user not found"));
         assertTargetVisible(reporterId, targetType, targetId);
+        rateLimitingService.checkDailyAction(RateLimitingService.DailyAction.REPORT, reporterId);
 
         Report report = Report.builder()
                 .reporterId(reporterId).targetType(targetType).targetId(targetId)

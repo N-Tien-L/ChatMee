@@ -7,6 +7,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
@@ -36,6 +37,7 @@ import com.lnt.chatmee.dto.response.DmRequestResponse;
 import com.lnt.chatmee.exception.ChatRoomNotFoundException;
 import com.lnt.chatmee.exception.ErrorCode;
 import com.lnt.chatmee.exception.ForbiddenActionException;
+import com.lnt.chatmee.exception.RateLimitExceededException;
 import com.lnt.chatmee.exception.RoomCapacityExceededException;
 import com.lnt.chatmee.model.ChatRoom;
 import com.lnt.chatmee.model.ChatRoom.RoomType;
@@ -58,6 +60,7 @@ class DirectMessageRequestServiceTest {
     @Mock UserEventPublisher userEvents;
     @Mock ObjectProvider<ChatRoomService> chatRoomProvider;
     @Mock ChatRoomService chatRooms;
+    @Mock RateLimitingService rateLimiting;
 
     @InjectMocks DirectMessageRequestService service;
 
@@ -122,6 +125,16 @@ class DirectMessageRequestServiceTest {
     }
 
     @Test
+    void resolveRequested_sameSenderAgain_doesNotConsumeDailyDmRequestLimit() {
+        when(requests.findFirstByRoomIdAndKindAndStatus("dm", MembershipRequestKind.DM_REQUEST,
+            MembershipRequestStatus.PENDING)).thenReturn(Optional.of(pending(Instant.now().plusSeconds(600))));
+
+        service.resolveRequested(room, "alice");
+
+        verifyNoInteractions(rateLimiting);
+    }
+
+    @Test
     void resolveRequested_recipientCreatesSamePair_acceptsAndReturnsActiveRoom() {
         when(requests.findFirstByRoomIdAndKindAndStatus("dm", MembershipRequestKind.DM_REQUEST,
             MembershipRequestStatus.PENDING)).thenReturn(Optional.of(pending(Instant.now().plusSeconds(600))));
@@ -154,6 +167,16 @@ class DirectMessageRequestServiceTest {
 
         assertEquals("Cannot message this user", error.getMessage());
         assertEquals(ErrorCode.FORBIDDEN_ACTION, error.getErrorCode());
+    }
+
+    @Test
+    void checkCanRequest_dailyDmRequestLimitReached_throwsRateLimitExceeded() {
+        when(requests.existsByPairKeyAndCooldownUntilAfter(eq("alice:bob"), any(Instant.class))).thenReturn(false);
+        doThrow(new RateLimitExceededException(3600)).when(rateLimiting)
+            .checkDailyAction(RateLimitingService.DailyAction.DM_REQUEST, "alice");
+
+        assertThrows(RateLimitExceededException.class, () -> service.checkCanRequest("alice", "bob"));
+        verify(requests, never()).insert(any(MembershipRequest.class));
     }
 
     @Test

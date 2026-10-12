@@ -7,6 +7,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
@@ -36,6 +37,7 @@ import com.lnt.chatmee.exception.ChatRoomNotFoundException;
 import com.lnt.chatmee.exception.DuplicateResourceException;
 import com.lnt.chatmee.exception.ErrorCode;
 import com.lnt.chatmee.exception.ForbiddenActionException;
+import com.lnt.chatmee.exception.RateLimitExceededException;
 import com.lnt.chatmee.exception.InvalidRequestException;
 import com.lnt.chatmee.exception.InvitationNotFoundException;
 import com.lnt.chatmee.exception.InvitationNotPendingException;
@@ -65,6 +67,7 @@ class InvitationServiceTest {
     @Mock ParticipantService participants;
     @Mock ChatRoomService chatRooms;
     @Mock UserEventPublisher userEvents;
+    @Mock RateLimitingService rateLimitingService;
     @Spy RoomTypePolicyRegistry policies = new RoomTypePolicyRegistry(List.of(
         new PublicRoomPolicy(), new PrivateRoomPolicy(), new DirectRoomPolicy()));
 
@@ -115,6 +118,17 @@ class InvitationServiceTest {
         service.invite("room", "owner", "bob");
 
         verify(requests).insert(any(MembershipRequest.class));
+    }
+
+    @Test
+    void invite_dailyInvitationLimitReached_throwsRateLimitWithoutInsert() {
+        caller("owner", Role.OWNER);
+        doThrow(new RateLimitExceededException(60)).when(rateLimitingService)
+            .checkDailyAction(RateLimitingService.DailyAction.INVITATION, "owner");
+
+        assertThrows(RateLimitExceededException.class, () -> service.invite("room", "owner", "bob"));
+        verify(requests, never()).insert(any(MembershipRequest.class));
+        verifyNoInteractions(userEvents);
     }
 
     @Test

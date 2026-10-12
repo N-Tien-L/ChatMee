@@ -40,6 +40,7 @@ class ReportServiceTest {
     @Mock private MessageRepository messageRepository;
     @Mock private ChatRoomRepository chatRoomRepository;
     @Mock private ParticipantService participantService;
+    @Mock private RateLimitingService rateLimitingService;
     @InjectMocks private ReportService reportService;
 
     @Test
@@ -51,6 +52,18 @@ class ReportServiceTest {
 
         Report saved = captureSaved();
         assertSaved(saved, "reporter", ReportTargetType.USER, "target", ReportReason.SPAM, "note");
+    }
+
+    @Test
+    void createReport_dailyReportLimitReached_throwsRateLimitWithoutSaving() {
+        when(userRepository.findById("reporter")).thenReturn(Optional.of(User.builder().id("reporter").build()));
+        when(userRepository.existsById("target")).thenReturn(true);
+        doThrow(new com.lnt.chatmee.exception.RateLimitExceededException(60)).when(rateLimitingService)
+                .checkDailyAction(RateLimitingService.DailyAction.REPORT, "reporter");
+
+        assertThatThrownBy(() -> reportService.createReport("reporter", ReportTargetType.USER, "target",
+                ReportReason.SPAM, "note")).isInstanceOf(com.lnt.chatmee.exception.RateLimitExceededException.class);
+        verify(reportRepository, never()).save(any());
     }
 
     @Test

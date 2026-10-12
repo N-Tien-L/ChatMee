@@ -29,6 +29,7 @@ import com.lnt.chatmee.repository.MessageRepository;
 import com.lnt.chatmee.repository.ReportRepository;
 import com.lnt.chatmee.repository.UserRepository;
 import com.lnt.chatmee.service.ParticipantService;
+import com.lnt.chatmee.service.RateLimitingService;
 import com.lnt.chatmee.service.ReportService;
 import com.lnt.chatmee.support.SecuredWebMvcTestSupport;
 import com.lnt.chatmee.support.TestUsers;
@@ -53,6 +54,7 @@ class ReportControllerWebMvcTest extends SecuredWebMvcTestSupport {
     @MockitoBean MessageRepository messageRepository;
     @MockitoBean ChatRoomRepository chatRoomRepository;
     @MockitoBean ParticipantService participantService;
+    @MockitoBean RateLimitingService rateLimitingService;
 
     private final ListAppender<ILoggingEvent> logs = new ListAppender<>();
     private Logger reportLogger;

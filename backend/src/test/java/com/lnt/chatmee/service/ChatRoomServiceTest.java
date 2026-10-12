@@ -68,6 +68,7 @@ class ChatRoomServiceTest {
         new PublicRoomPolicy(), new PrivateRoomPolicy(), new DirectRoomPolicy()));
     @Mock UserEventPublisher userEvents;
     @Mock DirectMessageRequestService dmRequests;
+    @Mock RateLimitingService rateLimitingService;
 
     @InjectMocks
     private ChatRoomService chatRoomService;
@@ -114,6 +115,20 @@ class ChatRoomServiceTest {
         order.verify(participantService).createParticipant("room1", "user1", Participant.Role.OWNER);
         order.verify(dmRequests).open(savedRoom, "user1", "user2");
         verify(participantService, never()).createParticipant(eq("room1"), eq("user2"), any());
+    }
+
+    @Test
+    void createRoom_dailyRoomLimitReached_throwsRateLimitWithoutSaving() {
+        when(userRepository.findById("user1")).thenReturn(Optional.of(User.builder().id("user1").build()));
+        CreateChatRoomRequest request = new CreateChatRoomRequest();
+        request.setRoomType(ChatRoom.RoomType.PUBLIC);
+        request.setRoomName("General");
+        doThrow(new com.lnt.chatmee.exception.RateLimitExceededException(60)).when(rateLimitingService)
+                .checkDailyAction(RateLimitingService.DailyAction.ROOM_CREATE, "user1");
+
+        assertThatThrownBy(() -> chatRoomService.createRoom(request, "user1"))
+                .isInstanceOf(com.lnt.chatmee.exception.RateLimitExceededException.class);
+        verify(chatRoomRepository, never()).save(any());
     }
 
     @Test
