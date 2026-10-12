@@ -45,6 +45,9 @@ public class Participant {
 
     private Instant lastReadAt;
 
+    /** DM hidden by this member (AC-009-21); cleared by the next message persisted after it. */
+    private Instant hiddenAt;
+
     private boolean isMuted;
 
     private boolean isBlocked;

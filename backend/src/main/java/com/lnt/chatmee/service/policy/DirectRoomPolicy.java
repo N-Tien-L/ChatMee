@@ -16,6 +16,9 @@ import com.lnt.chatmee.model.RoomState;
 
 @Component
 public class DirectRoomPolicy implements RoomTypePolicy {
+    /** DMs are hidden per user instead of being left or deleted (AC-009-21, AC-009-22). */
+    public static final String USE_HIDE_MESSAGE = "Use hide for direct messages";
+
     @Override
     public RoomType type() {
         return RoomType.DIRECT_MESSAGE;
@@ -45,7 +48,7 @@ public class DirectRoomPolicy implements RoomTypePolicy {
     }
     @Override
     public void checkLeave(ChatRoom room, String userId) {
-        throw new ForbiddenActionException("Cannot leave direct message rooms. Please delete the room instead.");
+        throw new ForbiddenActionException("Cannot leave direct message rooms. " + USE_HIDE_MESSAGE + ".");
     }
     @Override
     public ChatRoom create(CreateChatRoomRequest request, String creatorId, Predicate<String> userExists) {

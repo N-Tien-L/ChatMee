@@ -100,11 +100,19 @@ public class ChatRoomController {
         return ResponseEntity.ok(ApiResponse.success("Chat room updated successfully", responseBody));
     }
 
-    @Operation(summary = "Delete a room (creator only)")
+    @Operation(summary = "Delete a group room (owner only); direct messages are hidden instead")
     @DeleteMapping("/{roomId}")
     public ResponseEntity<ApiResponse<String>> deleteChatRoom(@CurrentUser UserPrincipal user, @PathVariable String roomId) {
         chatRoomService.deleteChatRoomById(user.userId(), roomId);
         return ResponseEntity.ok(ApiResponse.success("Chat room deleted successfully"));
+    }
+
+    @Operation(summary = "Hide a direct message for the caller (it reappears with the next message)")
+    @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "204", description = "Room hidden for the caller")
+    @PostMapping("/{roomId}/hide")
+    public ResponseEntity<Void> hideRoom(@CurrentUser UserPrincipal user, @PathVariable String roomId) {
+        chatRoomService.hideRoom(user.userId(), roomId);
+        return ResponseEntity.noContent().build();
     }
 
     @Operation(summary = "Join a public room as the caller")

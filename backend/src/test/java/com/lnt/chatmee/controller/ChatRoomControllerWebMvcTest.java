@@ -3,6 +3,7 @@ package com.lnt.chatmee.controller;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
@@ -31,6 +32,7 @@ import com.lnt.chatmee.dto.response.ChatRoomResponse;
 import com.lnt.chatmee.dto.response.PublicRoomSummary;
 import com.lnt.chatmee.exception.ChatRoomNotFoundException;
 import com.lnt.chatmee.exception.ForbiddenActionException;
+import com.lnt.chatmee.exception.InvalidRequestException;
 import com.lnt.chatmee.exception.RoomCapacityExceededException;
 import com.lnt.chatmee.exception.UnauthorizedRoomActionException;
 import com.lnt.chatmee.exception.UserAlreadyInRoomException;
@@ -316,4 +318,44 @@ class ChatRoomControllerWebMvcTest extends SecuredWebMvcTestSupport {
             .andExpect(status().isNotFound());
     }
 
+    // CM-075 AC2: hide is DM-only; DELETE on a DM is forbidden (AC-009-21, AC-009-22)
+
+    @Test
+    void hideRoom_directMessage_returns204ForCaller() throws Exception {
+        mvc.perform(post("/api/v1/rooms/dm-1/hide")
+                .with(oauth2Login().oauth2User(com.lnt.chatmee.support.TestUsers.principal("u1"))).with(csrf().asHeader()))
+            .andExpect(status().isNoContent());
+        verify(chatRoomService).hideRoom("u1", "dm-1");
+    }
+
+    @Test
+    void hideRoom_groupRoom_returns400Problem() throws Exception {
+        doThrow(new InvalidRequestException("Only direct messages can be hidden"))
+                .when(chatRoomService).hideRoom("u1", "room-1");
+
+        expectProblem(mvc.perform(post("/api/v1/rooms/room-1/hide")
+                .with(oauth2Login().oauth2User(com.lnt.chatmee.support.TestUsers.principal("u1"))).with(csrf().asHeader())),
+                400, "INVALID_ARGUMENT");
+    }
+
+    @Test
+    void hideRoom_nonMember_returns404Problem() throws Exception {
+        doThrow(new ChatRoomNotFoundException("Can't find chat room with id: dm-1 or user is not a participant"))
+                .when(chatRoomService).hideRoom("u1", "dm-1");
+
+        expectProblem(mvc.perform(post("/api/v1/rooms/dm-1/hide")
+                .with(oauth2Login().oauth2User(com.lnt.chatmee.support.TestUsers.principal("u1"))).with(csrf().asHeader())),
+                404, "ROOM_NOT_FOUND");
+    }
+
+    @Test
+    void deleteRoom_directMessage_returns403UseHideProblem() throws Exception {
+        doThrow(new ForbiddenActionException("Use hide for direct messages"))
+                .when(chatRoomService).deleteChatRoomById("u1", "dm-1");
+
+        expectProblem(mvc.perform(delete("/api/v1/rooms/dm-1")
+                .with(oauth2Login().oauth2User(com.lnt.chatmee.support.TestUsers.principal("u1"))).with(csrf().asHeader())),
+                403, "FORBIDDEN_ACTION")
+            .andExpect(jsonPath("$.detail").value("Use hide for direct messages"));
+    }
 }

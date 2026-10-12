@@ -33,6 +33,7 @@ import com.lnt.chatmee.model.RoomState;
 import com.lnt.chatmee.model.User;
 import com.lnt.chatmee.repository.ChatRoomRepository;
 import com.lnt.chatmee.repository.MessageRepository;
+import com.lnt.chatmee.repository.ParticipantRepository;
 import com.lnt.chatmee.repository.UserRepository;
 
 import lombok.RequiredArgsConstructor;
@@ -50,6 +51,7 @@ public class MessageService {
     private final UserRepository userRepository;
     private final UserEventPublisher userEvents;
     private final DirectMessageRequestService dmRequests;
+    private final ParticipantRepository participantRepository;
 
     public ChatMessageResponse sendMessage(ChatMessageRequest request, String userId) {
         User user = userRepository.findById(userId)
@@ -87,6 +89,12 @@ public class MessageService {
                 chatRoomRepository.updateActivity(saved.getChatRoomId(), saved.getCreatedAt(), summary);
             } catch (DataAccessException | MessagingException ex) {
                 logger.warn("Failed to update room activity for room {} message {}", saved.getChatRoomId(), saved.getId());
+            }
+            // D-06: members who hid the room before this message see it again; ROOM_ACTIVITY below reaches them too.
+            try {
+                participantRepository.unhideBefore(saved.getChatRoomId(), saved.getCreatedAt());
+            } catch (DataAccessException ex) {
+                logger.warn("Failed to unhide room {} for message {}", saved.getChatRoomId(), saved.getId());
             }
             try {
                 userEvents.roomActivity(participantService.getParticipantUserIds(saved.getChatRoomId()),

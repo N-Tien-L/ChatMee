@@ -32,7 +32,7 @@ class DirectRoomPolicyTest {
     @Test void checkLeave_anyMember_throwsForbidden() {
         var room = ChatRoom.builder().createdBy("owner").build();
         for (String user : List.of("owner", "member")) {
-            assertEquals("Cannot leave direct message rooms. Please delete the room instead.",
+            assertEquals("Cannot leave direct message rooms. Use hide for direct messages.",
                 assertThrows(ForbiddenActionException.class, () -> policy.checkLeave(room, user)).getMessage());
         }
     }

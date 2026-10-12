@@ -30,6 +30,7 @@ import com.lnt.chatmee.dto.request.UpdateChatRoomRequest;
 import com.lnt.chatmee.dto.response.ChatMessageResponse;
 import com.lnt.chatmee.dto.response.ChatRoomResponse;
 import com.lnt.chatmee.exception.ChatRoomNotFoundException;
+import com.lnt.chatmee.exception.ForbiddenActionException;
 import com.lnt.chatmee.exception.InvalidRequestException;
 import com.lnt.chatmee.exception.UnauthorizedRoomActionException;
 import com.lnt.chatmee.exception.UserNotFoundException;
@@ -38,9 +39,11 @@ import com.lnt.chatmee.model.Message;
 import com.lnt.chatmee.model.Participant.Role;
 import com.lnt.chatmee.model.RoomState;
 import com.lnt.chatmee.model.User;
+import com.lnt.chatmee.service.policy.DirectRoomPolicy;
 import com.lnt.chatmee.service.policy.RoomTypePolicy;
 import com.lnt.chatmee.service.policy.RoomTypePolicyRegistry;
 import com.lnt.chatmee.repository.ChatRoomRepository;
+import com.lnt.chatmee.repository.ParticipantRepository;
 import com.lnt.chatmee.repository.UserRepository;
 import com.lnt.chatmee.security.RoomSubscriptionInterceptor;
 import com.lnt.chatmee.util.ValidationUtil;
@@ -74,6 +77,7 @@ public class ChatRoomService {
     private final RoomTypePolicyRegistry policies;
     private final DirectMessageRequestService dmRequests;
     private final RateLimitingService rateLimitingService;
+    private final ParticipantRepository participantRepository;
 
     public ChatRoomResponse createRoom(CreateChatRoomRequest request, String userId) {
 
@@ -187,13 +191,36 @@ public class ChatRoomService {
         // Validate IDs
         ValidationUtil.validateId(roomId, "Room ID");
 
-        findById(roomId);
+        ChatRoom room = findById(roomId);
+        // AC-009-22: soft delete is a group-room action; DMs are hidden per user instead.
+        if (room.getType() == ChatRoom.RoomType.DIRECT_MESSAGE) {
+            throw new ForbiddenActionException(DirectRoomPolicy.USE_HIDE_MESSAGE);
+        }
 
         if (roleOf(roomId, authenticatedUser.getId()) != Role.OWNER) {
             throw new UnauthorizedRoomActionException("Only the owner can delete the room");
         }
 
         softDeleteRoom(roomId, authenticatedUser);
+    }
+
+    /**
+     * Hides a DM for the caller only (AC-009-21): it leaves the caller's room list and their sessions get
+     * {@code ROOM_REMOVED {reason: HIDDEN}}. The next message persisted after it brings the room back (D-06).
+     */
+    public void hideRoom(String userId, String roomId) {
+        User authenticatedUser = userRepository.findById(userId)
+            .orElseThrow(() -> new UserNotFoundException("Authenticated user not found"));
+
+        ChatRoom room = getRoomOfMember(roomId, authenticatedUser.getId());
+        if (room.getType() != ChatRoom.RoomType.DIRECT_MESSAGE) {
+            throw new InvalidRequestException("Only direct messages can be hidden");
+        }
+        if (participantRepository.hide(roomId, authenticatedUser.getId(), Instant.now()) == 0) {
+            throw new ChatRoomNotFoundException("Can't find chat room with id: " + roomId + " or user is not a participant");
+        }
+        userEvents.roomRemoved(Set.of(authenticatedUser.getId()), roomId, "HIDDEN");
+        logger.info("User {} hid room {}", authenticatedUser.getId(), roomId);
     }
 
     /** Participant role of the user in the room, or null when the user is not a member (AC-009-25). */
@@ -234,7 +261,11 @@ public class ChatRoomService {
         User authenticatedUser = userRepository.findById(userId)
             .orElseThrow(() -> new UserNotFoundException("Authenticated user not found"));
 
-        List<String> roomIds = participantService.getRoomIdsOfUser(authenticatedUser.getId());
+        // Rooms the caller has hidden stay out of their list until a new message clears hiddenAt (AC-009-21).
+        List<String> roomIds = participantService.getMemberships(authenticatedUser.getId()).stream()
+            .filter(membership -> membership.getHiddenAt() == null)
+            .map(Participant::getChatRoomId)
+            .toList();
         if (roomIds.isEmpty()) {
             return List.of();
         }
