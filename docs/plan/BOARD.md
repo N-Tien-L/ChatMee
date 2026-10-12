@@ -77,6 +77,8 @@ Lanes: BE-core is sequential (060 -> 061 -> 062 -> 076 -> 070 -> 072 -> 075 -> 0
 Owner actions O-1..O-6 (secrets, single Render instance, Vercel Node 22.x, backfill dry run, decisions review, docs merge) are listed in the plan.
 
 ## Notes
+- 2026-10-12 owner confirmed: AC-008-5 "at most two queries" = member data in two batched queries (no N+1); the active-room guard is not counted.
+  Room delete is OWNER-only; room update is OWNER or ADMIN. CM-067 records both in the AC lines.
 - 2026-10-12 M2: CM-061, 062, 064, 065, 069, 076 merged. Master decisions: AC-008-5 "two queries" counts member data only (participants once,
   users batch once); active-room and membership guards are separate. CM-076: room delete is OWNER-only (AC-002-6 + its amendment), update OWNER/ADMIN.
   CM-076 moved from codex to opus-w (OpenAI capacity errors on Sol high and medium; owner approved).
