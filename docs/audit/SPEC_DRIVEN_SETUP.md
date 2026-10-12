@@ -1,5 +1,7 @@
 # ChatMee: Đề xuất setup spec-driven development
 
+> **Tài liệu lịch sử.** Đề xuất này đã được áp dụng: `AGENTS.md`, `CLAUDE.md`, các template, ADR-0001..0005 và SPEC-001..007 đều đã có trong repo. Các bản nháp bên dưới có thể đã lỗi thời; bản chính thức nằm trong `docs/specs/`, `docs/adr/` và `AGENTS.md`.
+
 > Mục tiêu: mọi thay đổi đều đi qua chuỗi **spec → design → plan → code → test**, và mỗi bước để lại một tài liệu trong repo.
 > Bộ tài liệu này phục vụ hai việc: (1) dùng để giao việc cho AI agent một cách an toàn; (2) cho nhà tuyển dụng thấy bạn có quy trình phát triển phần mềm bài bản.
 > File này chỉ là **đề xuất kèm bản nháp**. Chưa tạo file nào ngoài `docs/audit/`.

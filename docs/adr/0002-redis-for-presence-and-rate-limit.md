@@ -1,6 +1,6 @@
 # ADR-0002: Use Redis for presence and rate limiting
 - Status: Accepted
-- Date: 2026-10-08 Ã‚Â· Deciders: @N-Tien-L
+- Date: 2026-10-08 · Deciders: @N-Tien-L
 
 ## Context
 Presence is ephemeral data, constantly changing, and must be consistent across instances; rate limiting requires an atomic counter with a TTL.

@@ -1,6 +1,6 @@
 # SPEC-007: Rate limiting
-- Status: Draft
-- Owner: @N-Tien-L · Created: 2026-10-09 · Related: ADR-0002, design/error-handling.md, design/websocket-protocol.md
+- Status: Approved (2026-10-12; daily action buckets added by SPEC-009 AC-009-29)
+- Owner: @N-Tien-L · Created: 2026-10-09 · Related: ADR-0002, design/error-handling.md, design/websocket-protocol.md, SPEC-009
 
 ## 1. Goal
 Protect the API and the chat from floods and abuse, without letting one attacker lock other users out.
@@ -34,6 +34,7 @@ Fixed windows in Redis (`INCR` + `EXPIRE`); one Redis round trip per counted req
 ## 8. Related APIs / Protocols
 docs/design/error-handling.md (rate limiting), docs/design/websocket-protocol.md (inbound rate limits), OpenAPI at `/v3/api-docs` (dev/local profiles only).
 
+- AC-007-6: Per-user daily action limits (SPEC-009 AC-009-29): room creation 20, invitations 50, DM requests 20, reports 10. Over the limit: 429 `RATE_LIMITED` ProblemDetail with `Retry-After`. Same fixed-window mechanism, key `action:<name>:<user>`, fail-open. -> Planned: CM-078
+
 ## 9. Open questions
-- Add a metric (Micrometer counter) for fail-open events (AC-007-4)?
-- The owner should confirm which proxy headers Render forwards, to decide whether anonymous traffic can be keyed by the real client address.
+- Resolved 2026-10-12 (D-22): the fail-open metric is v1. Anonymous traffic behind Vercel lands in varying per-IP buckets (BOARD finding 2026-10-11); low impact because `/api/v1/**` needs login. Keying by the real client address needs a trusted header and an ADR: v1.

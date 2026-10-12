@@ -3,6 +3,7 @@
 - Ngày tổng hợp: 2026-10-11 (Asia/Bangkok).
 - Loại tài liệu: tổng hợp cuộc trao đổi và đánh giá thiết kế dựa trên đọc code/tài liệu.
 - Trạng thái: ghi nhận và đề xuất; không phải spec Approved, ticket triển khai hay chứng nhận bảo mật.
+  **Đã triage 2026-10-12:** WS-A01..A14 được phân loại trong `docs/plan/MVP_V0_PLAN.md` (mục "Triage of the CM-003 WebSocket audit"); phần v0 nằm trong CM-068.
 - Phạm vi: CM-003, liên hệ CM-004, luồng gửi tin, `/user/queue/errors`, reconnect và vòng đời quyền truy cập.
 - Bằng chứng: code/tài liệu đã đọc trong cuộc trao đổi; một số điểm được đối chiếu lại khi lưu audit. Không chạy test, probe tấn công, kiểm tra production hoặc full verification trong lượt lưu này.
 

@@ -1,12 +1,12 @@
 # SPEC-003: Direct messages (DM)
-- Status: Draft
-- Owner: @N-Tien-L · Created: 2026-10-09 · Related: ADR-0005, design/data-model.md
+- Status: Approved (2026-10-12), amended by SPEC-009 (see section 10)
+- Owner: @N-Tien-L · Created: 2026-10-09 · Related: ADR-0005, ADR-0006, SPEC-009, design/data-model.md
 
 ## 1. Goal
 Two users chat privately in a room that has exactly those two members, shows the other person's name, and exists only once per pair.
 
 ## 2. Non-goals
-- Group DMs, hiding a DM (phase 3).
+- Group DMs (v1+). Hiding a DM moved into v0 by SPEC-009 (AC-009-21).
 
 ## 3. User stories
 - US-1: As a user, I start a DM with another user and see their name as the room title.
@@ -34,4 +34,11 @@ The pair lookup must be a single indexed query (`memberKey` unique, CM-049).
 docs/design/data-model.md, OpenAPI at `/v3/api-docs` (dev/local profiles only).
 
 ## 9. Open questions
-- Existing duplicate DMs in production: merge or keep the newest when the unique `memberKey` is introduced (CM-049)?
+- Existing duplicate DMs in production: the backfill in `docs/ops/backfill-CM-028-CM-049.js` keeps one per pair; run it in dry-run mode first (CM-067 step 3).
+
+## 10. Revision (2026-10-12): DM request flow
+SPEC-009 is Approved, so the ACs above that say a DM is active on creation are superseded as follows. The current code keeps the old behaviour until CM-072 and CM-075 are merged.
+- AC-003-1 -> AC-009-9: created in state `REQUESTED`, one participant row (the sender).
+- AC-003-2 keeps holding: one DM per pair, `memberKey` covers `REQUESTED` and `ACTIVE`.
+- AC-003-3 -> AC-009-21, AC-009-22: a member hides a DM instead of deleting it; DELETE returns 403. Leave stays forbidden.
+- New: AC-009-10 to AC-009-14 (request limits, accept or reply, decline cooldown, expiry, daily limit), AC-009-15 to AC-009-19 (block).

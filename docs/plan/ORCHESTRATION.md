@@ -8,6 +8,11 @@ The human (owner) reviews only at the escalation points in §8.
 Source documents: `docs/audit/AUDIT_REPORT.md` (findings), `docs/audit/IMPROVEMENT_PLAN.md` (tickets CM-xxx),
 `docs/audit/SPEC_DRIVEN_SETUP.md` (CLAUDE.md/AGENTS.md draft, spec/ADR/ticket/PR templates).
 
+> **Update 2026-10-12 (MVP v0):** phases 0-2 are done. The current ticket source is `docs/plan/MVP_V0_PLAN.md` (CM-060..CM-080, lanes and
+> merge rules there). The roster in §1, the quota notes in §9 and the execution order in §10 describe the earlier phases; §3 to §8 (git flow,
+> worktrees, dispatch, verification gate, safety, escalation) still apply. In the dispatch prompt, read `docs/plan/MVP_V0_PLAN.md#CM-xxx`
+> instead of `docs/audit/IMPROVEMENT_PLAN.md#CM-xxx`. Add the full-stack smoke (`docs/audit/PROJECT_REVIEW_GUIDE.md` §12) before any merge to `main`.
+
 ---
 
 ## 1. Team roster (workspace `w3`)
