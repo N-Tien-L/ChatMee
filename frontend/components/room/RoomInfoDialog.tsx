@@ -29,6 +29,8 @@ import {
   SheetTitle,
 } from "@/components/ui/sheet";
 import { Skeleton } from "@/components/ui/skeleton";
+import { UserAvatar } from "@/components/common/UserAvatar";
+import { DELETED_USER, isDeletedUser } from "@/components/common/deletedUser";
 
 interface RoomInfoDialogProps {
   roomId: string;
@@ -291,12 +293,14 @@ export const RoomInfoDialog: React.FC<RoomInfoDialogProps> = ({
                     key={participant.id}
                     className="flex items-center gap-3 p-2 rounded-lg hover:bg-gray-50"
                   >
-                    <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-400 to-purple-500 flex items-center justify-center text-white text-sm font-semibold">
-                      {(participant.name || "U").charAt(0).toUpperCase()}
-                    </div>
+                    <UserAvatar
+                      name={participant.name || DELETED_USER}
+                      avatarUrl={participant.avatarUrl}
+                      variant={isDeletedUser(participant.name || DELETED_USER) ? "neutral" : "default"}
+                    />
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-medium truncate">
-                        {participant.name || "Unknown User"}
+                        {participant.name || DELETED_USER}
                         {participant.id === user?.id && (
                           <span className="text-xs text-gray-500 ml-1">
                             (You)

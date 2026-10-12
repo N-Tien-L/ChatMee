@@ -1,5 +1,6 @@
 package com.lnt.chatmee.service;
 
+import com.lnt.chatmee.util.DisplayNames;
 import java.util.List;
 import com.lnt.chatmee.dto.event.LastMessageSummary;
 import org.slf4j.Logger;
@@ -76,7 +77,8 @@ public class MessageService {
                 .createdAt(Instant.now()).updatedAt(Instant.now())
                 .isUpdated(false).isDeleted(false).build();
         // SYSTEM messages never write the activity summary, so they never take the request-message slot.
-        boolean requestMessage = room.isPresent() && claimRequestMessage(room.get(), message, user.getName());
+        String senderName = DisplayNames.of(user);
+        boolean requestMessage = room.isPresent() && claimRequestMessage(room.get(), message, senderName);
         // Only the successfully persisted message may be acknowledged to the room.
         Message saved;
         try {
@@ -87,10 +89,10 @@ public class MessageService {
             }
             throw ex;
         }
-        ChatMessageResponse response = ChatMessageResponse.from(saved, user.getName(), request.getTempId());
+        ChatMessageResponse response = ChatMessageResponse.from(saved, senderName, request.getTempId());
 
         if (saved.getType() != Message.MessageType.SYSTEM) {
-            var summary = summary(saved, user.getName());
+            var summary = summary(saved, senderName);
             try {
                 chatRoomRepository.updateActivity(saved.getChatRoomId(), saved.getCreatedAt(), summary);
             } catch (DataAccessException | MessagingException ex) {
@@ -213,15 +215,11 @@ public class MessageService {
             Map<String, String> senderNames = new HashMap<>();
             if (!page.isEmpty()) {
                 Set<String> senderIds = page.stream().map(Message::getSenderId).collect(Collectors.toSet());
-                userRepository.findAllById(senderIds).forEach(user -> {
-                    if (user.getName() != null) {
-                        senderNames.put(user.getId(), user.getName());
-                    }
-                });
+                userRepository.findAllById(senderIds).forEach(user -> senderNames.put(user.getId(), DisplayNames.of(user)));
             }
             List<ChatMessageResponse> messages = page.stream()
                     .map(message -> ChatMessageResponse.from(message,
-                            senderNames.getOrDefault(message.getSenderId(), "Unknown User"), null))
+                            senderNames.getOrDefault(message.getSenderId(), DisplayNames.DELETED_USER), null))
                     .toList();
             String nextCursor = hasMore
                     ? new MessageCursor(page.get(0).getCreatedAt(), page.get(0).getId()).encode() : null;

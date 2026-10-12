@@ -1,5 +1,6 @@
 package com.lnt.chatmee.service;
 
+import com.lnt.chatmee.util.DisplayNames;
 import java.time.LocalDateTime;
 import java.time.Instant;
 import java.util.Collection;
@@ -140,7 +141,7 @@ public class ParticipantService {
     }
 
     public void announceJoin(String roomId, User member) {
-        messages.getObject().postSystemMessage(roomId, displayName(member) + " joined");
+        messages.getObject().postSystemMessage(roomId, DisplayNames.of(member) + " joined");
     }
 
     /**
@@ -214,7 +215,7 @@ public class ParticipantService {
             .forEach(user -> users.put(user.getId(), user));
         return members.stream().map(row -> {
             User user = users.get(row.getUserId());
-            return new MemberResponse(row.getUserId(), displayName(user), user == null ? null : user.getAvatarUrl(), row.getRole());
+            return new MemberResponse(row.getUserId(), DisplayNames.of(user), user == null ? null : user.getAvatarUrl(), row.getRole());
         }).toList();
     }
 
@@ -226,8 +227,8 @@ public class ParticipantService {
         Participant target = participantRepository.findByChatRoomIdAndUserId(roomId, targetId)
             .orElseThrow(() -> new ChatRoomNotFoundException("Room member not found"));
         policies.get(room.getType()).checkRemoveMember(callerId, actor.getRole(), targetId, target.getRole());
-        String actorName = displayName(userRepository.findById(callerId).orElse(null));
-        String targetName = displayName(userRepository.findById(targetId).orElse(null));
+        String actorName = DisplayNames.of(userRepository.findById(callerId).orElse(null));
+        String targetName = DisplayNames.of(userRepository.findById(targetId).orElse(null));
         if (!removeParticipant(roomId, targetId)) {
             throw new ChatRoomNotFoundException("Room member not found");
         }
@@ -270,7 +271,7 @@ public class ParticipantService {
     }
 
     public void announceOwnerTransfer(String roomId, String newOwnerId) {
-        String name = displayName(userRepository.findById(newOwnerId).orElse(null));
+        String name = DisplayNames.of(userRepository.findById(newOwnerId).orElse(null));
         messages.getObject().postSystemMessage(roomId, name + " is now the owner");
     }
 
@@ -304,8 +305,8 @@ public class ParticipantService {
         if (!changeRoleIfCurrent(roomId, targetId, target.getRole(), newRole)) {
             throw new ForbiddenActionException("Member role changed concurrently, retry the request");
         }
-        String actorName = displayName(userRepository.findById(callerId).orElse(null));
-        String targetName = displayName(userRepository.findById(targetId).orElse(null));
+        String actorName = DisplayNames.of(userRepository.findById(callerId).orElse(null));
+        String targetName = DisplayNames.of(userRepository.findById(targetId).orElse(null));
         messages.getObject().postSystemMessage(roomId,
             actorName + " made " + targetName + (newRole == Role.ADMIN ? " an admin" : " a member"));
         long unread = target.getLastReadAt() == null ? 0
@@ -314,11 +315,7 @@ public class ParticipantService {
     }
 
     public void postLeaveMessage(String roomId, String name) {
-        messages.getObject().postSystemMessage(roomId, (name == null || name.isBlank() ? "Deleted user" : name) + " left");
-    }
-
-    private static String displayName(User user) {
-        return user == null || user.getName() == null || user.getName().isBlank() ? "Deleted user" : user.getName();
+        messages.getObject().postSystemMessage(roomId, DisplayNames.of(name) + " left");
     }
 
 }

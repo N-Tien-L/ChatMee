@@ -278,6 +278,21 @@ class ParticipantServiceTest {
         verifyNoMoreInteractions(participants, users);
     }
 
+    // CM-077: a member whose user no longer exists is listed as "Deleted user" (AC-009-28)
+    @Test
+    void getMembers_missingUser_listsDeletedUser() {
+        when(rooms.findByIdAndIsActiveTrue("room")).thenReturn(Optional.of(room));
+        when(participants.findByChatRoomId("room")).thenReturn(List.of(
+            Participant.builder().userId("u0").role(Role.OWNER).build(),
+            Participant.builder().userId("gone").role(Role.MEMBER).build()));
+        when(users.findAllById(any())).thenReturn(List.of(User.builder().id("u0").name("Owner").build()));
+        var result = service.getMembers("room", "u0");
+        assertEquals("gone", result.get(1).id());
+        assertEquals(com.lnt.chatmee.util.DisplayNames.DELETED_USER, result.get(1).name());
+        assertEquals("Deleted user", result.get(1).name());
+        assertEquals(null, result.get(1).avatarUrl());
+    }
+
     @Test
     void getMembers_nonMember_throws404WithoutReadingUsers() {
         when(rooms.findByIdAndIsActiveTrue("room")).thenReturn(Optional.of(room));

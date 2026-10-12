@@ -1,5 +1,6 @@
 package com.lnt.chatmee.service;
 
+import com.lnt.chatmee.util.DisplayNames;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDateTime;
@@ -304,7 +305,7 @@ public class DirectMessageRequestService {
 
     private static UserSummaryResponse summary(String userId, User user) {
         if (user == null || user.getName() == null || user.getName().isBlank()) {
-            return new UserSummaryResponse(userId, "Deleted user", user == null ? null : user.getAvatarUrl());
+            return new UserSummaryResponse(userId, DisplayNames.DELETED_USER, user == null ? null : user.getAvatarUrl());
         }
         return new UserSummaryResponse(userId, user.getName(), user.getAvatarUrl());
     }

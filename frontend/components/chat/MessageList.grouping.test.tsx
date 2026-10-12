@@ -87,3 +87,15 @@ describe('MessageList grouping and system rows', () => {
         expect(screen.queryByRole('img', { name: 'Offline' })).not.toBeInTheDocument();
     });
 });
+
+describe('MessageList deleted sender', () => {
+    it('render_deletedUserSender_showsNeutralAvatarAndNoAction', () => {
+        const messages = [text('m1', '2026-10-09T10:00:00Z', { senderId: 'gone', senderName: 'Deleted user' })];
+        render(<MessageList {...props} messages={messages} />);
+        const avatar = screen.getByRole('img', { name: 'Deleted user' });
+        expect(screen.getByText('Deleted user')).toBeInTheDocument();
+        expect(avatar.querySelector('.bg-muted')).not.toBeNull();
+        expect(screen.queryByText('DU')).not.toBeInTheDocument();
+        expect(screen.queryByRole('button', { name: /message|profile/i })).not.toBeInTheDocument();
+    });
+});
