@@ -14,6 +14,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.dao.DuplicateKeyException;
 
+import com.lnt.chatmee.dto.response.ChatRoomResponse;
 import com.lnt.chatmee.exception.InvalidRequestException;
 import com.lnt.chatmee.exception.ChatRoomNotFoundException;
 import com.lnt.chatmee.exception.ForbiddenActionException;
@@ -41,6 +42,7 @@ public class ParticipantService {
 
     private final ParticipantRepository participantRepository;
     private final UserRepository userRepository;
+    private final UserEventPublisher userEvents;
     private final ChatRoomRepository chatRoomRepository;
     private final RoomTypePolicyRegistry policies;
 
@@ -78,6 +80,9 @@ public class ParticipantService {
             .orElseThrow(() -> new ChatRoomNotFoundException("Can't find chat room with id: " + roomId));
         policies.get(room.getType()).checkJoin();
         addParticipant(roomId, user.getId(), Role.MEMBER);
+        chatRoomRepository.findByIdAndIsActiveTrue(roomId).ifPresent(joinedRoom ->
+            userEvents.roomAdded(user.getId(), ChatRoomResponse.from(
+                joinedRoom, getParticipantUserIds(roomId))));
     }
 
     public void addParticipant(String roomId, String userId, String targetUserId, String requestedRole) {

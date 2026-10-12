@@ -46,7 +46,7 @@ SPEC-009 (invitations, DM requests, blocking, reporting, hiding DMs, owner auto-
   `{room}` is the same `ChatRoomResponse` as `GET /rooms` for that user (including `myRole`, `state`);
   `ROOM_ACTIVITY {roomId, lastMessage{id, senderId, senderName, preview, createdAt}}` to every member after a message is persisted.
   `preview` is at most 100 characters. The `/user/queue/*` subscription allowlist contains only `/user/queue/events`
-  and `/user/queue/errors` (session-scoped delivery per AC-008-15); all other `/user/queue/*` subscriptions stay denied. -> Test: planned (CM-060)
+  and `/user/queue/errors` (session-scoped delivery per AC-008-15); all other `/user/queue/*` subscriptions stay denied. -> Implemented. Test: AuthChannelInterceptorTest#preSend_userEventsSubscription_allowsOwnQueueOnly; UserEventPublisherTest#lifecycleEvents_affectedUsers_deliverExpectedEnvelopeAndPayload; ChatRoomServiceTest#updateChatRoomById_creator_updatesSuccessfully; ParticipantServiceTest#joinRoom_publicRoom_addsMember; UserEventsIT#sendMessage_unopenedRoom_deliversActivityToAllMemberSessionsButNotNonMember; MessageServiceTest#sendMessage_systemMessage_publishesNoActivity; UserEventPublisherTest#roomActivity_deliveryFails_logsMetadataOnlyAndContinuesFanout
 
 ### Room list
 - AC-008-2: `GET /api/v1/rooms` returns per room `lastActivityAt`, `lastMessage` (same shape as above, or null), `unreadCount` and `myRole`;

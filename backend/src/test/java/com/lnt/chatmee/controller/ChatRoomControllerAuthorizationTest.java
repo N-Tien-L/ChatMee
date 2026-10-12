@@ -37,6 +37,7 @@ import com.lnt.chatmee.service.policy.*;
 class ChatRoomControllerAuthorizationTest {
     @Autowired MockMvc mvc;
     @MockitoBean ChatRoomService chatRooms;
+    @MockitoBean com.lnt.chatmee.service.UserEventPublisher userEvents;
     @MockitoBean ChatRoomRepository rooms;
     @MockitoBean UserRepository users;
     @MockitoBean ParticipantRepository participants;

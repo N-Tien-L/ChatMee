@@ -417,4 +417,18 @@ class AuthChannelInterceptorTest {
             return "ws://127.0.0.1:" + port + "/ws";
         }
     }
+
+    @Test
+    void preSend_userEventsSubscription_allowsOwnQueueOnly() {
+        Message<?> message = applicationFrame(StompCommand.SUBSCRIBE, "/user/queue/events", "internal-user");
+        assertSame(message, interceptor.preSend(message, channel));
+        for (String destination : List.of("/user/queue/other", "/user/other/queue/events", "/queue/events", "/user/queue/events/extra")) {
+            assertThrows(AccessDeniedException.class, () -> interceptor.preSend(
+                applicationFrame(StompCommand.SUBSCRIBE, destination, "internal-user"), channel));
+        }
+        assertThrows(BadCredentialsException.class, () -> interceptor.preSend(
+            applicationFrame(StompCommand.SUBSCRIBE, "/user/queue/events", null), channel));
+        verifyNoInteractions(participants, tokens);
+    }
+
 }

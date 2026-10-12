@@ -40,6 +40,7 @@ public class MessageService {
     private final ParticipantService participantService;
     private final MessageRepository messageRepository;
     private final UserRepository userRepository;
+    private final UserEventPublisher userEvents;
 
     public ChatMessageResponse sendMessage(ChatMessageRequest request, String userId) {
         User user = userRepository.findById(userId)
@@ -58,6 +59,9 @@ public class MessageService {
         Message saved = persistMessage(message);
         ChatMessageResponse response = ChatMessageResponse.from(saved, user.getName(), request.getTempId());
 
+        if (saved.getType() != Message.MessageType.SYSTEM) {
+            userEvents.roomActivity(participantService.getParticipantUserIds(saved.getChatRoomId()), response);
+        }
         return response;
     }
 
