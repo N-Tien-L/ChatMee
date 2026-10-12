@@ -1,5 +1,5 @@
 import { RoomSettings } from "../entities/chat/chat-room.entity";
-import { MessageType, RoomType } from "../entities/chat/enums";
+import { MessageType, ParticipantRole, RoomType } from "../entities/chat/enums";
 import { UserSummaryResponse } from "./user.dto";
 
 // Requests
@@ -34,6 +34,15 @@ export interface ChatMessageRequest {
 
 // Response
 
+/** Preview of the newest non-SYSTEM message of a room (`lastMessage` of a room, `ROOM_ACTIVITY`). */
+export interface LastMessageSummary {
+    id: string;
+    senderId: string;
+    senderName?: string;
+    preview: string;
+    createdAt: string;
+}
+
 export interface ChatRoomResponse {
     id: string;
     roomName: string;
@@ -47,6 +56,20 @@ export interface ChatRoomResponse {
     /** DIRECT_MESSAGE rooms: the other member as seen by the caller (CM-049). */
     counterpart?: UserSummaryResponse | null;
     updatedAt?: string;
+    /** ISO-8601 UTC time of the newest activity; the list is sorted by it. */
+    lastActivityAt?: string | null;
+    lastMessage?: LastMessageSummary | null;
+    unreadCount?: number;
+    myRole?: ParticipantRole | null;
+    /** Absent until CM-072; a missing value means ACTIVE. REQUESTED = a DM request not yet accepted. */
+    state?: "ACTIVE" | "REQUESTED";
+}
+
+/** Envelope of every frame on `/user/queue/events`. */
+export interface UserEventEnvelope {
+    type: string;
+    payload: unknown;
+    occurredAt: string;
 }
 
 export interface MessageResponse {
