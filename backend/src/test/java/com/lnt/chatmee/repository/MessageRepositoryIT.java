@@ -229,4 +229,21 @@ class MessageRepositoryIT {
         insertedIds.add(message.getId());
         return message;
     }
+
+    @Test
+    void membershipSystemMessages_persisted_appearInHistoryAndNeverCountUnread() {
+        Instant marker = Instant.parse("2026-10-12T00:00:00Z");
+        for (String text : List.of("Alice joined", "Alice left", "Bob removed Alice")) {
+            var saved = messages.save(Message.builder().chatRoomId(roomId).senderId("SYSTEM")
+                .content(text).type(Message.MessageType.SYSTEM).createdAt(marker.plusSeconds(1))
+                .updatedAt(marker.plusSeconds(1)).isDeleted(false).build());
+            insertedIds.add(saved.getId());
+        }
+        assertThat(messages.findPage(roomId, PageRequest.of(0, 100)))
+            .extracting(Message::getContent).containsExactlyInAnyOrder("Alice joined", "Alice left", "Bob removed Alice");
+        assertThat(messages.countUnread(roomId, "reader", marker)).isZero();
+        save("text", marker.plusSeconds(2), false);
+        assertThat(messages.countUnread(roomId, "reader", marker)).isEqualTo(1);
+    }
+
 }

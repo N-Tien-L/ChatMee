@@ -287,6 +287,7 @@ public class ChatRoomService {
         }
 
         userEvents.roomRemoved(Set.of(authenticatedUser.getId()), roomId, "LEFT");
+        participantService.postLeaveMessage(roomId, authenticatedUser.getName());
         logger.info("User {} successfully left room {}", authenticatedUser.getId(), roomId);
     }
 }

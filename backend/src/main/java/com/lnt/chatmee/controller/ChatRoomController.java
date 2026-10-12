@@ -24,6 +24,7 @@ import com.lnt.chatmee.dto.request.CreateChatRoomRequest;
 import com.lnt.chatmee.dto.request.JoinChatRoomRequest;
 import com.lnt.chatmee.dto.request.UpdateChatRoomRequest;
 import com.lnt.chatmee.dto.response.ApiResponse;
+import com.lnt.chatmee.dto.response.MemberResponse;
 import com.lnt.chatmee.dto.response.ChatRoomResponse;
 import com.lnt.chatmee.dto.response.PagedResponse;
 import com.lnt.chatmee.dto.response.PublicRoomSummary;
@@ -121,6 +122,20 @@ public class ChatRoomController {
     @PutMapping("/{roomId}/members/me/read")
     public ResponseEntity<Void> markRead(@CurrentUser UserPrincipal user, @PathVariable String roomId) {
         participantService.markRead(roomId, user.userId());
+        return ResponseEntity.noContent().build();
+    }
+
+    @Operation(summary = "List room members and their roles (members only)")
+    @GetMapping("/{roomId}/members")
+    public ResponseEntity<ApiResponse<List<MemberResponse>>> getMembers(@CurrentUser UserPrincipal user, @PathVariable String roomId) {
+        return ResponseEntity.ok(ApiResponse.success(participantService.getMembers(roomId, user.userId())));
+    }
+
+    @Operation(summary = "Remove a member (owner or admin, according to participant roles)")
+    @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "204", description = "Member removed")
+    @DeleteMapping("/{roomId}/members/{userId}")
+    public ResponseEntity<Void> removeMember(@CurrentUser UserPrincipal user, @PathVariable String roomId, @PathVariable String userId) {
+        participantService.removeMember(roomId, user.userId(), userId);
         return ResponseEntity.noContent().build();
     }
 

@@ -16,6 +16,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.dao.DuplicateKeyException;
 
 import com.lnt.chatmee.dto.response.ChatRoomResponse;
+import com.lnt.chatmee.dto.response.MemberResponse;
+import org.springframework.beans.factory.ObjectProvider;
 import com.lnt.chatmee.exception.InvalidRequestException;
 import com.lnt.chatmee.exception.ChatRoomNotFoundException;
 import com.lnt.chatmee.exception.ForbiddenActionException;
@@ -46,6 +48,8 @@ public class ParticipantService {
     private final UserEventPublisher userEvents;
     private final ChatRoomRepository chatRoomRepository;
     private final RoomTypePolicyRegistry policies;
+    // Resolve on membership changes only: MessageService also uses the membership guard.
+    private final ObjectProvider<MessageService> messages;
 
     public void createParticipant(String chatRoomId, String userId, Role role) {
         // Validate inputs
@@ -124,9 +128,8 @@ public class ParticipantService {
             .orElseThrow(() -> new ChatRoomNotFoundException("Can't find chat room with id: " + roomId));
         policies.get(room.getType()).checkAddParticipant();
 
-        if(userRepository.findById(userId).isEmpty()) {
-            throw new UserNotFoundException("Participant not found");
-        }
+        User target = userRepository.findById(userId)
+            .orElseThrow(() -> new UserNotFoundException("Participant not found"));
 
         if(participantRepository.existsByChatRoomIdAndUserId(roomId, userId)) {
             throw new UserAlreadyInRoomException("User is already in the room");
@@ -142,6 +145,7 @@ public class ParticipantService {
             chatRoomRepository.releaseSeat(roomId, LocalDateTime.now());
             throw ex;
         }
+        messages.getObject().postSystemMessage(roomId, displayName(target) + " joined");
         logger.info("Added participant {} to room {}", userId, roomId);
     }
 
@@ -203,4 +207,46 @@ public class ParticipantService {
         return chatRoomRepository.findByIdAndIsActiveTrue(roomId).isPresent()
             && participantRepository.existsByChatRoomIdAndUserId(roomId, userId);
     }
+
+    public List<MemberResponse> getMembers(String roomId, String callerId) {
+        chatRoomRepository.findByIdAndIsActiveTrue(roomId)
+            .orElseThrow(() -> new ChatRoomNotFoundException("Room membership not found"));
+        List<Participant> members = participantRepository.findByChatRoomId(roomId);
+        if (members.stream().noneMatch(row -> callerId.equals(row.getUserId()))) {
+            throw new ChatRoomNotFoundException("Room membership not found");
+        }
+        Map<String, User> users = new java.util.HashMap<>();
+        userRepository.findAllById(members.stream().map(Participant::getUserId).collect(Collectors.toSet()))
+            .forEach(user -> users.put(user.getId(), user));
+        return members.stream().map(row -> {
+            User user = users.get(row.getUserId());
+            return new MemberResponse(row.getUserId(), displayName(user), user == null ? null : user.getAvatarUrl(), row.getRole());
+        }).toList();
+    }
+
+    public void removeMember(String roomId, String callerId, String targetId) {
+        ChatRoom room = chatRoomRepository.findByIdAndIsActiveTrue(roomId)
+            .orElseThrow(() -> new ChatRoomNotFoundException("Room membership not found"));
+        Participant actor = participantRepository.findByChatRoomIdAndUserId(roomId, callerId)
+            .orElseThrow(() -> new ChatRoomNotFoundException("Room membership not found"));
+        Participant target = participantRepository.findByChatRoomIdAndUserId(roomId, targetId)
+            .orElseThrow(() -> new ChatRoomNotFoundException("Room member not found"));
+        policies.get(room.getType()).checkRemoveMember(callerId, actor.getRole(), targetId, target.getRole());
+        String actorName = displayName(userRepository.findById(callerId).orElse(null));
+        String targetName = displayName(userRepository.findById(targetId).orElse(null));
+        if (!removeParticipant(roomId, targetId)) {
+            throw new ChatRoomNotFoundException("Room member not found");
+        }
+        userEvents.roomRemoved(Set.of(targetId), roomId, "REMOVED");
+        messages.getObject().postSystemMessage(roomId, actorName + " removed " + targetName);
+    }
+
+    public void postLeaveMessage(String roomId, String name) {
+        messages.getObject().postSystemMessage(roomId, (name == null || name.isBlank() ? "Deleted user" : name) + " left");
+    }
+
+    private static String displayName(User user) {
+        return user == null || user.getName() == null || user.getName().isBlank() ? "Deleted user" : user.getName();
+    }
+
 }

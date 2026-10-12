@@ -36,12 +36,15 @@ class ParticipantServiceTest {
     @Spy RoomTypePolicyRegistry policies = new RoomTypePolicyRegistry(List.of(
         new PublicRoomPolicy(), new PrivateRoomPolicy(), new DirectRoomPolicy()));
     @Mock UserEventPublisher userEvents;
+    @Mock org.springframework.beans.factory.ObjectProvider<MessageService> messages;
+    @Mock MessageService messageService;
 
     @InjectMocks ParticipantService service;
     private ChatRoom room;
 
     @BeforeEach
     void setUp() {
+        lenient().when(messages.getObject()).thenReturn(messageService);
         room = ChatRoom.builder().id("room").type(RoomType.PUBLIC).isActive(true)
                 .maxParticipants(10).build();
     }
@@ -54,6 +57,7 @@ class ParticipantServiceTest {
         service.joinRoom("room", "actor");
         verify(userEvents).roomAdded(eq("actor"), argThat(r -> r.id().equals("room") && r.participants().equals(Set.of("actor"))));
         verifyNoMoreInteractions(userEvents);
+        verify(messageService).postSystemMessage("room", "Deleted user joined");
         verify(participants).save(argThat(p -> p.getUserId().equals("actor") && p.getRole() == Role.MEMBER));
         verify(rooms).reserveSeat(eq("room"), any());
         verify(rooms, never()).save(any());
@@ -296,4 +300,93 @@ class ParticipantServiceTest {
         when(users.findById(userId)).thenReturn(Optional.of(User.builder().id(userId).build()));
         when(rooms.reserveSeat(eq("room"), any())).thenReturn(1L);
     }
+
+    @Test
+    void getMembers_largeRoom_readsParticipantsAndUsersOnceWithoutPerMemberLookup() {
+        when(rooms.findByIdAndIsActiveTrue("room")).thenReturn(Optional.of(room));
+        var rows = java.util.stream.IntStream.range(0, 1000)
+            .mapToObj(i -> Participant.builder().userId("u" + i).role(i == 0 ? Role.OWNER : Role.MEMBER).build()).toList();
+        when(participants.findByChatRoomId("room")).thenReturn(rows);
+        when(users.findAllById(any())).thenReturn(java.util.stream.IntStream.range(0, 1000)
+            .mapToObj(i -> User.builder().id("u" + i).name("User " + i).avatarUrl("avatar-" + i).build()).toList());
+        var result = service.getMembers("room", "u0");
+        assertEquals(1000, result.size());
+        assertEquals("u0", result.get(0).id());
+        assertEquals("User 0", result.get(0).name());
+        assertEquals("avatar-0", result.get(0).avatarUrl());
+        assertEquals(Role.OWNER, result.get(0).role());
+        verify(participants).findByChatRoomId("room");
+        verify(users).findAllById(any());
+        verify(users, never()).findById(any());
+        verifyNoMoreInteractions(participants, users);
+    }
+
+    @Test
+    void getMembers_nonMember_throws404WithoutReadingUsers() {
+        when(rooms.findByIdAndIsActiveTrue("room")).thenReturn(Optional.of(room));
+        when(participants.findByChatRoomId("room")).thenReturn(List.of(Participant.builder().userId("other").build()));
+        assertThrows(ChatRoomNotFoundException.class, () -> service.getMembers("room", "actor"));
+        verifyNoInteractions(users);
+    }
+
+    @Test
+    void getMembers_inactiveRoom_throws404BeforeReadingOrphanMemberships() {
+        assertThrows(ChatRoomNotFoundException.class, () -> service.getMembers("room", "actor"));
+        verifyNoInteractions(participants, users);
+    }
+
+    @Test
+    void postSystemMessage_membershipText_persistsBeforeBroadcastWithoutActivity() {
+        var messages = mock(com.lnt.chatmee.repository.MessageRepository.class);
+        var messageService = new MessageService(rooms, service, messages, users, userEvents);
+        when(messages.save(any())).thenAnswer(call -> call.getArgument(0));
+        for (String text : List.of("Alice joined", "Alice left", "Bob removed Alice")) {
+            var result = messageService.postSystemMessage("room", text);
+            assertEquals(com.lnt.chatmee.model.Message.MessageType.SYSTEM, result.type());
+            assertEquals(text, result.content());
+            assertNotNull(result.id());
+            assertNotNull(result.createdAt());
+            var order = inOrder(messages, userEvents);
+            order.verify(messages).save(argThat(m -> m.getType() == com.lnt.chatmee.model.Message.MessageType.SYSTEM && m.getContent().equals(text)));
+            order.verify(userEvents).systemMessage(result);
+        }
+        verifyNoInteractions(rooms, users, participants);
+        verify(userEvents, never()).roomActivity(any(), anyString(), any());
+    }
+
+
+    @Test
+    void membershipChanges_joinLeaveRemove_persistAndBroadcastSystemMessagesWithoutActivity() {
+        var repository = mock(com.lnt.chatmee.repository.MessageRepository.class);
+        when(repository.save(any())).thenAnswer(call -> call.getArgument(0));
+        when(messages.getObject()).thenReturn(new MessageService(rooms, service, repository, users, userEvents));
+        room.setCreatedBy("former-owner");
+        when(rooms.findByIdAndIsActiveTrue("room")).thenReturn(Optional.of(room));
+        when(users.findById("alice")).thenReturn(Optional.of(User.builder().id("alice").name("Alice").build()));
+        when(rooms.reserveSeat(eq("room"), any())).thenReturn(1L);
+        service.addParticipant("room", "alice", Role.MEMBER);
+        when(participants.existsByChatRoomIdAndUserId("room", "alice")).thenReturn(true);
+        when(participants.deleteByChatRoomIdAndUserId("room", "alice")).thenReturn(1L);
+        var chatRooms = new ChatRoomService(rooms, users, repository, userEvents, service,
+            mock(org.springframework.messaging.simp.SimpMessagingTemplate.class), policies);
+        chatRooms.leaveChatRoomById("alice", "room");
+        when(participants.findByChatRoomIdAndUserId("room", "bob"))
+            .thenReturn(Optional.of(Participant.builder().role(Role.OWNER).build()));
+        when(participants.findByChatRoomIdAndUserId("room", "alice"))
+            .thenReturn(Optional.of(Participant.builder().role(Role.MEMBER).build()));
+        when(users.findById("bob")).thenReturn(Optional.of(User.builder().id("bob").name("Bob").build()));
+        service.removeMember("room", "bob", "alice");
+        var saved = org.mockito.ArgumentCaptor.forClass(com.lnt.chatmee.model.Message.class);
+        verify(repository, times(3)).save(saved.capture());
+        assertEquals(List.of("Alice joined", "Alice left", "Bob removed Alice"),
+            saved.getAllValues().stream().map(com.lnt.chatmee.model.Message::getContent).toList());
+        for (var message : saved.getAllValues()) {
+            assertEquals(com.lnt.chatmee.model.Message.MessageType.SYSTEM, message.getType());
+            verify(userEvents).systemMessage(argThat(response -> response.id().equals(message.getId())
+                && response.content().equals(message.getContent()) && response.type() == message.getType()));
+        }
+        verify(rooms, never()).updateActivity(any(), any(), any());
+        verify(userEvents, never()).roomActivity(any(), anyString(), any());
+    }
+
 }

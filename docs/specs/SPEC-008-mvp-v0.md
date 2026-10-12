@@ -59,12 +59,12 @@ SPEC-009 (invitations, DM requests, blocking, reporting, hiding DMs, owner auto-
   and the tab is visible. The document title shows the total unread count. -> Test: planned (CM-064)
 
 ### Membership
-- AC-008-5: `GET /api/v1/rooms/{roomId}/members` returns `{id, name, avatarUrl, role}` for every member in at most two queries; non-members get 404. -> Test: planned (CM-062)
+- AC-008-5: `GET /api/v1/rooms/{roomId}/members` returns `{id, name, avatarUrl, role}` for every member in at most two queries; non-members get 404. -> Implemented. Test: ChatRoomControllerWebMvcTest#getMembers_member_returnsMemberContractUsingPrincipal; ChatRoomControllerWebMvcTest#getMembers_nonMember_returns404; ParticipantServiceTest#getMembers_largeRoom_readsParticipantsAndUsersOnceWithoutPerMemberLookup; ParticipantServiceTest#getMembers_inactiveRoom_throws404BeforeReadingOrphanMemberships
 - AC-008-6: `DELETE /api/v1/rooms/{roomId}/members/{userId}`: OWNER may remove anyone but themselves; ADMIN may remove MEMBERs only;
-  DMs return 403; the removed user loses access immediately (existing revocation) and gets `ROOM_REMOVED`. -> Test: planned (CM-062)
+  DMs return 403; the removed user loses access immediately (existing revocation) and gets `ROOM_REMOVED`. -> Implemented. Test: ChatRoomControllerAuthorizationTest#removeMember_ownerRemovingAdmin_returns204; ChatRoomControllerAuthorizationTest#removeMember_ownerRemovingSelf_returns403; ChatRoomControllerAuthorizationTest#removeMember_adminRemovingMember_returns204; ChatRoomControllerAuthorizationTest#removeMember_adminRemovingAdmin_returns403; ChatRoomControllerAuthorizationTest#removeMember_directRoom_returns403; ChatRoomControllerAuthorizationTest#removeMember_unknownTarget_returns404; ChatRoomControllerAuthorizationTest#removeMember_nonMemberCaller_returns404; SubscriptionRevocationIT#removeMember_subscribedTabs_receiveRemovedEventAndNoFurtherRoomFrames
 - AC-008-7: Join (including an accepted invitation), leave and remove persist a SYSTEM message ("X joined", "X left", "A removed B") that is
   broadcast on `/topic/rooms/{roomId}` and appears in history. Role and owner changes add "X is now an admin/a member/the owner" (CM-076).
-  SYSTEM messages do not count as unread and do not move the room in the list. -> Test: planned (CM-062)
+  SYSTEM messages do not count as unread and do not move the room in the list. -> Implemented. Test: ParticipantServiceTest#membershipChanges_joinLeaveRemove_persistAndBroadcastSystemMessagesWithoutActivity; ParticipantServiceTest#postSystemMessage_membershipText_persistsBeforeBroadcastWithoutActivity; MessageRepositoryIT#membershipSystemMessages_persisted_appearInHistoryAndNeverCountUnread
 
 ### Flows and UI
 - AC-008-8: Creating a room or DM opens it. Starting a DM that exists opens the existing one and never duplicates it in the list.

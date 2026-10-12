@@ -63,4 +63,15 @@ class ResponseContractTest {
         for (Class<?> type : new Class<?>[]{AuthResponse.class, UserResponse.class,
                 ChatRoomResponse.class, ChatMessageResponse.class}) assertThat(type.isRecord()).isTrue();
     }
+
+    @Test
+    void memberResponse_record_serializesOnlyMemberFields() throws Exception {
+        assertThat(MemberResponse.class.isRecord()).isTrue();
+        tools.jackson.databind.JsonNode member = json.valueToTree(new MemberResponse("user", "Alice", "avatar", com.lnt.chatmee.model.Participant.Role.ADMIN));
+        assertThat(member)
+            .isEqualTo(json.readTree("""
+                {"id":"user","name":"Alice","avatarUrl":"avatar","role":"ADMIN"}
+                """));
+    }
+
 }

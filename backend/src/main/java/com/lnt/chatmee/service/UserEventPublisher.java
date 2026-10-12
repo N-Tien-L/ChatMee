@@ -57,6 +57,15 @@ public class UserEventPublisher {
         userIds.forEach(userId -> send(userId, event));
     }
 
+    /** Broadcasts a saved server-generated announcement through the existing room topic. */
+    public void systemMessage(ChatMessageResponse message) {
+        try {
+            messagingTemplate.convertAndSend("/topic/rooms/" + message.chatRoomId(), message);
+        } catch (MessagingException ex) {
+            logger.warn("Failed to broadcast SYSTEM message {} for room {}", message.id(), message.chatRoomId());
+        }
+    }
+
     private void send(String userId, UserEvent<?> event) {
         try {
             messagingTemplate.convertAndSendToUser(userId, "/queue/events", event);

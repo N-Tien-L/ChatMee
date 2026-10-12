@@ -159,4 +159,16 @@ public class MessageService {
         return messageRepository.findFirstByChatRoomIdAndSenderIdAndClientMessageId(
                 message.getChatRoomId(), message.getSenderId(), message.getClientMessageId());
     }
+
+    /** Membership announcements are persisted before publication and never update room activity. */
+    public ChatMessageResponse postSystemMessage(String roomId, String text) {
+        Instant now = Instant.now();
+        Message saved = persistMessage(Message.builder().id(UUID.randomUUID().toString())
+            .chatRoomId(roomId).senderId("SYSTEM").content(text).type(Message.MessageType.SYSTEM)
+            .createdAt(now).updatedAt(now).isUpdated(false).isDeleted(false).build());
+        ChatMessageResponse response = ChatMessageResponse.from(saved, "System", null);
+        userEvents.systemMessage(response);
+        return response;
+    }
+
 }
