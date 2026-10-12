@@ -1,12 +1,12 @@
 # SPEC-002: Group chat rooms (PUBLIC / PRIVATE)
-- Status: Approved
-- Owner: @N-Tien-L · Created: 2026-10-09 · Related: ADR-0005, design/data-model.md, design/error-handling.md
+- Status: Approved, amended by SPEC-009 (see section 10)
+- Owner: @N-Tien-L · Created: 2026-10-09 · Related: ADR-0005, ADR-0006, SPEC-009, design/data-model.md, design/error-handling.md
 
 ## 1. Goal
 Users create group rooms, see their rooms, discover and join public rooms, invite people into private rooms, and the owner manages or deletes the room. Membership stays consistent under concurrent requests.
 
 ## 2. Non-goals
-- Ownership transfer, bans, moderation tools (phase 3).
+- Manual ownership transfer, bans, moderation tools (v1+; automatic transfer on owner leave is v0, AC-009-24).
 
 ## 3. User stories
 - US-1: As a user, I create a room and become its owner.
@@ -21,7 +21,7 @@ Routes follow the target from the audit and are implemented under `/api/v1/rooms
 - AC-002-2: `GET /rooms` returns only active rooms the caller is a member of. -> Implemented. Test: `ChatRoomControllerWebMvcTest#listRooms_authenticated_returnsCallerRooms`, `ChatRoomServiceTest#getList_returnsUserRooms`
 - AC-002-3: `GET /rooms/discover?query=` returns paged PUBLIC rooms the caller has not joined. -> Implemented (CM-048) at `GET /api/v1/rooms/discover?query=&page=&size=`. Tests: `ChatRoomControllerWebMvcTest#discoverRooms_authenticated_returnsPublicRoomsPage`, `ChatRoomControllerWebMvcTest#discoverRooms_unauthenticated_returns401`, `ChatRoomServiceTest#discoverRooms_excludesJoinedPrivateDirectAndDeletedRooms`, `ChatRoomServiceTest#discoverRooms_oversizedOrInvalidPaging_clampsPageAndSize`, `ChatRoomRepositoryIT#findDiscoverable_regexCharactersInQuery_matchedLiterally`; frontend `discoverRoomsStore.test.ts`, `DiscoverRoomsDialog.test.tsx`
 - AC-002-4: Joining a PUBLIC room with free seats succeeds; a full room returns 409 `ROOM_FULL`; an existing member gets 409 `ALREADY_PARTICIPANT`; PRIVATE and DM rooms return 403. -> Implemented (status 204 No Content). Test: `ChatRoomControllerWebMvcTest#joinRoom_fullRoom_returns409Problem`, `ChatRoomControllerWebMvcTest#joinRoom_alreadyMember_returns409Problem`, `ChatRoomControllerAuthorizationTest#joinRoom_privateRoom_returnsForbidden`, `ChatRoomControllerAuthorizationTest#joinRoom_directMessageRoom_returnsForbidden`
-- AC-002-5: Only OWNER/ADMIN add members; only OWNER grants ADMIN; nobody grants OWNER. -> Implemented (CM-008). Test: `ChatRoomControllerAuthorizationTest#addParticipant_adminAssigningAdmin_returnsForbidden`, `ChatRoomControllerAuthorizationTest#addParticipant_ownerAssigningAdmin_returnsOk`, `ChatRoomControllerAuthorizationTest#addParticipant_nonParticipant_returnsForbidden`
+- AC-002-5 (superseded by SPEC-009, see §10): Only OWNER/ADMIN add members; only OWNER grants ADMIN; nobody grants OWNER. -> Implemented (CM-008). Test: `ChatRoomControllerAuthorizationTest#addParticipant_adminAssigningAdmin_returnsForbidden`, `ChatRoomControllerAuthorizationTest#addParticipant_ownerAssigningAdmin_returnsOk`, `ChatRoomControllerAuthorizationTest#addParticipant_nonParticipant_returnsForbidden`
 - AC-002-6: Only the OWNER edits or deletes the room. Deletion is soft, broadcasts a room-deleted event, and members lose access. -> Implemented (CM-028, CM-058). Test: `ChatRoomControllerWebMvcTest#deleteRoom_nonCreator_returns403Problem`, `ChatRoomServiceTest#deleteChatRoomById_creator_softDeletesCleansUpAndBroadcasts`, `RoomMembershipIT#softDelete_activeRoom_hidesRoomAndBlocksJoins`, `SubscriptionRevocationIT#deleteRoom_subscribedMembers_receiveDeletedEventThenNothing`
 - AC-002-7: The OWNER cannot leave (delete or transfer first). A member who leaves loses subscribe and history access immediately. -> Implemented (CM-058). Test: `ChatRoomServiceTest#leaveChatRoomById_creator_throwsException`, `ChatRoomControllerWebMvcTest#leaveRoom_member_returns200`, `SubscriptionRevocationIT#leaveRoom_subscribedMember_stopsReceivingRoomAndTypingFrames`, `SubscriptionRevocationIT#leaveRoom_otherMembers_keepReceivingFrames`, `SubscriptionRevocationIT#leaveRoom_otherSubscriptions_keepWorking`
 - AC-002-8: Membership changes are atomic: under concurrency the member count never exceeds `maxMembers` and no duplicate rows exist. -> Implemented (CM-028, ADR-0005). Test: `RoomMembershipIT#addParticipant_twentyConcurrentJoinsWithCapacityTen_exactlyTenSucceed`, `RoomMembershipIT#addParticipant_sameUserJoiningConcurrently_storesOneMembership`, `ParticipantRepositoryIT#save_duplicateRoomAndUser_rejectedByUniqueIndex`
@@ -45,4 +45,11 @@ docs/design/data-model.md, docs/design/error-handling.md, docs/design/websocket-
 
 ## 9. Open questions
 - Resolved (CM-042): join returns 204 No Content.
-- Ownership transfer is not designed yet.
+- Resolved (SPEC-009): automatic ownership transfer when the owner leaves is v0 (AC-009-24); manual transfer is v1.
+
+## 10. Amendments (2026-10-12, SPEC-009 Approved)
+The ACs above stay as the record of what CM-008/028/058 implemented. They are superseded as follows; the code changes in the named tickets.
+- US-4 / AC-002-5 -> AC-009-1..5 (CM-070): direct add (`POST /rooms/{roomId}/members`) is removed. A PRIVATE room is entered only by an accepted invitation (join requests are v1). Role rules move to AC-009-23 (CM-076): only the OWNER changes roles between ADMIN and MEMBER; nobody grants OWNER.
+- AC-002-6 / AC-002-7 -> AC-009-24, AC-009-25 (CM-076): "the OWNER" is the participant whose `role = OWNER`, not `createdBy`. The owner may leave; the role moves to the earliest-joined ADMIN, else the earliest-joined MEMBER; a sole owner leaving soft-deletes the room.
+- Member removal (SPEC-008 AC-008-6, CM-062): OWNER removes anyone but self; ADMIN removes MEMBERs only. A removed PUBLIC member may rejoin at once in v0 (rejoin cooldown AC-009-26 is v1).
+- US-5: DM rooms are hidden, not deleted (AC-009-21, AC-009-22).

@@ -317,3 +317,59 @@ leases, recovery reconciliation), `PresenceServiceTest` (immutable shared reads,
 fail-open local sessions, unknown heartbeat rejection), `PresenceEventListenerTest`
 (authenticated session identity), `PresenceWebSocketControllerTest` (ignored flags),
 `RedisPresenceSubscriberTest` (fan-out without registry writes).
+
+## Per-user events (SPEC-008 AC-008-1, planned: CM-060)
+Destination `/user/queue/events`, server to client, SUBSCRIBE by any authenticated Principal for its own user destination. The
+`/user/queue/*` SUBSCRIBE allowlist becomes exactly `/user/queue/events` and `/user/queue/errors`. Events go to **every** session of the
+user (`convertAndSendToUser`), unlike private errors (see below). Events are not replayed: after a reconnect the client refetches
+`GET /api/v1/rooms` and `GET /api/v1/online-users`.
+
+Envelope: `{type, payload, occurredAt}` (`occurredAt` ISO-8601 UTC). `room` is the same `ChatRoomResponse` that `GET /rooms` returns for
+that user (with `myRole`, `unreadCount`, `lastMessage`, `state`, `blocked`).
+
+| `type` | `payload` | To | Sent when | Ticket |
+|---|---|---|---|---|
+| `ROOM_ADDED` | `{room}` | the user who entered | create, PUBLIC join, invitation accepted, DM request accepted (recipient) | CM-060, CM-070, CM-072 |
+| `ROOM_REMOVED` | `{roomId, reason}`; `reason` = `LEFT` \| `REMOVED` \| `DELETED` \| `HIDDEN` \| `DECLINED` \| `EXPIRED` | the affected user | leave; removed by owner/admin; room deleted (every member); DM hidden (caller's other sessions); DM request declined or expired (sender) | CM-060, CM-062, CM-072, CM-075 |
+| `ROOM_UPDATED` | `{room}` | every member, or only the affected user | name/description/capacity change (all members); role change or owner transfer (affected user); DM request accepted (sender) | CM-060, CM-072, CM-076 |
+| `ROOM_ACTIVITY` | `{roomId, lastMessage: {id, senderId, senderName, preview, createdAt}}` | every member, after persist | non-SYSTEM message persisted; `preview` <= 100 chars; a member whose `hiddenAt` is cleared by this message receives it too | CM-060, CM-075 |
+| `INVITATION_RECEIVED` | `{invitation: {id, room: {id, name, memberCount}, inviter: {id, name, avatarUrl}, createdAt, expiresAt}}` | invitee | invitation created | CM-070 |
+| `INVITATION_CHANGED` | `{invitationId, roomId, status}` | invitee and inviter | accepted, declined, revoked | CM-070 |
+| `DM_REQUEST_RECEIVED` | `{request: {roomId, sender: {id, name, avatarUrl}, preview, createdAt, expiresAt}}` | recipient (not when a block exists) | DM request created; `preview` is updated by the one allowed message with a second `DM_REQUEST_RECEIVED` for the same `roomId` (client upserts by `roomId`) | CM-072 |
+
+Rules:
+- An event for a room that is not in the client's list makes the client fetch `GET /api/v1/rooms/{id}` once and insert it.
+- Logs never contain `preview` or message content.
+- Publishing goes through one `UserEventPublisher` service so every event type has one place and one test.
+- Cost: one `ROOM_ACTIVITY` per member per message. Accepted for v0; measure before v1 (rooms up to 1000 members).
+
+## Private errors and ordering (SPEC-008 AC-008-15/16, planned: CM-068)
+- `/user/queue/errors` is delivered only to the STOMP session that sent the failing frame (`@SendToUser(broadcast = false)` or a
+  session-targeted header), in `ChatWebSocketController` and `WsRateLimitInterceptor`. `/user/queue/events` stays user-wide.
+- Inbound frames of one session are processed in order (`setPreserveReceiveOrder(true)`), so a SUBSCRIBE sent right before a SEND is
+  registered first.
+- `/app/chat.sendMessage` payload keeps `tempId`; the server stores it as `clientMessageId` and echoes both on the broadcast and in history.
+  A repeated `(roomId, senderId, clientMessageId)` returns and re-broadcasts the stored message. A Resend reuses the failed message's id.
+- Persist and broadcast are separate steps: a broadcast failure after a successful save is logged (without content) and does not send
+  `INTERNAL_ERROR`; the message reaches the room on the next resync.
+- CONNECT while Redis is unavailable gets a STOMP ERROR without the token in the frame or the log (fail closed).
+
+New STOMP error codes (SPEC-009): `DM_REQUEST_PENDING` (second message in a REQUESTED DM by the sender), `FORBIDDEN_ACTION` with the
+generic message "Cannot message this user" (block). Both go to `/user/queue/errors` of the sending session.
+
+## REST endpoints added in v0 (summary)
+Full contracts are in the specs and in OpenAPI (`/v3/api-docs`, dev/local).
+
+| Method and path | Spec | Ticket |
+|---|---|---|
+| `PUT /api/v1/rooms/{roomId}/members/me/read` | AC-008-3 | CM-061 |
+| `GET /api/v1/rooms/{roomId}/members` | AC-008-5 | CM-062 |
+| `DELETE /api/v1/rooms/{roomId}/members/{userId}` | AC-008-6 | CM-062 |
+| `POST /api/v1/rooms/{roomId}/invitations`, `GET /api/v1/rooms/{roomId}/invitations` | AC-009-1, -3 | CM-070 |
+| `GET /api/v1/invitations`, `POST /api/v1/invitations/{id}/accept`, `POST .../decline`, `DELETE /api/v1/invitations/{id}` | AC-009-2, -3 | CM-070 |
+| removed: `POST /api/v1/rooms/{roomId}/members` | AC-009-5 | CM-070 |
+| `GET /api/v1/dm-requests`, `POST /api/v1/rooms/{roomId}/dm-request/accept`, `POST .../dm-request/decline` | AC-009-11, -12 | CM-072 |
+| `PUT` / `DELETE /api/v1/users/{userId}/block`, `GET /api/v1/users/me/blocks` | AC-009-15 | CM-073 |
+| `POST /api/v1/reports` | AC-009-20 | CM-074 |
+| `POST /api/v1/rooms/{roomId}/hide` | AC-009-21 | CM-075 |
+| `PATCH /api/v1/rooms/{roomId}/members/{userId}/role` | AC-009-23 | CM-076 |

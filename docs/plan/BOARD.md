@@ -48,7 +48,38 @@ Updated by master. Status: todo | in-progress | review | changes-requested | mer
 | CM-056 | WebSocket hardening (review F1, F4 server side, NV-4; F3 moved to CM-053) | 2 | master | fix/CM-056-ws-hardening | merged | STOMP SEND rate limit per user+destination in Redis (chat 10/5 s with private RATE_LIMITED error, typing 10/5 s, presence 20/60 s, dropped not thrown); TEXT-only client messages; /app/chat.addUser removed; StompError.code; verify green 274 unit + 42 IT (WsRateLimitIT) | 42447b4 |
 | CM-058 | Server-side STOMP subscription revocation on leave/delete (review F6) | 2 | codex | fix/CM-058-ws-subscription-revocation | merged (2 rounds) | outbound `RoomSubscriptionInterceptor` (beforeHandle, live membership check per room/typing frame, no cache, fail closed); room-deleted event reaches the pre-delete audience via an internal header; round 2 fixed IT CSRF (`csrf().asHeader()`); reviewed by master + claude-w (Opus 5.5, APPROVE); develop gate 326 unit + 60 IT, FE 106 vitest/lint/tsc/build OK | df6a22d |
 
+## MVP v0 (plan: docs/plan/MVP_V0_PLAN.md, specs: SPEC-008, SPEC-009)
+Lanes: BE-core is sequential (060 -> 061 -> 062 -> 076 -> 070 -> 072 -> 075 -> 073 -> 077). Day-one start: CM-060, CM-063, CM-068, CM-074.
+
+| Ticket | Title | Lane | Depends on | Owner | Branch | Status | Verification | Merge commit |
+|---|---|---|---|---|---|---|---|---|
+| CM-060 | Per-user event queue | BE-core | — | | | todo | | |
+| CM-061 | Room activity, read marker, unread count | BE-core | 060 | | | todo | | |
+| CM-062 | Member list, removal, SYSTEM messages | BE-core | 061 | | | todo | | |
+| CM-063 | UI foundation and app shell | FE-A | — | | | todo | | |
+| CM-064 | Real-time sidebar (+ presence snapshot) | FE-A | 060, 061, 063, 068, 069 | | | todo | | |
+| CM-065 | Conversation view (+ U-3..U-8) | FE-B | 062, 063 | | | todo | | |
+| CM-066 | Room dialogs and flows (invite, roles) | FE-A | 062, 064, 070, 076 | | | todo | | |
+| CM-067 | Release v0 | Release | all | master + owner | | todo | | |
+| CM-068 | Realtime robustness (+ W-1, W-2) | BE-side | — | | | todo | | |
+| CM-069 | Auth flows: login redirect, logout | FE-A | 063 | | | todo | | |
+| CM-070 | Invitations (replaces direct add) | BE-core | 062, 076 | | | todo | | |
+| CM-072 | DM requests | BE-core | 070 | | | todo | | |
+| CM-073 | Blocking | BE-core | 070, 072, 075 | | | todo | | |
+| CM-074 | Reports (store only) | BE-side | — | | | todo | | |
+| CM-075 | Hide DMs, DELETE on DM forbidden | BE-core | 072 | | | todo | | |
+| CM-076 | Roles, owner auto-transfer | BE-core | 062 | | | todo | | |
+| CM-077 | "Deleted user" label | BE-core | 062, 073 | | | todo | | |
+| CM-078 | Daily action limits | BE-side | 070, 072, 074 | | | todo | | |
+| CM-079 | Requests inbox (frontend) | FE-B | 064, 065, 070, 072 | | | todo | | |
+| CM-080 | Safety UI: block, report, hide | FE-A | 066, 073, 074, 075 | | | todo | | |
+
+Owner actions O-1..O-6 (secrets, single Render instance, Vercel Node 22.x, backfill dry run, decisions review, docs merge) are listed in the plan.
+
 ## Notes
+- 2026-10-12: v0 decisions D-01..D-23 recorded in `MVP_V0_PLAN.md`; SPEC-001/003/005/006/007/009 Approved, ADR-0006 Accepted. Review
+  follow-up files moved to `docs/audit/REVIEW_*.md` and marked triaged. `WsTokenServiceTest` (6) and `AuthChannelInterceptorTest` (21) verified
+  green; the surefire `.txt` "Tests run: 0" is a `@Nested` reporting artefact.
 - CM-011 is folded into CM-003. CM-006 already aligned the subscriber channel with the publisher ("presence-channel").
 - Step 0: develop created from main at f8a2855. Worktrees: ChatMee-codex, ChatMee-agy, ChatMee-agy2.
 - CM-005c: removed the empty UserProfile.tsx and UsersList.tsx (tsc + build OK).
