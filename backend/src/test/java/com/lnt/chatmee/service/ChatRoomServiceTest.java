@@ -69,6 +69,7 @@ class ChatRoomServiceTest {
     @Mock UserEventPublisher userEvents;
     @Mock DirectMessageRequestService dmRequests;
     @Mock RateLimitingService rateLimitingService;
+    @Mock com.lnt.chatmee.repository.ParticipantRepository participantRepository;
 
     @InjectMocks
     private ChatRoomService chatRoomService;
@@ -264,7 +265,7 @@ class ChatRoomServiceTest {
         User user = User.builder().id("user1").build();
         when(userRepository.findById("user1"))
                 .thenReturn(Optional.of(user));
-        when(participantService.getRoomIdsOfUser("user1")).thenReturn(List.of("room1"));
+        when(participantService.getMemberships("user1")).thenReturn(memberships("user1", "room1"));
 
         ChatRoom room = ChatRoom.builder().id("room1").build();
         when(chatRoomRepository.findByIdInAndIsActiveTrue(List.of("room1")))
@@ -280,7 +281,7 @@ class ChatRoomServiceTest {
     void getList_noMemberships_returnsEmptyWithoutRoomQuery() {
         when(userRepository.findById("user1"))
                 .thenReturn(Optional.of(User.builder().id("user1").build()));
-        when(participantService.getRoomIdsOfUser("user1")).thenReturn(List.of());
+        when(participantService.getMemberships("user1")).thenReturn(List.of());
 
         assertThat(chatRoomService.getList("user1")).isEmpty();
         verifyNoInteractions(chatRoomRepository);
@@ -951,7 +952,7 @@ class ChatRoomServiceTest {
     @Test
     void getList_activityAndCreatedAtFallback_sortsDescending() {
         when(userRepository.findById("user1")).thenReturn(Optional.of(User.builder().id("user1").build()));
-        when(participantService.getRoomIdsOfUser("user1")).thenReturn(List.of("old", "new", "empty"));
+        when(participantService.getMemberships("user1")).thenReturn(memberships("user1", "old", "new", "empty"));
         var time = Instant.parse("2026-10-12T10:00:00Z");
         var old = ChatRoom.builder().id("old").lastActivityAt(time.minusSeconds(10)).build();
         var latest = ChatRoom.builder().id("new").lastActivityAt(time).build();
@@ -970,8 +971,8 @@ class ChatRoomServiceTest {
         when(userRepository.findById("recipient")).thenReturn(Optional.of(User.builder().id("recipient").build()));
         ChatRoom requested = ChatRoom.builder().id("dm").type(ChatRoom.RoomType.DIRECT_MESSAGE)
                 .state(RoomState.REQUESTED).isActive(true).build();
-        when(participantService.getRoomIdsOfUser("sender")).thenReturn(List.of("dm"));
-        when(participantService.getRoomIdsOfUser("recipient")).thenReturn(List.of());
+        when(participantService.getMemberships("sender")).thenReturn(memberships("sender", "dm"));
+        when(participantService.getMemberships("recipient")).thenReturn(List.of());
         when(chatRoomRepository.findByIdInAndIsActiveTrue(List.of("dm"))).thenReturn(List.of(requested));
         when(participantService.getParticipantUserIds(List.of("dm"))).thenReturn(Map.of("dm", Set.of("sender")));
 
@@ -991,5 +992,87 @@ class ChatRoomServiceTest {
         when(participantService.getParticipantUserIds(List.of("old"))).thenReturn(Map.of("old", Set.of("user1")));
 
         assertThat(chatRoomService.toResponse(legacy, "user1").state()).isEqualTo(RoomState.ACTIVE);
+    }
+
+    private static List<Participant> memberships(String userId, String... roomIds) {
+        return java.util.Arrays.stream(roomIds)
+            .map(roomId -> Participant.builder().chatRoomId(roomId).userId(userId).role(Role.MEMBER).build())
+            .toList();
+    }
+
+    // CM-075 AC1: hiding a DM is per user (AC-009-21)
+
+    @Test
+    void hideRoom_directMessage_hidesForCallerOnlyAndNotifiesCallerSessions() {
+        when(userRepository.findById("alice")).thenReturn(Optional.of(User.builder().id("alice").build()));
+        when(chatRoomRepository.findByIdAndIsActiveTrue("dm")).thenReturn(Optional.of(directMessage("dm")));
+        when(participantService.isUserParticipant("dm", "alice")).thenReturn(true);
+        when(participantRepository.hide(eq("dm"), eq("alice"), any(Instant.class))).thenReturn(1L);
+
+        chatRoomService.hideRoom("alice", "dm");
+
+        var order = inOrder(participantRepository, userEvents);
+        order.verify(participantRepository).hide(eq("dm"), eq("alice"), any(Instant.class));
+        order.verify(userEvents).roomRemoved(Set.of("alice"), "dm", "HIDDEN");
+        verifyNoMoreInteractions(participantRepository, userEvents);
+    }
+
+    @Test
+    void getList_roomHiddenByCaller_excludedForCallerOnly() {
+        when(userRepository.findById("alice")).thenReturn(Optional.of(User.builder().id("alice").build()));
+        when(userRepository.findById("bob")).thenReturn(Optional.of(User.builder().id("bob").build()));
+        var hidden = Participant.builder().chatRoomId("dm").userId("alice").role(Role.OWNER)
+            .hiddenAt(Instant.parse("2026-10-12T10:00:00Z")).build();
+        var group = Participant.builder().chatRoomId("group").userId("alice").role(Role.MEMBER).build();
+        when(participantService.getMemberships("alice")).thenReturn(List.of(hidden, group));
+        when(participantService.getMemberships("bob")).thenReturn(memberships("bob", "dm"));
+        when(chatRoomRepository.findByIdInAndIsActiveTrue(List.of("group")))
+            .thenReturn(List.of(ChatRoom.builder().id("group").build()));
+        when(chatRoomRepository.findByIdInAndIsActiveTrue(List.of("dm"))).thenReturn(List.of(directMessage("dm")));
+
+        assertThat(chatRoomService.getList("alice")).extracting(ChatRoom::getId).containsExactly("group");
+        assertThat(chatRoomService.getList("bob")).extracting(ChatRoom::getId).containsExactly("dm");
+    }
+
+    @Test
+    void hideRoom_groupRoom_throwsInvalidRequestWithoutHiding() {
+        when(userRepository.findById("alice")).thenReturn(Optional.of(User.builder().id("alice").build()));
+        when(chatRoomRepository.findByIdAndIsActiveTrue("room1")).thenReturn(Optional.of(
+            ChatRoom.builder().id("room1").type(ChatRoom.RoomType.PRIVATE).isActive(true).build()));
+        when(participantService.isUserParticipant("room1", "alice")).thenReturn(true);
+
+        assertThatThrownBy(() -> chatRoomService.hideRoom("alice", "room1"))
+            .isInstanceOf(InvalidRequestException.class);
+        verifyNoInteractions(participantRepository, userEvents);
+    }
+
+    @Test
+    void hideRoom_nonMember_throwsNotFoundWithoutHiding() {
+        when(userRepository.findById("mallory")).thenReturn(Optional.of(User.builder().id("mallory").build()));
+        when(chatRoomRepository.findByIdAndIsActiveTrue("dm")).thenReturn(Optional.of(directMessage("dm")));
+        when(participantService.isUserParticipant("dm", "mallory")).thenReturn(false);
+
+        assertThatThrownBy(() -> chatRoomService.hideRoom("mallory", "dm"))
+            .isInstanceOf(ChatRoomNotFoundException.class);
+        verifyNoInteractions(participantRepository, userEvents);
+    }
+
+    // CM-075 AC2: a DM cannot be deleted (AC-009-22)
+
+    @Test
+    void deleteChatRoomById_directMessage_throwsForbiddenUseHide() {
+        when(userRepository.findById("alice")).thenReturn(Optional.of(User.builder().id("alice").build()));
+        when(chatRoomRepository.findByIdAndIsActiveTrue("dm")).thenReturn(Optional.of(directMessage("dm")));
+
+        assertThatThrownBy(() -> chatRoomService.deleteChatRoomById("alice", "dm"))
+            .isInstanceOf(ForbiddenActionException.class)
+            .hasMessage("Use hide for direct messages");
+        verify(chatRoomRepository, never()).softDelete(any(), any());
+        verifyNoInteractions(userEvents, messagingTemplate);
+    }
+
+    private static ChatRoom directMessage(String id) {
+        return ChatRoom.builder().id(id).type(ChatRoom.RoomType.DIRECT_MESSAGE).state(RoomState.ACTIVE)
+            .isActive(true).build();
     }
 }

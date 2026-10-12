@@ -32,6 +32,19 @@ public interface ParticipantRepository extends MongoRepository<Participant, Stri
     @Update("{ '$max': { 'lastReadAt': ?2 } }")
     long markRead(String roomId, String userId, Instant now);
 
+    /** Hides the room for this member only (AC-009-21). @return 0 when the user is not a member */
+    @Query("{ 'chatRoomId': ?0, 'userId': ?1 }")
+    @Update("{ '$set': { 'hiddenAt': ?2 } }")
+    long hide(String roomId, String userId, Instant now);
+
+    /**
+     * Conditional unhide (AC-009-21, D-06): clears {@code hiddenAt} only for members who hid the room before
+     * the message was created, so a hide that happens after the message stays in effect.
+     */
+    @Query("{ 'chatRoomId': ?0, 'hiddenAt': { '$lt': ?1 } }")
+    @Update("{ '$unset': { 'hiddenAt': '' } }")
+    long unhideBefore(String roomId, Instant messageCreatedAt);
+
     long countByChatRoomId(String chatRoomId);
 
     /** @return the number of deleted rows (0 or 1 thanks to the unique (chatRoomId, userId) index) */

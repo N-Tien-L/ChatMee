@@ -33,7 +33,8 @@ class ChatWebSocketControllerValidationTest {
     private final UserRepository users = mock(UserRepository.class);
     private final com.lnt.chatmee.service.ParticipantService participants = mock(com.lnt.chatmee.service.ParticipantService.class);
     private final MessageService messages = spy(new MessageService(mock(com.lnt.chatmee.repository.ChatRoomRepository.class), participants, mock(com.lnt.chatmee.repository.MessageRepository.class), users, mock(com.lnt.chatmee.service.UserEventPublisher.class),
-            mock(com.lnt.chatmee.service.DirectMessageRequestService.class)));
+            mock(com.lnt.chatmee.service.DirectMessageRequestService.class),
+            mock(com.lnt.chatmee.repository.ParticipantRepository.class)));
     private final StaticApplicationContext context = new StaticApplicationContext();
     private final OptionalValidatorFactoryBean validator = new OptionalValidatorFactoryBean();
     private SimpAnnotationMethodMessageHandler handler;

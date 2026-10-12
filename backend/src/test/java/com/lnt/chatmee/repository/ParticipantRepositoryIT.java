@@ -3,6 +3,8 @@ package com.lnt.chatmee.repository;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import java.time.Instant;
+
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -65,5 +67,39 @@ class ParticipantRepositoryIT {
 
     private static Participant member(String roomId, String userId) {
         return Participant.builder().chatRoomId(roomId).userId(userId).role(Role.MEMBER).build();
+    }
+
+    // CM-075: hide and the conditional unhide (AC-009-21, D-06)
+
+    @Test
+    void hide_thenUnhideBefore_clearsOnlyRowsHiddenBeforeTheMessage() {
+        Instant hiddenAt = Instant.parse("2026-10-12T10:00:00Z");
+        participantRepository.save(member("dm", "alice"));
+        participantRepository.save(member("dm", "bob"));
+        participantRepository.save(member("other", "alice"));
+
+        assertThat(participantRepository.hide("dm", "alice", hiddenAt)).isEqualTo(1);
+        assertThat(participantRepository.hide("other", "alice", hiddenAt)).isEqualTo(1);
+        assertThat(participantRepository.findByChatRoomIdAndUserId("dm", "bob").orElseThrow().getHiddenAt()).isNull();
+
+        assertThat(participantRepository.unhideBefore("dm", hiddenAt.minusSeconds(1))).isZero();
+        assertThat(participantRepository.findByChatRoomIdAndUserId("dm", "alice").orElseThrow().getHiddenAt())
+                .isEqualTo(hiddenAt);
+
+        assertThat(participantRepository.unhideBefore("dm", hiddenAt.plusSeconds(1))).isEqualTo(1);
+        assertThat(participantRepository.findByChatRoomIdAndUserId("dm", "alice").orElseThrow().getHiddenAt()).isNull();
+        assertThat(participantRepository.findByChatRoomIdAndUserId("other", "alice").orElseThrow().getHiddenAt())
+                .isEqualTo(hiddenAt);
+    }
+
+    @Test
+    void unhideBefore_bothMembersHidden_clearsBoth() {
+        Instant hiddenAt = Instant.parse("2026-10-12T10:00:00Z");
+        participantRepository.save(member("dm", "alice"));
+        participantRepository.save(member("dm", "bob"));
+        participantRepository.hide("dm", "alice", hiddenAt);
+        participantRepository.hide("dm", "bob", hiddenAt);
+
+        assertThat(participantRepository.unhideBefore("dm", hiddenAt.plusSeconds(1))).isEqualTo(2);
     }
 }

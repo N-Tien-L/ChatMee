@@ -192,7 +192,7 @@ Status: Approved (SPEC-009, ADR-0006). Join requests, `room_removals` and mute a
   `lastMessage` that matches only while the REQUESTED room has no `lastMessage`. It runs before the message is saved and is undone
   (`releaseRequestMessage`) if the save fails. `lastMessage.preview` is the request preview. SYSTEM messages never take it.
 
-### participants (new field, CM-075)
+### participants (new field, CM-075 implemented)
 - `hiddenAt` (`Instant`, nullable): DM hidden by this member. A message persisted after it clears it for that member (AC-009-21).
 - `isMuted` exists but stays unused in v0 (mute is v1).
 - The owner is the row with `role = OWNER` (CM-076). `createdBy` on `chat_rooms` stays as history.

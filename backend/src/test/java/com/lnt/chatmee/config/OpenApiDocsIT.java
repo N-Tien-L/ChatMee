@@ -46,7 +46,7 @@ class OpenApiDocsIT {
                 "/api/v1/rooms/{roomId}/invitations", "/api/v1/invitations",
                 "/api/v1/invitations/{id}", "/api/v1/invitations/{id}/accept", "/api/v1/invitations/{id}/decline",
                 "/api/v1/dm-requests", "/api/v1/rooms/{roomId}/dm-request/accept",
-                "/api/v1/rooms/{roomId}/dm-request/decline");
+                "/api/v1/rooms/{roomId}/dm-request/decline", "/api/v1/rooms/{roomId}/hide");
         // AC-009-5: direct add is removed; the members collection is read-only.
         assertThat(paths.path("/api/v1/rooms/{roomId}/members").propertyNames()).containsExactly("get");
         assertThat(paths.path("/api/v1/rooms/{roomId}/invitations").propertyNames()).contains("get", "post");

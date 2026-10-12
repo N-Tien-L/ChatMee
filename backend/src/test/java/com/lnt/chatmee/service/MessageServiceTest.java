@@ -57,6 +57,8 @@ class MessageServiceTest {
 
     @Mock DirectMessageRequestService dmRequests;
 
+    @Mock ParticipantRepository participantRepository;
+
     @InjectMocks
     private MessageService messageService;
 
@@ -538,5 +540,50 @@ class MessageServiceTest {
         return com.lnt.chatmee.model.ChatRoom.builder().id("room1")
                 .type(com.lnt.chatmee.model.ChatRoom.RoomType.DIRECT_MESSAGE)
                 .state(com.lnt.chatmee.model.RoomState.REQUESTED).isActive(true).build();
+    }
+
+    // CM-075 AC1: a message after hiddenAt brings the DM back for the member who hid it (AC-009-21, D-06)
+
+    @Test
+    void sendMessage_persistedText_clearsEarlierHiddenAtBeforeActivity() {
+        var request = new com.lnt.chatmee.dto.request.ChatMessageRequest();
+        request.setRoomId("dm"); request.setContent("hello again");
+        when(participantService.isUserParticipant("dm", "user1")).thenReturn(true);
+        when(participantService.getParticipantUserIds("dm")).thenReturn(Set.of("user1", "user2"));
+        when(messageRepository.save(any())).thenAnswer(call -> call.getArgument(0));
+
+        ChatMessageResponse response = messageService.sendMessage(request, "user1");
+
+        var order = inOrder(messageRepository, participantRepository, userEvents);
+        order.verify(messageRepository).save(any());
+        order.verify(participantRepository).unhideBefore("dm", response.createdAt());
+        order.verify(userEvents).roomActivity(eq(Set.of("user1", "user2")), eq("dm"),
+            any(com.lnt.chatmee.dto.event.LastMessageSummary.class));
+    }
+
+    @Test
+    void sendMessage_unhideFails_returnsSavedMessageAndStillPublishesActivity() {
+        var request = new com.lnt.chatmee.dto.request.ChatMessageRequest();
+        request.setRoomId("dm"); request.setContent("hello again");
+        when(participantService.isUserParticipant("dm", "user1")).thenReturn(true);
+        when(participantService.getParticipantUserIds("dm")).thenReturn(Set.of("user1", "user2"));
+        when(messageRepository.save(any())).thenAnswer(call -> call.getArgument(0));
+        when(participantRepository.unhideBefore(eq("dm"), any())).thenThrow(new DuplicateKeyException("db down"));
+
+        assertThat(messageService.sendMessage(request, "user1").content()).isEqualTo("hello again");
+        verify(userEvents).roomActivity(eq(Set.of("user1", "user2")), eq("dm"),
+            any(com.lnt.chatmee.dto.event.LastMessageSummary.class));
+    }
+
+    @Test
+    void sendMessage_systemMessage_doesNotUnhide() {
+        var request = new com.lnt.chatmee.dto.request.ChatMessageRequest();
+        request.setRoomId("dm"); request.setContent("system"); request.setMessageType(Message.MessageType.SYSTEM);
+        when(participantService.isUserParticipant("dm", "user1")).thenReturn(true);
+        when(messageRepository.save(any())).thenAnswer(call -> call.getArgument(0));
+
+        messageService.sendMessage(request, "user1");
+
+        verifyNoInteractions(participantRepository);
     }
 }
