@@ -13,6 +13,7 @@ import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -23,6 +24,7 @@ import org.springframework.web.bind.annotation.RestController;
 import com.lnt.chatmee.dto.request.CreateChatRoomRequest;
 import com.lnt.chatmee.dto.request.JoinChatRoomRequest;
 import com.lnt.chatmee.dto.request.UpdateChatRoomRequest;
+import com.lnt.chatmee.dto.request.UpdateMemberRoleRequest;
 import com.lnt.chatmee.dto.response.ApiResponse;
 import com.lnt.chatmee.dto.response.MemberResponse;
 import com.lnt.chatmee.dto.response.ChatRoomResponse;
@@ -136,6 +138,15 @@ public class ChatRoomController {
     @DeleteMapping("/{roomId}/members/{userId}")
     public ResponseEntity<Void> removeMember(@CurrentUser UserPrincipal user, @PathVariable String roomId, @PathVariable String userId) {
         participantService.removeMember(roomId, user.userId(), userId);
+        return ResponseEntity.noContent().build();
+    }
+
+    @Operation(summary = "Promote or demote a member between ADMIN and MEMBER (owner only)")
+    @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "204", description = "Role changed")
+    @PatchMapping("/{roomId}/members/{userId}/role")
+    public ResponseEntity<Void> changeMemberRole(@CurrentUser UserPrincipal user, @PathVariable String roomId,
+            @PathVariable String userId, @Validated @RequestBody UpdateMemberRoleRequest request) {
+        participantService.changeMemberRole(roomId, user.userId(), userId, request.role());
         return ResponseEntity.noContent().build();
     }
 

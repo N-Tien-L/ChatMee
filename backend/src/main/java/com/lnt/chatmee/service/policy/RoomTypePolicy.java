@@ -20,6 +20,10 @@ public interface RoomTypePolicy {
         }
     }
 
+    /** Role changes are a group-room feature; direct messages have no roles to change. */
+    default void checkRoleChange() {
+    }
+
     void checkUpdate(UpdateChatRoomRequest request);
     void checkLeave(ChatRoom room, String userId);
     ChatRoom create(CreateChatRoomRequest request, String creatorId, Predicate<String> userExists);

@@ -3,10 +3,12 @@ package com.lnt.chatmee.service;
 import java.time.LocalDateTime;
 import java.time.Instant;
 import java.util.Collection;
+import java.util.Comparator;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -29,6 +31,7 @@ import com.lnt.chatmee.model.Participant;
 import com.lnt.chatmee.model.User;
 import com.lnt.chatmee.model.Participant.Role;
 import com.lnt.chatmee.repository.ChatRoomRepository;
+import com.lnt.chatmee.repository.MessageRepository;
 import com.lnt.chatmee.repository.ParticipantRepository;
 import com.lnt.chatmee.repository.UserRepository;
 import com.lnt.chatmee.util.ValidationUtil;
@@ -50,6 +53,7 @@ public class ParticipantService {
     private final RoomTypePolicyRegistry policies;
     // Resolve on membership changes only: MessageService also uses the membership guard.
     private final ObjectProvider<MessageService> messages;
+    private final MessageRepository messageRepository;
 
     public void createParticipant(String chatRoomId, String userId, Role role) {
         // Validate inputs
@@ -239,6 +243,84 @@ public class ParticipantService {
         }
         userEvents.roomRemoved(Set.of(targetId), roomId, "REMOVED");
         messages.getObject().postSystemMessage(roomId, actorName + " removed " + targetName);
+    }
+
+    public Optional<Participant> findMembership(String roomId, String userId) {
+        return participantRepository.findByChatRoomIdAndUserId(roomId, userId);
+    }
+
+    /** Next owner when the owner leaves: the earliest-joined ADMIN, else the earliest-joined MEMBER (AC-009-24). */
+    public Optional<Participant> findSuccessor(String roomId, String leavingUserId) {
+        List<Participant> others = participantRepository.findByChatRoomId(roomId).stream()
+            .filter(row -> row.getRole() != Role.OWNER && !row.getUserId().equals(leavingUserId))
+            .toList();
+        return earliestJoined(others, Role.ADMIN).or(() -> earliestJoined(others, Role.MEMBER));
+    }
+
+    private static Optional<Participant> earliestJoined(List<Participant> rows, Role role) {
+        return rows.stream()
+            .filter(row -> row.getRole() == role)
+            .min(Comparator.comparing(Participant::getJoinedAt, Comparator.nullsLast(Comparator.naturalOrder()))
+                .thenComparing(Participant::getId, Comparator.nullsLast(Comparator.naturalOrder())));
+    }
+
+    /** Conditional role write: no effect unless the row still has {@code fromRole}. */
+    public boolean changeRoleIfCurrent(String roomId, String userId, Role fromRole, Role toRole) {
+        return participantRepository.updateRoleIfCurrent(roomId, userId, fromRole, toRole) > 0;
+    }
+
+    /** Removes a row only if it still has {@code role}, and gives the seat back when it does. */
+    public boolean removeParticipantIfRole(String roomId, String userId, Role role) {
+        if (participantRepository.deleteByChatRoomIdAndUserIdAndRole(roomId, userId, role) == 0) {
+            return false;
+        }
+        chatRoomRepository.releaseSeat(roomId, LocalDateTime.now());
+        logger.info("Removed participant {} with role {} from room {}", userId, role, roomId);
+        return true;
+    }
+
+    public void announceOwnerTransfer(String roomId, String newOwnerId) {
+        String name = displayName(userRepository.findById(newOwnerId).orElse(null));
+        messages.getObject().postSystemMessage(roomId, name + " is now the owner");
+    }
+
+    /**
+     * Owner-only change between ADMIN and MEMBER (AC-009-23). The caller comes from the authenticated principal;
+     * {@code newRole} is the target role only.
+     */
+    public void changeMemberRole(String roomId, String callerId, String targetId, Role newRole) {
+        ChatRoom room = chatRoomRepository.findByIdAndIsActiveTrue(roomId)
+            .orElseThrow(() -> new ChatRoomNotFoundException("Room membership not found"));
+        Participant actor = participantRepository.findByChatRoomIdAndUserId(roomId, callerId)
+            .orElseThrow(() -> new ChatRoomNotFoundException("Room membership not found"));
+        policies.get(room.getType()).checkRoleChange();
+        if (actor.getRole() != Role.OWNER) {
+            throw new ForbiddenActionException("Only the owner can change member roles");
+        }
+        if (callerId.equals(targetId)) {
+            throw new ForbiddenActionException("The owner cannot change their own role");
+        }
+        if (newRole == Role.OWNER) {
+            throw new InvalidRequestException("The owner role cannot be assigned");
+        }
+        Participant target = participantRepository.findByChatRoomIdAndUserId(roomId, targetId)
+            .orElseThrow(() -> new ChatRoomNotFoundException("Room member not found"));
+        if (target.getRole() == Role.OWNER) {
+            throw new ForbiddenActionException("The owner role cannot be changed");
+        }
+        if (target.getRole() == newRole) {
+            return;
+        }
+        if (!changeRoleIfCurrent(roomId, targetId, target.getRole(), newRole)) {
+            throw new ForbiddenActionException("Member role changed concurrently, retry the request");
+        }
+        String actorName = displayName(userRepository.findById(callerId).orElse(null));
+        String targetName = displayName(userRepository.findById(targetId).orElse(null));
+        messages.getObject().postSystemMessage(roomId,
+            actorName + " made " + targetName + (newRole == Role.ADMIN ? " an admin" : " a member"));
+        long unread = target.getLastReadAt() == null ? 0
+            : messageRepository.countUnread(roomId, targetId, target.getLastReadAt());
+        userEvents.roomUpdated(targetId, ChatRoomResponse.from(room, getParticipantUserIds(roomId), null, unread, newRole));
     }
 
     public void postLeaveMessage(String roomId, String name) {

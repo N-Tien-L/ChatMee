@@ -136,8 +136,8 @@ role assignment checks and atomic capacity reservation/compensation remain in
 
 | Type / policy | Create | Join | Add participant | Update | Leave |
 |---|---|---|---|---|---|
-| PUBLIC / PublicRoomPolicy | Configurable group, one OWNER, default unlimited capacity | Allowed | CM-008 role rules | Editable fields, atomic capacity check | Members may leave; creator denied (403) |
-| PRIVATE / PrivateRoomPolicy | Configurable group, one OWNER, default unlimited capacity | Denied (403) | CM-008 role rules | Editable fields, atomic capacity check | Members may leave; creator denied (403) |
+| PUBLIC / PublicRoomPolicy | Configurable group, one OWNER, default unlimited capacity | Allowed | CM-008 role rules | OWNER or ADMIN (role from participants, CM-076); editable fields, atomic capacity check | Anyone may leave; the OWNER leaving transfers ownership, a sole member deletes the room (AC-009-24) |
+| PRIVATE / PrivateRoomPolicy | Configurable group, one OWNER, default unlimited capacity | Denied (403) | CM-008 role rules | OWNER or ADMIN (CM-076); editable fields, atomic capacity check | Anyone may leave; the OWNER leaving transfers ownership, a sole member deletes the room (AC-009-24) |
 | DIRECT_MESSAGE / DirectRoomPolicy | Existing other user, OWNER + MEMBER, fixed capacity 2; self DM denied (400) | Denied (403) | Denied (403 FORBIDDEN_ACTION) | Capacity changes denied (400); other fields allowed | Denied (403) |
 
 `ParticipantService.isUserParticipant` requires both an active room and a membership
@@ -191,7 +191,8 @@ Status: Approved (SPEC-009, ADR-0006). Join requests, `room_removals` and mute a
 - `isMuted` exists but stays unused in v0 (mute is v1).
 - The owner is the row with `role = OWNER` (CM-076). `createdBy` on `chat_rooms` stays as history.
 - Owner auto-transfer (AC-009-24): pick the earliest `joinedAt` ADMIN, else the earliest MEMBER (tie-break `_id`), update that row to
-  `OWNER` with a conditional update (`role != OWNER`), then delete the leaving owner's row and release the seat.
+  `OWNER` with a conditional update (still the role it was read with), then delete the leaving owner's row with a conditional delete
+  (`role = OWNER`) and release the seat. If that delete finds no row, the promotion is reverted so one OWNER remains. Implemented in CM-076.
 
 ### membership_requests (new, CM-070 and CM-072)
 | Field | Notes |

@@ -1,5 +1,6 @@
 package com.lnt.chatmee.service;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
@@ -259,6 +260,35 @@ class ParticipantServiceTest {
         assertFalse(service.isUserParticipant("room", "actor"));
     }
 
+    @Test
+    void findSuccessor_adminsAndMembers_picksEarliestJoinedAdmin() {
+        when(participants.findByChatRoomId("room")).thenReturn(List.of(
+            member("owner", Role.OWNER, 1), member("m1", Role.MEMBER, 2),
+            member("a2", Role.ADMIN, 4), member("a1", Role.ADMIN, 3)));
+
+        assertThat(service.findSuccessor("room", "owner")).map(Participant::getUserId).contains("a1");
+    }
+
+    @Test
+    void findSuccessor_onlyMembersLeft_picksEarliestJoinedMember() {
+        when(participants.findByChatRoomId("room")).thenReturn(List.of(
+            member("owner", Role.OWNER, 1), member("m2", Role.MEMBER, 5), member("m1", Role.MEMBER, 2)));
+
+        assertThat(service.findSuccessor("room", "owner")).map(Participant::getUserId).contains("m1");
+    }
+
+    @Test
+    void findSuccessor_soleOwner_returnsEmpty() {
+        when(participants.findByChatRoomId("room")).thenReturn(List.of(member("owner", Role.OWNER, 1)));
+
+        assertThat(service.findSuccessor("room", "owner")).isEmpty();
+    }
+
+    private static Participant member(String userId, Role role, int joinedMinute) {
+        return Participant.builder().chatRoomId("room").userId(userId).role(role)
+            .joinedAt(java.time.LocalDateTime.of(2026, 10, 1, 10, joinedMinute)).build();
+    }
+
     private void actor(Role role) {
         joinUser();
         when(participants.findByChatRoomIdAndUserId("room", "actor"))
@@ -369,6 +399,9 @@ class ParticipantServiceTest {
         when(participants.deleteByChatRoomIdAndUserId("room", "alice")).thenReturn(1L);
         var chatRooms = new ChatRoomService(rooms, users, repository, userEvents, service,
             mock(org.springframework.messaging.simp.SimpMessagingTemplate.class), policies);
+        when(participants.findByChatRoomIdAndUserId("room", "alice"))
+            .thenReturn(Optional.of(Participant.builder().role(Role.MEMBER).build()));
+        when(participants.deleteByChatRoomIdAndUserIdAndRole("room", "alice", Role.MEMBER)).thenReturn(1L);
         chatRooms.leaveChatRoomById("alice", "room");
         when(participants.findByChatRoomIdAndUserId("room", "bob"))
             .thenReturn(Optional.of(Participant.builder().role(Role.OWNER).build()));

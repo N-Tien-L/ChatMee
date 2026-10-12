@@ -42,6 +42,7 @@ class ChatRoomControllerAuthorizationTest {
     @MockitoBean ChatRoomRepository rooms;
     @MockitoBean UserRepository users;
     @MockitoBean ParticipantRepository participants;
+    @MockitoBean com.lnt.chatmee.repository.MessageRepository messageRepository;
 
     @BeforeEach
     void setUp() {
@@ -162,6 +163,55 @@ class ChatRoomControllerAuthorizationTest {
     void removeMember_unknownTarget_returns404() throws Exception { remove(Role.OWNER, null, RoomType.PUBLIC, "target", 404); }
     @Test
     void removeMember_nonMemberCaller_returns404() throws Exception { remove(null, Role.MEMBER, RoomType.PUBLIC, "target", 404); }
+
+    @Test
+    void roleChange_ownerPromotesMemberToAdmin_returns204() throws Exception { roleChange(Role.OWNER, Role.MEMBER, RoomType.PUBLIC, "target", "{\"role\":\"ADMIN\"}", 204); }
+    @Test
+    void roleChange_ownerDemotesAdminToMember_returns204() throws Exception { roleChange(Role.OWNER, Role.ADMIN, RoomType.PRIVATE, "target", "{\"role\":\"MEMBER\"}", 204); }
+    @Test
+    void roleChange_adminCaller_returns403() throws Exception { roleChange(Role.ADMIN, Role.MEMBER, RoomType.PUBLIC, "target", "{\"role\":\"ADMIN\"}", 403); }
+    @Test
+    void roleChange_memberCaller_returns403() throws Exception { roleChange(Role.MEMBER, Role.MEMBER, RoomType.PUBLIC, "target", "{\"role\":\"ADMIN\"}", 403); }
+    @Test
+    void roleChange_ownerTargetingSelf_returns403() throws Exception { roleChange(Role.OWNER, Role.OWNER, RoomType.PUBLIC, "actor", "{\"role\":\"MEMBER\"}", 403); }
+    @Test
+    void roleChange_targetIsOwner_returns403() throws Exception { roleChange(Role.OWNER, Role.OWNER, RoomType.PUBLIC, "target", "{\"role\":\"MEMBER\"}", 403); }
+    @Test
+    void roleChange_ownerRoleInBody_returns400() throws Exception { roleChange(Role.OWNER, Role.MEMBER, RoomType.PUBLIC, "target", "{\"role\":\"OWNER\"}", 400); }
+    @Test
+    void roleChange_unknownRoleValue_returns400() throws Exception { roleChange(Role.OWNER, Role.MEMBER, RoomType.PUBLIC, "target", "{\"role\":\"SUPERUSER\"}", 400); }
+    @Test
+    void roleChange_directRoom_returns403() throws Exception { roleChange(Role.OWNER, Role.MEMBER, RoomType.DIRECT_MESSAGE, "target", "{\"role\":\"ADMIN\"}", 403); }
+    @Test
+    void roleChange_unknownTarget_returns404() throws Exception { roleChange(Role.OWNER, null, RoomType.PUBLIC, "target", "{\"role\":\"ADMIN\"}", 404); }
+    @Test
+    void roleChange_nonMemberCaller_returns404() throws Exception { roleChange(null, Role.MEMBER, RoomType.PUBLIC, "target", "{\"role\":\"ADMIN\"}", 404); }
+
+    private void roleChange(Role actorRole, Role targetRole, RoomType type, String target, String body, int expected) throws Exception {
+        // createdBy deliberately names the caller: only the participant role may grant a role change.
+        when(rooms.findByIdAndIsActiveTrue("room")).thenReturn(Optional.of(ChatRoom.builder()
+            .id("room").createdBy("actor").type(type).isActive(true).build()));
+        if (actorRole != null) actor(actorRole);
+        if (targetRole != null && !target.equals("actor"))
+            when(participants.findByChatRoomIdAndUserId("room", target)).thenReturn(Optional.of(Participant.builder().userId(target).role(targetRole).build()));
+        if (expected == 204) {
+            when(participants.updateRoleIfCurrent("room", target, targetRole, body.contains("ADMIN") ? Role.ADMIN : Role.MEMBER)).thenReturn(1L);
+            when(users.findById(target)).thenReturn(Optional.of(User.builder().id(target).name("Target").build()));
+        }
+        mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch("/api/v1/rooms/room/members/" + target + "/role")
+            .with(oauth2Login().oauth2User(com.lnt.chatmee.support.TestUsers.principal("actor"))).with(csrf())
+            .contentType(MediaType.APPLICATION_JSON).content(body))
+            .andExpect(status().is(expected));
+        if (expected == 204) {
+            verify(participants).updateRoleIfCurrent(eq("room"), eq(target), eq(targetRole), any());
+            verify(messageService).postSystemMessage(eq("room"), any());
+            verify(userEvents).roomUpdated(eq(target), any());
+        } else {
+            verify(participants, never()).updateRoleIfCurrent(any(), any(), any(), any());
+            verify(messageService, never()).postSystemMessage(any(), any());
+            verifyNoInteractions(userEvents);
+        }
+    }
 
     private void remove(Role actorRole, Role targetRole, RoomType type, String target, int expected) throws Exception {
         // createdBy deliberately differs: the participant role controls authorization.

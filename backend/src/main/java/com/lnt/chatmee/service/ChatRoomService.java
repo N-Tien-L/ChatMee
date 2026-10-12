@@ -35,6 +35,7 @@ import com.lnt.chatmee.exception.UnauthorizedRoomActionException;
 import com.lnt.chatmee.exception.UserNotFoundException;
 import com.lnt.chatmee.model.ChatRoom;
 import com.lnt.chatmee.model.Message;
+import com.lnt.chatmee.model.Participant.Role;
 import com.lnt.chatmee.model.User;
 import com.lnt.chatmee.service.policy.RoomTypePolicy;
 import com.lnt.chatmee.service.policy.RoomTypePolicyRegistry;
@@ -57,6 +58,9 @@ public class ChatRoomService {
     static final int MAX_PAGE_SIZE = 50;
 
     static final String ROOM_DELETED_MESSAGE = "This room has been deleted";
+
+    /** Bounded retries when a concurrent role change or leave moves the caller's membership mid-leave. */
+    private static final int LEAVE_ATTEMPTS = 5;
 
     private static final Logger logger = LoggerFactory.getLogger(ChatRoomService.class);
 
@@ -166,12 +170,21 @@ public class ChatRoomService {
         // Validate IDs
         ValidationUtil.validateId(roomId, "Room ID");
 
-        ChatRoom room = findById(roomId);
+        findById(roomId);
 
-        if (!room.getCreatedBy().equals(authenticatedUser.getId())) {
-            throw new UnauthorizedRoomActionException("Only room creator can delete the room");
+        if (roleOf(roomId, authenticatedUser.getId()) != Role.OWNER) {
+            throw new UnauthorizedRoomActionException("Only the owner can delete the room");
         }
 
+        softDeleteRoom(roomId, authenticatedUser);
+    }
+
+    /** Participant role of the user in the room, or null when the user is not a member (AC-009-25). */
+    private Role roleOf(String roomId, String userId) {
+        return participantService.findMembership(roomId, userId).map(Participant::getRole).orElse(null);
+    }
+
+    private void softDeleteRoom(String roomId, User actor) {
         Set<String> deletedRecipients = Set.copyOf(participantService.getParticipantUserIds(roomId));
         if (chatRoomRepository.softDelete(roomId, LocalDateTime.now()) == 0) {
             throw new ChatRoomNotFoundException("Can't find chat room with id: " + roomId);
@@ -183,7 +196,7 @@ public class ChatRoomService {
         Instant now = Instant.now();
         Message deletionMessage = Message.builder()
             .chatRoomId(roomId)
-            .senderId(authenticatedUser.getId())
+            .senderId(actor.getId())
             .content(ROOM_DELETED_MESSAGE)
             .type(Message.MessageType.SYSTEM)
             .createdAt(now)
@@ -195,9 +208,9 @@ public class ChatRoomService {
         headers.setHeader(RoomSubscriptionInterceptor.ROOM_DELETED_RECIPIENTS_HEADER, deletedRecipients);
         headers.setLeaveMutable(true);
         messagingTemplate.convertAndSend("/topic/rooms/" + roomId,
-                ChatMessageResponse.from(deletionMessage, authenticatedUser.getName(), null), headers.getMessageHeaders());
+                ChatMessageResponse.from(deletionMessage, actor.getName(), null), headers.getMessageHeaders());
 
-        logger.info("Room {} soft-deleted by user {}, {} memberships removed", roomId, authenticatedUser.getId(), removed);
+        logger.info("Room {} soft-deleted by user {}, {} memberships removed", roomId, actor.getId(), removed);
     }
 
     public List<ChatRoom> getList(String userId) {
@@ -244,8 +257,9 @@ public class ChatRoomService {
 
         ChatRoom room = getRoomOfMember(roomId, authenticatedUser.getId());
 
-        if(!room.getCreatedBy().equals(authenticatedUser.getId())) {
-            throw new UnauthorizedRoomActionException("Only room creator can update the room");
+        Role role = roleOf(roomId, authenticatedUser.getId());
+        if (role != Role.OWNER && role != Role.ADMIN) {
+            throw new UnauthorizedRoomActionException("Only the owner or an admin can update the room");
         }
 
         policies.get(room.getType()).checkUpdate(request);
@@ -282,12 +296,53 @@ public class ChatRoomService {
 
         policies.get(room.getType()).checkLeave(room, authenticatedUser.getId());
 
-        if (!participantService.removeParticipant(roomId, authenticatedUser.getId())) {
-            throw new UnauthorizedRoomActionException("User is not a participant of this room");
+        // The membership is re-read on every attempt: a concurrent role change or leave may have moved it (ADR-0005).
+        for (int attempt = 0; attempt < LEAVE_ATTEMPTS; attempt++) {
+            Participant membership = participantService.findMembership(roomId, authenticatedUser.getId())
+                .orElseThrow(() -> new UnauthorizedRoomActionException("User is not a participant of this room"));
+            boolean left = membership.getRole() == Role.OWNER
+                ? leaveAsOwner(room, authenticatedUser)
+                : leaveAsMember(room, authenticatedUser, membership.getRole());
+            if (left) {
+                logger.info("User {} successfully left room {}", authenticatedUser.getId(), roomId);
+                return;
+            }
         }
+        throw new UnauthorizedRoomActionException("Room membership changed concurrently, retry the request");
+    }
 
-        userEvents.roomRemoved(Set.of(authenticatedUser.getId()), roomId, "LEFT");
-        participantService.postLeaveMessage(roomId, authenticatedUser.getName());
-        logger.info("User {} successfully left room {}", authenticatedUser.getId(), roomId);
+    private boolean leaveAsMember(ChatRoom room, User leaver, Role role) {
+        if (!participantService.removeParticipantIfRole(room.getId(), leaver.getId(), role)) {
+            return false;
+        }
+        userEvents.roomRemoved(Set.of(leaver.getId()), room.getId(), "LEFT");
+        participantService.postLeaveMessage(room.getId(), leaver.getName());
+        return true;
+    }
+
+    /**
+     * The owner's successor is promoted before the owner row is removed (AC-009-24). If the owner row is already
+     * gone, the promotion is reverted so exactly one OWNER remains. A sole owner soft-deletes the room.
+     */
+    private boolean leaveAsOwner(ChatRoom room, User leaver) {
+        Optional<Participant> successor = participantService.findSuccessor(room.getId(), leaver.getId());
+        if (successor.isEmpty()) {
+            softDeleteRoom(room.getId(), leaver);
+            return true;
+        }
+        String successorId = successor.get().getUserId();
+        Role successorRole = successor.get().getRole();
+        if (!participantService.changeRoleIfCurrent(room.getId(), successorId, successorRole, Role.OWNER)) {
+            return false;
+        }
+        if (!participantService.removeParticipantIfRole(room.getId(), leaver.getId(), Role.OWNER)) {
+            participantService.changeRoleIfCurrent(room.getId(), successorId, Role.OWNER, successorRole);
+            return false;
+        }
+        userEvents.roomRemoved(Set.of(leaver.getId()), room.getId(), "LEFT");
+        participantService.postLeaveMessage(room.getId(), leaver.getName());
+        participantService.announceOwnerTransfer(room.getId(), successorId);
+        userEvents.roomUpdated(successorId, toResponse(room, successorId));
+        return true;
     }
 }
