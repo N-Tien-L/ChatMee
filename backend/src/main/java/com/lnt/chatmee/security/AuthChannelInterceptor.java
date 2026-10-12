@@ -85,7 +85,8 @@ public class AuthChannelInterceptor implements ChannelInterceptor {
     }
 
     private void authorizeSubscription(String destination, String userId) {
-        if ("/topic/presence".equals(destination) || "/user/queue/errors".equals(destination)) {
+        if ("/topic/presence".equals(destination) || "/user/queue/errors".equals(destination)
+                || "/user/queue/events".equals(destination)) {
             return;
         }
         if (destination != null && destination.startsWith(ROOM_TOPIC_PREFIX)) {

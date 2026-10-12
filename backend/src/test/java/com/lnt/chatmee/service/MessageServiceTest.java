@@ -53,6 +53,8 @@ class MessageServiceTest {
     @Mock
     private UserRepository userRepository;
 
+    @Mock UserEventPublisher userEvents;
+
     @InjectMocks
     private MessageService messageService;
 
@@ -347,6 +349,43 @@ class MessageServiceTest {
         converter.setCustomConversions(conversions);
         converter.afterPropertiesSet();
         return converter;
+    }
+
+
+    @Test
+    void sendMessage_persistedText_publishesActivityToMembersAfterSave() {
+        var request = new com.lnt.chatmee.dto.request.ChatMessageRequest();
+        request.setRoomId("room1"); request.setContent("private preview");
+        when(participantService.isUserParticipant("room1", "user1")).thenReturn(true);
+        when(participantService.getParticipantUserIds("room1")).thenReturn(Set.of("user1", "user2"));
+        when(messageRepository.save(any())).thenAnswer(call -> call.getArgument(0));
+        ChatMessageResponse response = messageService.sendMessage(request, "user1");
+        var order = inOrder(messageRepository, userEvents);
+        order.verify(messageRepository).save(any());
+        order.verify(userEvents).roomActivity(Set.of("user1", "user2"), response);
+        verifyNoMoreInteractions(userEvents);
+    }
+
+    @Test
+    void sendMessage_systemMessage_publishesNoActivity() {
+        var request = new com.lnt.chatmee.dto.request.ChatMessageRequest();
+        request.setRoomId("room1"); request.setContent("system"); request.setMessageType(Message.MessageType.SYSTEM);
+        when(participantService.isUserParticipant("room1", "user1")).thenReturn(true);
+        when(messageRepository.save(any())).thenAnswer(call -> call.getArgument(0));
+        messageService.sendMessage(request, "user1");
+        verifyNoInteractions(userEvents);
+        verify(participantService, never()).getParticipantUserIds(anyString());
+    }
+
+    @Test
+    void sendMessage_saveFails_publishesNoActivity() {
+        var request = new com.lnt.chatmee.dto.request.ChatMessageRequest();
+        request.setRoomId("room1"); request.setContent("private preview");
+        when(participantService.isUserParticipant("room1", "user1")).thenReturn(true);
+        when(messageRepository.save(any())).thenThrow(new org.springframework.dao.DataAccessResourceFailureException("offline"));
+        assertThatThrownBy(() -> messageService.sendMessage(request, "user1"))
+            .isInstanceOf(com.lnt.chatmee.exception.DatabaseOperationException.class);
+        verifyNoInteractions(userEvents);
     }
 
 }

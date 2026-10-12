@@ -338,7 +338,11 @@ CM-068 regression coverage:
 - `stompSession.test.ts`: 401 from the token request stops retries; jitter stays within the capped backoff.
 - `messageUtils.resync.test.ts`, `useRoomMessage.test.ts`, `messageReducer.resend.test.ts`: resync matches by client id; Resend reuses the id; new sends get distinct ids.
 
-## Per-user events (SPEC-008 AC-008-1, planned: CM-060)
+## Per-user events (SPEC-008 AC-008-1, CM-060 implemented)
+CM-060 implements the queue, create/PUBLIC join, leave/delete, editable room updates and non-SYSTEM activity.
+It uses the current `ChatRoomResponse`; activity/read fields and SPEC-009 extensions remain with the later tickets in the table.
+New DMs notify both initial members with their respective room views. Unchanged name/description/capacity emits no update event.
+Delivery failures log metadata only and do not stop other recipients; clients recover missed events by refetching after reconnect.
 Destination `/user/queue/events`, server to client, SUBSCRIBE by any authenticated Principal for its own user destination. The
 `/user/queue/*` SUBSCRIBE allowlist becomes exactly `/user/queue/events` and `/user/queue/errors`. Events go to **every** session of the
 user (`convertAndSendToUser`), unlike private errors (see below). Events are not replayed: after a reconnect the client refetches

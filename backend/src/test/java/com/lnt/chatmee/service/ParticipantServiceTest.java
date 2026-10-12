@@ -35,6 +35,8 @@ class ParticipantServiceTest {
     @Mock ChatRoomRepository rooms;
     @Spy RoomTypePolicyRegistry policies = new RoomTypePolicyRegistry(List.of(
         new PublicRoomPolicy(), new PrivateRoomPolicy(), new DirectRoomPolicy()));
+    @Mock UserEventPublisher userEvents;
+
     @InjectMocks ParticipantService service;
     private ChatRoom room;
 
@@ -48,7 +50,10 @@ class ParticipantServiceTest {
     void joinRoom_publicRoom_addsMember() {
         joinUser();
         targetAndRoom("actor");
+        when(participants.findByChatRoomId("room")).thenReturn(List.of(Participant.builder().userId("actor").build()));
         service.joinRoom("room", "actor");
+        verify(userEvents).roomAdded(eq("actor"), argThat(r -> r.id().equals("room") && r.participants().equals(Set.of("actor"))));
+        verifyNoMoreInteractions(userEvents);
         verify(participants).save(argThat(p -> p.getUserId().equals("actor") && p.getRole() == Role.MEMBER));
         verify(rooms).reserveSeat(eq("room"), any());
         verify(rooms, never()).save(any());

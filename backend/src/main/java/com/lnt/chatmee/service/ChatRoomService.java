@@ -3,6 +3,7 @@ package com.lnt.chatmee.service;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Optional;
+import java.util.Objects;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -58,6 +59,7 @@ public class ChatRoomService {
 
     private final ChatRoomRepository chatRoomRepository;
     private final UserRepository userRepository;
+    private final UserEventPublisher userEvents;
     private final ParticipantService participantService;
     private final SimpMessagingTemplate messagingTemplate;
     private final RoomTypePolicyRegistry policies;
@@ -81,7 +83,12 @@ public class ChatRoomService {
             participantService.createParticipant(room.getId(), id, role));
         logger.info("Created {} room: {} with creator: {}", room.getType(), room.getId(), authenticatedUser.getId());
 
-        return toResponse(room, authenticatedUser.getId());
+        ChatRoomResponse response = toResponse(room, authenticatedUser.getId());
+        userEvents.roomAdded(authenticatedUser.getId(), response);
+        policy.initialMembers(request, authenticatedUser.getId()).keySet().stream()
+            .filter(id -> !id.equals(authenticatedUser.getId()))
+            .forEach(id -> userEvents.roomAdded(id, toResponse(room, id)));
+        return response;
     }
 
     /** The caller's active DM with the request's participant, if one exists (one DM per pair, SPEC-003). */
@@ -158,6 +165,8 @@ public class ChatRoomService {
             throw new ChatRoomNotFoundException("Can't find chat room with id: " + roomId);
         }
         long removed = participantService.removeAllParticipants(roomId);
+
+        userEvents.roomRemoved(deletedRecipients, roomId, "DELETED");
 
         Instant now = Instant.now();
         Message deletionMessage = Message.builder()
@@ -241,7 +250,14 @@ public class ChatRoomService {
             throw new InvalidRequestException("Max users cannot be less than current participants");
         }
 
-        return findById(roomId);
+        ChatRoom updatedRoom = findById(roomId);
+        if (!Objects.equals(room.getName(), name) || !Objects.equals(room.getDescription(), description)
+                || room.getMaxParticipants() != maxParticipants) {
+            for (String memberId : participantService.getParticipantUserIds(roomId)) {
+                userEvents.roomUpdated(memberId, toResponse(updatedRoom, memberId));
+            }
+        }
+        return updatedRoom;
     }
 
     public void leaveChatRoomById(String userId, String roomId) {
@@ -256,6 +272,7 @@ public class ChatRoomService {
             throw new UnauthorizedRoomActionException("User is not a participant of this room");
         }
 
+        userEvents.roomRemoved(Set.of(authenticatedUser.getId()), roomId, "LEFT");
         logger.info("User {} successfully left room {}", authenticatedUser.getId(), roomId);
     }
 }

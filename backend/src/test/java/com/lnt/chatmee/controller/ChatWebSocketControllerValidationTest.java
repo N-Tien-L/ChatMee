@@ -32,7 +32,7 @@ class ChatWebSocketControllerValidationTest {
     private final SimpMessagingTemplate messaging = mock(SimpMessagingTemplate.class);
     private final UserRepository users = mock(UserRepository.class);
     private final com.lnt.chatmee.service.ParticipantService participants = mock(com.lnt.chatmee.service.ParticipantService.class);
-    private final MessageService messages = spy(new MessageService(mock(com.lnt.chatmee.repository.ChatRoomRepository.class), participants, mock(com.lnt.chatmee.repository.MessageRepository.class), users));
+    private final MessageService messages = spy(new MessageService(mock(com.lnt.chatmee.repository.ChatRoomRepository.class), participants, mock(com.lnt.chatmee.repository.MessageRepository.class), users, mock(com.lnt.chatmee.service.UserEventPublisher.class)));
     private final StaticApplicationContext context = new StaticApplicationContext();
     private final OptionalValidatorFactoryBean validator = new OptionalValidatorFactoryBean();
     private SimpAnnotationMethodMessageHandler handler;
