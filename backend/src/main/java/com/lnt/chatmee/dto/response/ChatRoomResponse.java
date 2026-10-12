@@ -7,6 +7,7 @@ import java.time.ZoneId;
 import com.fasterxml.jackson.annotation.JsonFormat;
 import com.lnt.chatmee.dto.event.LastMessageSummary;
 import com.lnt.chatmee.model.Participant.Role;
+import com.lnt.chatmee.model.RoomState;
 import java.util.Set;
 
 import com.lnt.chatmee.model.ChatRoom.RoomSettings;
@@ -31,7 +32,9 @@ public record ChatRoomResponse(
     @JsonFormat(shape = JsonFormat.Shape.STRING) Instant lastActivityAt,
     LastMessageSummary lastMessage,
     long unreadCount,
-    Role myRole
+    Role myRole,
+    /** ACTIVE, or REQUESTED for a DM waiting for the recipient (shown to the sender only, AC-009-11). */
+    RoomState state
 ) {
     public static ChatRoomResponse from(com.lnt.chatmee.model.ChatRoom room, Set<String> participants) {
         return from(room, participants, null);
@@ -51,6 +54,7 @@ public record ChatRoomResponse(
             UserSummaryResponse counterpart, long unreadCount, Role myRole) {
         return new ChatRoomResponse(room.getId(), room.getName(), room.getType(), room.getDescription(),
                 room.getCreatedBy(), room.getCreatedAt(), room.getLastActivity(), room.getMaxParticipants(),
-                room.getSettings(), participants, counterpart, activityAt(room), room.getLastMessage(), unreadCount, myRole);
+                room.getSettings(), participants, counterpart, activityAt(room), room.getLastMessage(), unreadCount, myRole,
+                room.getState());
     }
 }

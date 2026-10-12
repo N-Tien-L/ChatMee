@@ -66,6 +66,23 @@ class UserEventPublisherTest {
     }
 
     @Test
+    void dmRequestReceived_recipient_deliversRequestPayload() {
+        var publisher = new UserEventPublisher(messaging);
+        var request = new com.lnt.chatmee.dto.response.DmRequestResponse("dm",
+            new com.lnt.chatmee.dto.response.UserSummaryResponse("alice", "Alice", null), "hi", Instant.EPOCH,
+            Instant.EPOCH);
+        publisher.dmRequestReceived("bob", request);
+        var events = ArgumentCaptor.forClass(UserEvent.class);
+        verify(messaging).convertAndSendToUser(eq("bob"), eq("/queue/events"), events.capture());
+        verifyNoMoreInteractions(messaging);
+        assertThat(events.getValue().type()).isEqualTo("DM_REQUEST_RECEIVED");
+        assertThat(events.getValue().payload()).isEqualTo(Map.of("request", request));
+        var json = new tools.jackson.databind.json.JsonMapper().writeValueAsString(events.getValue());
+        assertThat(json).contains("\"type\":\"DM_REQUEST_RECEIVED\"", "\"roomId\":\"dm\"",
+            "\"createdAt\":\"1970-01-01T00:00:00Z\"");
+    }
+
+    @Test
     void roomActivity_textMessage_sendsBoundedPreviewToEveryMemberOnly() {
         var publisher = new UserEventPublisher(messaging);
         var message = ChatMessageResponse.builder().id("saved").chatRoomId("room").senderId("alice")

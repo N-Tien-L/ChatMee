@@ -295,7 +295,8 @@ class ParticipantServiceTest {
     @Test
     void postSystemMessage_membershipText_persistsBeforeBroadcastWithoutActivity() {
         var messages = mock(com.lnt.chatmee.repository.MessageRepository.class);
-        var messageService = new MessageService(rooms, service, messages, users, userEvents);
+        var messageService = new MessageService(rooms, service, messages, users, userEvents,
+            mock(DirectMessageRequestService.class));
         when(messages.save(any())).thenAnswer(call -> call.getArgument(0));
         for (String text : List.of("Alice joined", "Alice left", "Bob removed Alice")) {
             var result = messageService.postSystemMessage("room", text);
@@ -315,7 +316,8 @@ class ParticipantServiceTest {
     void membershipChanges_joinLeaveRemove_persistAndBroadcastSystemMessagesWithoutActivity() {
         var repository = mock(com.lnt.chatmee.repository.MessageRepository.class);
         when(repository.save(any())).thenAnswer(call -> call.getArgument(0));
-        when(messages.getObject()).thenReturn(new MessageService(rooms, service, repository, users, userEvents));
+        when(messages.getObject()).thenReturn(new MessageService(rooms, service, repository, users, userEvents,
+            mock(DirectMessageRequestService.class)));
         room.setCreatedBy("former-owner");
         when(rooms.findByIdAndIsActiveTrue("room")).thenReturn(Optional.of(room));
         when(users.findById("alice")).thenReturn(Optional.of(User.builder().id("alice").name("Alice").build()));
@@ -324,7 +326,8 @@ class ParticipantServiceTest {
         when(participants.existsByChatRoomIdAndUserId("room", "alice")).thenReturn(true);
         when(participants.deleteByChatRoomIdAndUserId("room", "alice")).thenReturn(1L);
         var chatRooms = new ChatRoomService(rooms, users, repository, userEvents, service,
-            mock(org.springframework.messaging.simp.SimpMessagingTemplate.class), policies);
+            mock(org.springframework.messaging.simp.SimpMessagingTemplate.class), policies,
+            mock(DirectMessageRequestService.class));
         when(participants.findByChatRoomIdAndUserId("room", "alice"))
             .thenReturn(Optional.of(Participant.builder().role(Role.MEMBER).build()));
         when(participants.deleteByChatRoomIdAndUserIdAndRole("room", "alice", Role.MEMBER)).thenReturn(1L);

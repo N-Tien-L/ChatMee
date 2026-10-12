@@ -180,11 +180,17 @@ Status: Approved design, implemented by the tickets named below.
 ## Consent, requests, blocks and reports (SPEC-009, v0 scope)
 Status: Approved (SPEC-009, ADR-0006). Join requests, `room_removals` and mute are v1 (D-02, D-03).
 
-### chat_rooms (new field, CM-072)
+### chat_rooms (new field, CM-072 implemented)
 - `state`: `ACTIVE` (default; a missing field reads as `ACTIVE`, so no backfill) | `REQUESTED` (DM waiting for the recipient).
   `isActive` stays the soft-delete flag.
 - `memberKey` remains set for `REQUESTED` and `ACTIVE` DMs, so one DM per pair is enforced by the existing unique sparse index.
   Decline and expiry clear it (as soft delete does today).
+- CM-072: `ChatRoom.getState()` returns `ACTIVE` for a missing field. A DM is created `REQUESTED` with `memberCount` 1 and only the
+  sender's row; accept reserves the recipient's seat (`reserveSeat`) and then sets `ACTIVE` with a conditional update
+  (`activateRequested`). Decline and expiry use `softDeleteRequested`, which only matches a room that is still `REQUESTED`.
+- The sender's one request message (AC-009-10) is enforced by `claimRequestMessage`: a conditional `$set` of `lastActivityAt` and
+  `lastMessage` that matches only while the REQUESTED room has no `lastMessage`. It runs before the message is saved and is undone
+  (`releaseRequestMessage`) if the save fails. `lastMessage.preview` is the request preview. SYSTEM messages never take it.
 
 ### participants (new field, CM-075)
 - `hiddenAt` (`Instant`, nullable): DM hidden by this member. A message persisted after it clears it for that member (AC-009-21).
@@ -194,7 +200,7 @@ Status: Approved (SPEC-009, ADR-0006). Join requests, `room_removals` and mute a
   `OWNER` with a conditional update (still the role it was read with), then delete the leaving owner's row with a conditional delete
   (`role = OWNER`) and release the seat. If that delete finds no row, the promotion is reverted so one OWNER remains. Implemented in CM-076.
 
-### membership_requests (new, CM-070 implemented for `INVITE`; CM-072)
+### membership_requests (new, CM-070 implemented for `INVITE`; CM-072 implemented for `DM_REQUEST`)
 | Field | Notes |
 |---|---|
 | `_id` | id |
@@ -230,7 +236,12 @@ reservation on accept stays the authority.
 - `{reporterId, targetType, targetId, reason, note (<= 500), createdAt}`; unique `{reporterId: 1, targetType: 1, targetId: 1}`;
   `{targetType: 1, targetId: 1}` for later reviews. No status field in v0.
 
-### Expiry (CM-072)
+### Expiry (CM-072 implemented)
 - An hourly `@Scheduled` job sets `EXPIRED` on `PENDING` rows past `expiresAt` in batches, and for `DM_REQUEST` soft-deletes the room and
   sends `ROOM_REMOVED {reason: EXPIRED}` to the sender. Every read and accept also checks `expiresAt`, so the job is not needed for correctness.
   v0 runs one backend instance (D-11); the job is idempotent if that changes.
+- CM-072: `MembershipRequestExpiryJob` runs every hour (first run one hour after startup; `@EnableScheduling` is already on
+  `PresenceService`). It reads PENDING rows with `expiresAt <= now` in pages of 100 and moves each with the conditional `expireIfPast`;
+  INVITE rows are only marked `EXPIRED`. That query has no dedicated `{status, expiresAt}` index (CM-072 follow-up).
+- A declined `DM_REQUEST` keeps `cooldownUntil` on its own row; the cooldown check is `exists(pairKey, cooldownUntil > now)` on the
+  `membership_requests_pair_cooldown` index, so it applies to the pair in both directions.

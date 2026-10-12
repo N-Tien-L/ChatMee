@@ -36,6 +36,7 @@ import com.lnt.chatmee.exception.UserNotFoundException;
 import com.lnt.chatmee.model.ChatRoom;
 import com.lnt.chatmee.model.Message;
 import com.lnt.chatmee.model.Participant.Role;
+import com.lnt.chatmee.model.RoomState;
 import com.lnt.chatmee.model.User;
 import com.lnt.chatmee.service.policy.RoomTypePolicy;
 import com.lnt.chatmee.service.policy.RoomTypePolicyRegistry;
@@ -71,6 +72,7 @@ public class ChatRoomService {
     private final ParticipantService participantService;
     private final SimpMessagingTemplate messagingTemplate;
     private final RoomTypePolicyRegistry policies;
+    private final DirectMessageRequestService dmRequests;
 
     public ChatRoomResponse createRoom(CreateChatRoomRequest request, String userId) {
 
@@ -80,15 +82,21 @@ public class ChatRoomService {
         RoomTypePolicy policy = policies.get(request.getRoomType());
         ChatRoom candidate = policy.create(request, authenticatedUser.getId(),
             id -> userRepository.findById(id).isPresent());
+        if (candidate.getState() == RoomState.REQUESTED) {
+            dmRequests.checkCanRequest(authenticatedUser.getId(), request.getParticipantId());
+        }
         ChatRoom room;
         try {
             room = chatRoomRepository.save(candidate);
         } catch (DuplicateKeyException ex) {
-            // A concurrent request created the same DM first: return that room instead of a duplicate.
+            // A concurrent request created the same DM first: apply the same-pair rules to that room instead.
             return findActiveDirectRoom(candidate.getMemberKey(), authenticatedUser.getId()).orElseThrow(() -> ex);
         }
         policy.initialMembers(request, authenticatedUser.getId()).forEach((id, role) ->
             participantService.createParticipant(room.getId(), id, role));
+        if (room.getState() == RoomState.REQUESTED) {
+            dmRequests.open(room, authenticatedUser.getId(), request.getParticipantId());
+        }
         logger.info("Created {} room: {} with creator: {}", room.getType(), room.getId(), authenticatedUser.getId());
 
         ChatRoomResponse response = toResponse(room, authenticatedUser.getId());
@@ -99,7 +107,10 @@ public class ChatRoomService {
         return response;
     }
 
-    /** The caller's active DM with the request's participant, if one exists (one DM per pair, SPEC-003). */
+    /**
+     * The caller's DM with the request's participant, if one exists (one DM per pair, SPEC-003). A REQUESTED DM
+     * follows the same-pair rules of AC-009-9: the sender gets it back, the recipient accepts it.
+     */
     public Optional<ChatRoomResponse> findExistingDirectRoom(CreateChatRoomRequest request, String userId) {
         if (request.getRoomType() == null) {
             return Optional.empty();
@@ -111,7 +122,10 @@ public class ChatRoomService {
         if (memberKey == null) {
             return Optional.empty();
         }
-        return chatRoomRepository.findByMemberKeyAndIsActiveTrue(memberKey).map(room -> toResponse(room, userId));
+        return chatRoomRepository.findByMemberKeyAndIsActiveTrue(memberKey).flatMap(room ->
+            room.getState() == RoomState.REQUESTED
+                ? dmRequests.resolveRequested(room, userId)
+                : Optional.of(toResponse(room, userId)));
     }
 
     /** Maps a room to the caller's view of it, reading the member ids from the participants collection. */

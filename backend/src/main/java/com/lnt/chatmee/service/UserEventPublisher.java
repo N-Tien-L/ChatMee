@@ -9,6 +9,7 @@ import com.lnt.chatmee.dto.event.RoomActivityPayload;
 import com.lnt.chatmee.dto.event.LastMessageSummary;
 import com.lnt.chatmee.dto.response.ChatMessageResponse;
 import com.lnt.chatmee.dto.response.ChatRoomResponse;
+import com.lnt.chatmee.dto.response.DmRequestResponse;
 import com.lnt.chatmee.dto.response.InvitationResponse;
 import com.lnt.chatmee.model.MembershipRequestStatus;
 import com.lnt.chatmee.model.Message.MessageType;
@@ -68,6 +69,11 @@ public class UserEventPublisher {
         var event = new UserEvent<>("INVITATION_CHANGED",
             Map.of("invitationId", invitationId, "roomId", roomId, "status", status), Instant.now());
         userIds.forEach(userId -> send(userId, event));
+    }
+
+    /** Sent on create and again when the one allowed message sets the preview; the client upserts by roomId. */
+    public void dmRequestReceived(String recipientId, DmRequestResponse request) {
+        send(recipientId, new UserEvent<>("DM_REQUEST_RECEIVED", Map.of("request", request), Instant.now()));
     }
 
     /** Broadcasts a saved server-generated announcement through the existing room topic. */

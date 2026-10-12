@@ -46,6 +46,9 @@ public class ChatWebSocketController {
         try {
             // Only a failure here means the message was not saved.
             response = messageService.sendMessage(request, principal.getName());
+        } catch (com.lnt.chatmee.exception.DmRequestPendingException e) {
+            sendError(sessionId, request, principal, ErrorCode.DM_REQUEST_PENDING, e.getMessage());
+            return;
         } catch (com.lnt.chatmee.exception.ForbiddenActionException e) {
             sendError(sessionId, request, principal, ErrorCode.FORBIDDEN_ACTION, "Room membership required");
             return;
