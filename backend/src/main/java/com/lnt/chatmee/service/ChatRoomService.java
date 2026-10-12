@@ -73,6 +73,7 @@ public class ChatRoomService {
     private final SimpMessagingTemplate messagingTemplate;
     private final RoomTypePolicyRegistry policies;
     private final DirectMessageRequestService dmRequests;
+    private final RateLimitingService rateLimitingService;
 
     public ChatRoomResponse createRoom(CreateChatRoomRequest request, String userId) {
 
@@ -84,6 +85,8 @@ public class ChatRoomService {
             id -> userRepository.findById(id).isPresent());
         if (candidate.getState() == RoomState.REQUESTED) {
             dmRequests.checkCanRequest(authenticatedUser.getId(), request.getParticipantId());
+        } else {
+            rateLimitingService.checkDailyAction(RateLimitingService.DailyAction.ROOM_CREATE, authenticatedUser.getId());
         }
         ChatRoom room;
         try {

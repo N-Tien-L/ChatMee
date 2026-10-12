@@ -47,6 +47,7 @@ import com.lnt.chatmee.repository.UserRepository;
 import com.lnt.chatmee.service.ChatRoomService;
 import com.lnt.chatmee.service.InvitationService;
 import com.lnt.chatmee.service.ParticipantService;
+import com.lnt.chatmee.service.RateLimitingService;
 import com.lnt.chatmee.service.UserEventPublisher;
 import com.lnt.chatmee.service.policy.DirectRoomPolicy;
 import com.lnt.chatmee.service.policy.PrivateRoomPolicy;
@@ -74,6 +75,7 @@ class InvitationControllerWebMvcTest extends SecuredWebMvcTestSupport {
     @MockitoBean ParticipantService participantService;
     @MockitoBean ChatRoomService chatRoomService;
     @MockitoBean UserEventPublisher userEvents;
+    @MockitoBean RateLimitingService rateLimitingService;
 
     private ChatRoom room;
     private final ListAppender<ILoggingEvent> logs = new ListAppender<>();

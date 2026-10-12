@@ -327,7 +327,7 @@ class ParticipantServiceTest {
         when(participants.deleteByChatRoomIdAndUserId("room", "alice")).thenReturn(1L);
         var chatRooms = new ChatRoomService(rooms, users, repository, userEvents, service,
             mock(org.springframework.messaging.simp.SimpMessagingTemplate.class), policies,
-            mock(DirectMessageRequestService.class));
+            mock(DirectMessageRequestService.class), mock(RateLimitingService.class));
         when(participants.findByChatRoomIdAndUserId("room", "alice"))
             .thenReturn(Optional.of(Participant.builder().role(Role.MEMBER).build()));
         when(participants.deleteByChatRoomIdAndUserIdAndRole("room", "alice", Role.MEMBER)).thenReturn(1L);

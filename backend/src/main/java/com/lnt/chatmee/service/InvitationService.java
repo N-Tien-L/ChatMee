@@ -62,12 +62,14 @@ public class InvitationService {
     private final ChatRoomService chatRoomService;
     private final RoomTypePolicyRegistry policies;
     private final UserEventPublisher userEvents;
+    private final RateLimitingService rateLimitingService;
 
     public InvitationResponse invite(String roomId, String callerId, String inviteeId) {
         ChatRoom room = activeRoom(roomId);
         Participant caller = membership(roomId, callerId);
         policies.get(room.getType()).checkInvite();
         requireManager(caller, "Only OWNER or ADMIN can invite users");
+        rateLimitingService.checkDailyAction(RateLimitingService.DailyAction.INVITATION, callerId);
         User inviter = userRepository.findById(callerId).orElse(null);
         User invitee = userRepository.findById(inviteeId)
             .orElseThrow(() -> new UserNotFoundException("User not found"));

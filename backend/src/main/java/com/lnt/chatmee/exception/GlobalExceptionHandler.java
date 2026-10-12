@@ -50,6 +50,13 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
         return response(ErrorCode.INVALID_ARGUMENT, "Invalid request argument", request);
     }
 
+    @ExceptionHandler(RateLimitExceededException.class)
+    public ResponseEntity<Object> handleRateLimited(RateLimitExceededException ex, WebRequest request) {
+        return ResponseEntity.status(ex.getErrorCode().getStatus()).contentType(MediaType.APPLICATION_PROBLEM_JSON)
+                .header(HttpHeaders.RETRY_AFTER, String.valueOf(ex.getRetryAfterSeconds()))
+                .body(problem(ex.getErrorCode(), ex.getMessage(), path(request)));
+    }
+
     @ExceptionHandler(org.springframework.security.core.AuthenticationException.class)
     public ResponseEntity<Object> handleUnauthenticated(org.springframework.security.core.AuthenticationException ex, WebRequest request) {
         return response(ErrorCode.UNAUTHENTICATED, "Authentication required", request);

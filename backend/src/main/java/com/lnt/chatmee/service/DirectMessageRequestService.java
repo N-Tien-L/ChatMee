@@ -59,14 +59,19 @@ public class DirectMessageRequestService {
     private final UserEventPublisher userEvents;
     // ChatRoomService creates DMs through this service; resolve it lazily, only to render room views.
     private final ObjectProvider<ChatRoomService> chatRooms;
+    private final RateLimitingService rateLimitingService;
 
-    /** Refuses a new request while a decline cooldown exists for the pair, in either direction (AC-009-9). */
+    /**
+     * Refuses a new request while a decline cooldown exists for the pair, in either direction (AC-009-9), and
+     * when the sender reached the daily DM request limit (AC-009-14). Called only for a request that is about to be created.
+     */
     public void checkCanRequest(String senderId, String recipientId) {
         checkConsentAllowed(senderId, recipientId);
         if (requests.existsByPairKeyAndCooldownUntilAfter(DirectRoomPolicy.memberKey(senderId, recipientId),
                 Instant.now())) {
             throw new ForbiddenActionException(CANNOT_MESSAGE);
         }
+        rateLimitingService.checkDailyAction(RateLimitingService.DailyAction.DM_REQUEST, senderId);
     }
 
     /**
