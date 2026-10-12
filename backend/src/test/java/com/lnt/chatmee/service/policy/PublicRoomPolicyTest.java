@@ -19,10 +19,9 @@ class PublicRoomPolicyTest {
         var request = new UpdateChatRoomRequest(); request.setMaxUsers(5);
         assertDoesNotThrow(() -> policy.checkUpdate(request));
     }
-    @Test void checkLeave_creator_throwsForbidden() {
+    @Test void checkLeave_creator_allowedBecauseOwnershipMovesByRole() {
         var room = ChatRoom.builder().createdBy("owner").build();
-        assertEquals("Room creator cannot leave the room. Please delete the room or transfer ownership first.",
-            assertThrows(ForbiddenActionException.class, () -> policy.checkLeave(room, "owner")).getMessage());
+        assertDoesNotThrow(() -> policy.checkLeave(room, "owner"));
     }
     @Test void checkLeave_member_allowsLeave() {
         assertDoesNotThrow(() -> policy.checkLeave(ChatRoom.builder().createdBy("owner").build(), "member"));

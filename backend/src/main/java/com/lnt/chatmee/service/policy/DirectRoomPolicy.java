@@ -28,6 +28,10 @@ public class DirectRoomPolicy implements RoomTypePolicy {
         throw new ForbiddenActionException("Cannot add participants to direct message rooms");
     }
     @Override
+    public void checkRoleChange() {
+        throw new ForbiddenActionException("Cannot change roles in direct message rooms");
+    }
+    @Override
     public void checkRemoveMember(String callerId, Role callerRole, String targetId, Role targetRole) {
         throw new ForbiddenActionException("Cannot remove members from direct message rooms");
     }

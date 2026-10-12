@@ -5,7 +5,6 @@ import java.util.Map;
 import java.util.function.Predicate;
 import com.lnt.chatmee.dto.request.CreateChatRoomRequest;
 import com.lnt.chatmee.dto.request.UpdateChatRoomRequest;
-import com.lnt.chatmee.exception.ForbiddenActionException;
 import com.lnt.chatmee.model.ChatRoom;
 import com.lnt.chatmee.model.Participant.Role;
 
@@ -20,9 +19,7 @@ public abstract class GroupRoomPolicy implements RoomTypePolicy {
     }
     @Override
     public void checkLeave(ChatRoom room, String userId) {
-        if (room.getCreatedBy().equals(userId)) {
-            throw new ForbiddenActionException("Room creator cannot leave the room. Please delete the room or transfer ownership first.");
-        }
+        // Owner succession is decided by participant roles in ChatRoomService (AC-009-24).
     }
     @Override
     public ChatRoom create(CreateChatRoomRequest request, String creatorId, Predicate<String> userExists) {

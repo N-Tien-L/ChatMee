@@ -11,6 +11,7 @@ import org.springframework.data.mongodb.repository.MongoRepository;
 import org.springframework.stereotype.Repository;
 
 import com.lnt.chatmee.model.Participant;
+import com.lnt.chatmee.model.Participant.Role;
 
 /** The participants collection is the single source of truth for room membership (ADR-0001, ADR-0005). */
 @Repository
@@ -35,6 +36,14 @@ public interface ParticipantRepository extends MongoRepository<Participant, Stri
 
     /** @return the number of deleted rows (0 or 1 thanks to the unique (chatRoomId, userId) index) */
     long deleteByChatRoomIdAndUserId(String chatRoomId, String userId);
+
+    /** Deletes only a row that still has {@code role}, so a concurrent role change makes the caller retry. */
+    long deleteByChatRoomIdAndUserIdAndRole(String chatRoomId, String userId, Role role);
+
+    /** Conditional role write (ADR-0005): matches only a row that still has {@code fromRole}. */
+    @Query("{ 'chatRoomId': ?0, 'userId': ?1, 'role': ?2 }")
+    @Update("{ '$set': { 'role': ?3 } }")
+    long updateRoleIfCurrent(String chatRoomId, String userId, Role fromRole, Role toRole);
 
     long deleteByChatRoomId(String chatRoomId);
 }

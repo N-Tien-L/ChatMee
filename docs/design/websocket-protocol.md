@@ -404,6 +404,13 @@ Full contracts are in the specs and in OpenAPI (`/v3/api-docs`, dev/local).
 | `POST /api/v1/rooms/{roomId}/hide` | AC-009-21 | CM-075 |
 | `PATCH /api/v1/rooms/{roomId}/members/{userId}/role` | AC-009-23 | CM-076 |
 
+## Role changes and owner transfer (CM-076 implemented)
+
+`PATCH /api/v1/rooms/{roomId}/members/{userId}/role` (body `{role: ADMIN|MEMBER}`) is owner-only and answers 204. It posts
+"A made B an admin" / "A made B a member" as a SYSTEM message, then sends `ROOM_UPDATED` with `myRole` to the affected user only.
+When the owner leaves, the successor gets the OWNER role and `ROOM_UPDATED` (AC-009-24), and the SYSTEM message
+"B is now the owner" follows the "A left" message. Authorization for update and delete reads the caller's participant role.
+
 ## Membership announcements (CM-062 implemented)
 
 Successful group joins (including the shared add-member path), leaves and removals save a SYSTEM

@@ -16,6 +16,7 @@ import com.lnt.chatmee.security.RoomSubscriptionInterceptor;
 import com.lnt.chatmee.model.ChatRoom;
 import com.lnt.chatmee.model.Message;
 import com.lnt.chatmee.model.Participant;
+import com.lnt.chatmee.model.Participant.Role;
 import com.lnt.chatmee.model.User;
 import com.lnt.chatmee.repository.ChatRoomRepository;
 import com.lnt.chatmee.repository.UserRepository;
@@ -26,6 +27,7 @@ import org.springframework.data.domain.Pageable;
 import com.lnt.chatmee.dto.response.PublicRoomSummary;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
+import org.mockito.InOrder;
 import org.mockito.InjectMocks;
 import org.mockito.Spy;
 import com.lnt.chatmee.service.policy.*;
@@ -299,6 +301,7 @@ class ChatRoomServiceTest {
         when(chatRoomRepository.findByIdAndIsActiveTrue("room1"))
                 .thenReturn(Optional.of(room), Optional.of(updatedRoom));
         when(participantService.isUserParticipant("room1", "user1")).thenReturn(true);
+        when(participantService.findMembership("room1", "user1")).thenReturn(Optional.of(member(Role.OWNER)));
         ChatRoom.RoomSettings settings = ChatRoom.RoomSettings.builder().build();
         when(chatRoomRepository.updateEditableFields(eq("room1"), eq("New Name"), eq("New Desc"), eq(10),
                 eq(settings), any())).thenReturn(1L);
@@ -329,6 +332,7 @@ class ChatRoomServiceTest {
                 .name("Name").description("Desc").maxParticipants(-1).settings(settings).build();
         when(chatRoomRepository.findByIdAndIsActiveTrue("room1")).thenReturn(Optional.of(room));
         when(participantService.isUserParticipant("room1", "user1")).thenReturn(true);
+        when(participantService.findMembership("room1", "user1")).thenReturn(Optional.of(member(Role.OWNER)));
         when(chatRoomRepository.updateEditableFields(eq("room1"), eq("Name"), eq("Desc"), eq(-1), eq(settings), any()))
                 .thenReturn(1L);
 
@@ -350,6 +354,7 @@ class ChatRoomServiceTest {
                 .build();
         when(chatRoomRepository.findByIdAndIsActiveTrue("room1")).thenReturn(Optional.of(room));
         when(participantService.isUserParticipant("room1", "user2")).thenReturn(true);
+        when(participantService.findMembership("room1", "user2")).thenReturn(Optional.of(member(Role.MEMBER)));
 
         UpdateChatRoomRequest request = new UpdateChatRoomRequest();
 
@@ -369,6 +374,7 @@ class ChatRoomServiceTest {
                 .createdBy("user1")
                 .build();
         when(chatRoomRepository.findByIdAndIsActiveTrue("room1")).thenReturn(Optional.of(room));
+        when(participantService.findMembership("room1", "user1")).thenReturn(Optional.of(member(Role.OWNER)));
         when(chatRoomRepository.softDelete(eq("room1"), any())).thenReturn(1L);
         when(participantService.removeAllParticipants("room1")).thenReturn(3L);
         when(participantService.getParticipantUserIds("room1")).thenReturn(Set.of("user1", "user2", "user3"));
@@ -401,6 +407,7 @@ class ChatRoomServiceTest {
                 .thenReturn(Optional.of(User.builder().id("user1").build()));
         when(chatRoomRepository.findByIdAndIsActiveTrue("room1"))
                 .thenReturn(Optional.of(ChatRoom.builder().id("room1").createdBy("user1").build()));
+        when(participantService.findMembership("room1", "user1")).thenReturn(Optional.of(member(Role.OWNER)));
         when(chatRoomRepository.softDelete(eq("room1"), any())).thenReturn(0L);
 
         assertThatThrownBy(() -> chatRoomService.deleteChatRoomById("user1", "room1"))
@@ -439,33 +446,144 @@ class ChatRoomServiceTest {
                 .build();
         when(chatRoomRepository.findByIdAndIsActiveTrue("room1")).thenReturn(Optional.of(room));
         when(participantService.isUserParticipant("room1", "user2")).thenReturn(true);
-        when(participantService.removeParticipant("room1", "user2")).thenReturn(true);
+        when(participantService.findMembership("room1", "user2")).thenReturn(Optional.of(member(Role.MEMBER)));
+        when(participantService.removeParticipantIfRole("room1", "user2", Role.MEMBER)).thenReturn(true);
 
         chatRoomService.leaveChatRoomById("user2", "room1");
 
-        verify(participantService).removeParticipant("room1", "user2");
+        verify(participantService).removeParticipantIfRole("room1", "user2", Role.MEMBER);
         verify(userEvents).roomRemoved(Set.of("user2"), "room1", "LEFT");
         verifyNoMoreInteractions(userEvents);
         verify(chatRoomRepository, never()).save(any());
     }
 
     @Test
-    void leaveChatRoomById_creator_throwsException() {
-        User user = User.builder().id("user1").build();
-        when(userRepository.findById("user1"))
-                .thenReturn(Optional.of(user));
-
-        ChatRoom room = ChatRoom.builder()
-                .id("room1")
-                .createdBy("user1")
-                .type(ChatRoom.RoomType.PUBLIC)
-                .build();
+    void leaveChatRoomById_owner_transfersOwnershipToEarliestAdminBeforeRemovingOwnerRow() {
+        when(userRepository.findById("user1")).thenReturn(Optional.of(User.builder().id("user1").name("Alice").build()));
+        ChatRoom room = ChatRoom.builder().id("room1").createdBy("user1").type(ChatRoom.RoomType.PUBLIC).build();
         when(chatRoomRepository.findByIdAndIsActiveTrue("room1")).thenReturn(Optional.of(room));
         when(participantService.isUserParticipant("room1", "user1")).thenReturn(true);
+        when(participantService.findMembership("room1", "user1")).thenReturn(Optional.of(member(Role.OWNER)));
+        when(participantService.findSuccessor("room1", "user1"))
+                .thenReturn(Optional.of(Participant.builder().chatRoomId("room1").userId("admin1").role(Role.ADMIN).build()));
+        when(participantService.changeRoleIfCurrent("room1", "admin1", Role.ADMIN, Role.OWNER)).thenReturn(true);
+        when(participantService.removeParticipantIfRole("room1", "user1", Role.OWNER)).thenReturn(true);
+
+        chatRoomService.leaveChatRoomById("user1", "room1");
+
+        InOrder order = inOrder(participantService);
+        order.verify(participantService).changeRoleIfCurrent("room1", "admin1", Role.ADMIN, Role.OWNER);
+        order.verify(participantService).removeParticipantIfRole("room1", "user1", Role.OWNER);
+        verify(participantService).announceOwnerTransfer("room1", "admin1");
+        verify(userEvents).roomUpdated(eq("admin1"), any());
+        verify(userEvents).roomRemoved(Set.of("user1"), "room1", "LEFT");
+        verify(chatRoomRepository, never()).softDelete(any(), any());
+    }
+
+    @Test
+    void leaveChatRoomById_soleOwner_softDeletesRoomAndNotifiesMembers() {
+        when(userRepository.findById("user1")).thenReturn(Optional.of(User.builder().id("user1").name("Alice").build()));
+        ChatRoom room = ChatRoom.builder().id("room1").createdBy("user1").type(ChatRoom.RoomType.PUBLIC).build();
+        when(chatRoomRepository.findByIdAndIsActiveTrue("room1")).thenReturn(Optional.of(room));
+        when(participantService.isUserParticipant("room1", "user1")).thenReturn(true);
+        when(participantService.findMembership("room1", "user1")).thenReturn(Optional.of(member(Role.OWNER)));
+        when(participantService.findSuccessor("room1", "user1")).thenReturn(Optional.empty());
+        when(participantService.getParticipantUserIds("room1")).thenReturn(Set.of("user1"));
+        when(chatRoomRepository.softDelete(eq("room1"), any())).thenReturn(1L);
+
+        chatRoomService.leaveChatRoomById("user1", "room1");
+
+        verify(chatRoomRepository).softDelete(eq("room1"), any());
+        verify(participantService, never()).removeParticipantIfRole(any(), any(), any());
+        verify(userEvents).roomRemoved(Set.of("user1"), "room1", "DELETED");
+    }
+
+    @Test
+    void leaveChatRoomById_successorTakenByConcurrentLeave_retriesWithNextSuccessor() {
+        when(userRepository.findById("user1")).thenReturn(Optional.of(User.builder().id("user1").name("Alice").build()));
+        ChatRoom room = ChatRoom.builder().id("room1").createdBy("user1").type(ChatRoom.RoomType.PUBLIC).build();
+        when(chatRoomRepository.findByIdAndIsActiveTrue("room1")).thenReturn(Optional.of(room));
+        when(participantService.isUserParticipant("room1", "user1")).thenReturn(true);
+        when(participantService.findMembership("room1", "user1")).thenReturn(Optional.of(member(Role.OWNER)));
+        Participant admin = Participant.builder().chatRoomId("room1").userId("admin1").role(Role.ADMIN).build();
+        Participant member = Participant.builder().chatRoomId("room1").userId("member1").role(Role.MEMBER).build();
+        when(participantService.findSuccessor("room1", "user1")).thenReturn(Optional.of(admin), Optional.of(member));
+        when(participantService.changeRoleIfCurrent("room1", "admin1", Role.ADMIN, Role.OWNER)).thenReturn(false);
+        when(participantService.changeRoleIfCurrent("room1", "member1", Role.MEMBER, Role.OWNER)).thenReturn(true);
+        when(participantService.removeParticipantIfRole("room1", "user1", Role.OWNER)).thenReturn(true);
+
+        chatRoomService.leaveChatRoomById("user1", "room1");
+
+        verify(participantService).announceOwnerTransfer("room1", "member1");
+        verify(participantService, never()).announceOwnerTransfer("room1", "admin1");
+    }
+
+    @Test
+    void leaveChatRoomById_ownerRowAlreadyRemoved_revertsSuccessorSoOneOwnerRemains() {
+        when(userRepository.findById("user1")).thenReturn(Optional.of(User.builder().id("user1").name("Alice").build()));
+        ChatRoom room = ChatRoom.builder().id("room1").createdBy("user1").type(ChatRoom.RoomType.PUBLIC).build();
+        when(chatRoomRepository.findByIdAndIsActiveTrue("room1")).thenReturn(Optional.of(room));
+        when(participantService.isUserParticipant("room1", "user1")).thenReturn(true);
+        when(participantService.findMembership("room1", "user1"))
+                .thenReturn(Optional.of(member(Role.OWNER)), Optional.empty());
+        Participant admin = Participant.builder().chatRoomId("room1").userId("admin1").role(Role.ADMIN).build();
+        when(participantService.findSuccessor("room1", "user1")).thenReturn(Optional.of(admin));
+        when(participantService.changeRoleIfCurrent("room1", "admin1", Role.ADMIN, Role.OWNER)).thenReturn(true);
+        when(participantService.removeParticipantIfRole("room1", "user1", Role.OWNER)).thenReturn(false);
 
         assertThatThrownBy(() -> chatRoomService.leaveChatRoomById("user1", "room1"))
-                .isInstanceOf(ForbiddenActionException.class);
-        verify(participantService, never()).removeParticipant(any(), any());
+                .isInstanceOf(UnauthorizedRoomActionException.class);
+        verify(participantService).changeRoleIfCurrent("room1", "admin1", Role.OWNER, Role.ADMIN);
+        verify(participantService, never()).announceOwnerTransfer(any(), any());
+    }
+
+    @Test
+    void updateChatRoomById_adminPromotedAfterCreation_updatesRoom() {
+        when(userRepository.findById("admin1")).thenReturn(Optional.of(User.builder().id("admin1").build()));
+        ChatRoom room = ChatRoom.builder().id("room1").createdBy("owner1").type(ChatRoom.RoomType.PUBLIC)
+                .name("Old").maxParticipants(-1).build();
+        ChatRoom updated = ChatRoom.builder().id("room1").name("New").build();
+        when(chatRoomRepository.findByIdAndIsActiveTrue("room1")).thenReturn(Optional.of(room), Optional.of(updated));
+        when(participantService.isUserParticipant("room1", "admin1")).thenReturn(true);
+        when(participantService.findMembership("room1", "admin1")).thenReturn(Optional.of(member(Role.ADMIN)));
+        when(chatRoomRepository.updateEditableFields(eq("room1"), eq("New"), any(), anyInt(), any(), any())).thenReturn(1L);
+
+        UpdateChatRoomRequest request = new UpdateChatRoomRequest();
+        request.setRoomName("New");
+
+        assertThat(chatRoomService.updateChatRoomById("admin1", "room1", request).getName()).isEqualTo("New");
+    }
+
+    @Test
+    void updateChatRoomById_createdByWithoutOwnerRole_throwsUnauthorized() {
+        when(userRepository.findById("owner1")).thenReturn(Optional.of(User.builder().id("owner1").build()));
+        ChatRoom room = ChatRoom.builder().id("room1").createdBy("owner1").type(ChatRoom.RoomType.PUBLIC).build();
+        when(chatRoomRepository.findByIdAndIsActiveTrue("room1")).thenReturn(Optional.of(room));
+        when(participantService.isUserParticipant("room1", "owner1")).thenReturn(true);
+        when(participantService.findMembership("room1", "owner1")).thenReturn(Optional.of(member(Role.MEMBER)));
+
+        UpdateChatRoomRequest request = new UpdateChatRoomRequest();
+        request.setRoomName("New");
+
+        assertThatThrownBy(() -> chatRoomService.updateChatRoomById("owner1", "room1", request))
+                .isInstanceOf(UnauthorizedRoomActionException.class);
+        verify(chatRoomRepository, never()).updateEditableFields(any(), any(), any(), anyInt(), any(), any());
+    }
+
+    @Test
+    void deleteChatRoomById_adminRole_throwsUnauthorized() {
+        when(userRepository.findById("admin1")).thenReturn(Optional.of(User.builder().id("admin1").build()));
+        when(chatRoomRepository.findByIdAndIsActiveTrue("room1"))
+                .thenReturn(Optional.of(ChatRoom.builder().id("room1").createdBy("owner1").build()));
+        when(participantService.findMembership("room1", "admin1")).thenReturn(Optional.of(member(Role.ADMIN)));
+
+        assertThatThrownBy(() -> chatRoomService.deleteChatRoomById("admin1", "room1"))
+                .isInstanceOf(UnauthorizedRoomActionException.class);
+        verify(chatRoomRepository, never()).softDelete(any(), any());
+    }
+
+    private static Participant member(Role role) {
+        return Participant.builder().role(role).build();
     }
 
     @Test
@@ -571,6 +689,7 @@ class ChatRoomServiceTest {
 
         ChatRoom room = ChatRoom.builder().id("room1").createdBy("user1").build();
         when(chatRoomRepository.findByIdAndIsActiveTrue("room1")).thenReturn(Optional.of(room));
+        when(participantService.findMembership("room1", "user1")).thenReturn(Optional.of(member(Role.OWNER)));
         when(chatRoomRepository.softDelete(eq("room1"), any())).thenThrow(new DataIntegrityViolationException("db error"));
 
         assertThatThrownBy(() -> chatRoomService.deleteChatRoomById("user1", "room1"))
@@ -591,6 +710,7 @@ class ChatRoomServiceTest {
                 .build();
         when(chatRoomRepository.findByIdAndIsActiveTrue("room1")).thenReturn(Optional.of(room));
         when(participantService.isUserParticipant("room1", "user1")).thenReturn(true);
+        when(participantService.findMembership("room1", "user1")).thenReturn(Optional.of(member(Role.OWNER)));
 
         UpdateChatRoomRequest request = new UpdateChatRoomRequest();
         request.setMaxUsers(5); // invalid for direct message
@@ -614,6 +734,7 @@ class ChatRoomServiceTest {
                 .build();
         when(chatRoomRepository.findByIdAndIsActiveTrue("room1")).thenReturn(Optional.of(room));
         when(participantService.isUserParticipant("room1", "user1")).thenReturn(true);
+        when(participantService.findMembership("room1", "user1")).thenReturn(Optional.of(member(Role.OWNER)));
         // The conditional update matches nothing because memberCount (2) > new capacity
         when(chatRoomRepository.updateEditableFields(eq("room1"), any(), any(), eq(2), any(), any())).thenReturn(0L);
 
@@ -656,7 +777,9 @@ class ChatRoomServiceTest {
         when(chatRoomRepository.findByIdAndIsActiveTrue("room1")).thenReturn(Optional.of(room));
         // Member when the room was read, but the row was already removed by a concurrent leave
         when(participantService.isUserParticipant("room1", "user2")).thenReturn(true);
-        when(participantService.removeParticipant("room1", "user2")).thenReturn(false);
+        when(participantService.findMembership("room1", "user2"))
+                .thenReturn(Optional.of(member(Role.MEMBER)), Optional.empty());
+        when(participantService.removeParticipantIfRole("room1", "user2", Role.MEMBER)).thenReturn(false);
 
         assertThatThrownBy(() -> chatRoomService.leaveChatRoomById("user2", "room1"))
                 .isInstanceOf(UnauthorizedRoomActionException.class);
@@ -675,7 +798,8 @@ class ChatRoomServiceTest {
                 .build();
         when(chatRoomRepository.findByIdAndIsActiveTrue("room1")).thenReturn(Optional.of(room));
         when(participantService.isUserParticipant("room1", "user2")).thenReturn(true);
-        when(participantService.removeParticipant("room1", "user2"))
+        when(participantService.findMembership("room1", "user2")).thenReturn(Optional.of(member(Role.MEMBER)));
+        when(participantService.removeParticipantIfRole("room1", "user2", Role.MEMBER))
                 .thenThrow(new DataIntegrityViolationException("db error"));
 
         assertThatThrownBy(() -> chatRoomService.leaveChatRoomById("user2", "room1"))
