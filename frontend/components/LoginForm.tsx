@@ -11,12 +11,30 @@ import {
 import { Button } from "./ui/button";
 import { Github, Google } from "./ui/icon/OAuthIcons";
 import { useAuthStore } from "@/lib/stores";
+import { useSearchParams } from "next/navigation";
+import { useEffect } from "react";
+import toast from "react-hot-toast";
 
 export function LoginForm({
   className,
   ...props
 }: React.ComponentProps<"div">) {
   const { login, loading } = useAuthStore();
+  const searchParams = useSearchParams();
+  const hasError = searchParams.get("error") === "true";
+  const signedOut = searchParams.get("signedOut") === "true";
+
+  useEffect(() => {
+    if (hasError) {
+      toast.error("Login failed. Please try again.", { id: "login-error" });
+    }
+  }, [hasError]);
+
+  useEffect(() => {
+    if (signedOut) {
+      toast.success("Signed out successfully", { id: "signed-out" });
+    }
+  }, [signedOut]);
 
   return (
     <div

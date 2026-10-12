@@ -1,48 +1,50 @@
 "use client";
 
 import { LoginForm } from "@/components/LoginForm";
-import { useSearchParams, useRouter } from "next/navigation";
-import { useEffect, useState, Suspense } from "react";
+import { Skeleton } from "@/components/ui/skeleton";
+import { useRouter } from "next/navigation";
+import { useEffect, useRef, useState, Suspense } from "react";
 import { useAuthStore } from "@/lib/stores/authStore";
-import toast from "react-hot-toast";
-import React from "react";
-import { useShallow } from "zustand/react/shallow";
+
+function LoginSkeleton() {
+  return (
+    <div
+      role="status"
+      aria-label="Checking your session"
+      className="flex flex-col items-center space-y-6 px-4"
+    >
+      <Skeleton className="h-14 w-56" />
+      <Skeleton className="h-48 w-full max-w-md rounded-2xl" />
+    </div>
+  );
+}
 
 const LoginContent = () => {
-  const searchParams = useSearchParams();
   const router = useRouter();
-  const { isAuthenticated, loading } = useAuthStore(
-    useShallow((state) => ({
-      isAuthenticated: state.isAuthenticated,
-      loading: state.loading,
-    }))
-  );
-  const checkAuthStatus = useAuthStore((state) => state.checkAuthStatus);
-  const [hasCheckedAuth, setHasCheckedAuth] = useState(false);
-
+  const routerRef = useRef(router);
   useEffect(() => {
-    const fetchAuthStatus = async () => {
-      await checkAuthStatus();
-      setHasCheckedAuth(true); // Mark that we've checked
+    routerRef.current = router;
+  }, [router]);
+  const checkAuthStatus = useAuthStore((state) => state.checkAuthStatus);
+  const [checked, setChecked] = useState(false);
+
+  // The server decides: /auth/me 200 -> dashboard, 401 -> the form. Nothing client-side gates this.
+  useEffect(() => {
+    let cancelled = false;
+    checkAuthStatus().then(() => {
+      if (cancelled) return;
+      if (useAuthStore.getState().isAuthenticated) {
+        routerRef.current.replace("/dashboard");
+      } else {
+        setChecked(true);
+      }
+    });
+    return () => {
+      cancelled = true;
     };
-    fetchAuthStatus();
   }, [checkAuthStatus]);
 
-  useEffect(() => {
-    // Only redirect after initial auth check is done
-    if (hasCheckedAuth && !loading && isAuthenticated) {
-      router.push("/dashboard");
-    }
-  }, [hasCheckedAuth, isAuthenticated, loading, router]);
-
-  useEffect(() => {
-    const error = searchParams.get("error");
-    if (error === "true") {
-      toast.error("Login failed. Please try again.", {
-        id: "login-error", // Prevent duplicate toasts
-      });
-    }
-  }, [searchParams]);
+  if (!checked) return <LoginSkeleton />;
 
   return (
     <div className="flex flex-col justify-center items-center space-y-6 sm:space-y-8 px-4 sm:px-6 lg:px-8">
@@ -61,13 +63,7 @@ const LoginContent = () => {
 
 const Login = () => {
   return (
-    <Suspense
-      fallback={
-        <div className="flex justify-center items-center min-h-screen">
-          Loading...
-        </div>
-      }
-    >
+    <Suspense fallback={<LoginSkeleton />}>
       <LoginContent />
     </Suspense>
   );
