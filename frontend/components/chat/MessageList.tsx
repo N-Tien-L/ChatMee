@@ -1,17 +1,24 @@
 "use client";
 
-import { Message } from "@/lib/types";
-import React, { useLayoutEffect, useRef } from "react";
-import { AlertCircle, MessageSquare, RotateCw } from "lucide-react";
+import { Message, MessageType } from "@/lib/types";
+import React, { useCallback, useLayoutEffect, useRef, useState } from "react";
+import { AlertCircle, ArrowDown, Check, Clock, MessageSquare, RotateCw } from "lucide-react";
 import { Skeleton } from "../ui/skeleton";
 import { Button } from "../ui/button";
+import { UserAvatar } from "../common/UserAvatar";
 
 /** Distance from the top of the list at which the next older page is requested. */
 const LOAD_OLDER_THRESHOLD_PX = 48;
+/** Within this distance of the bottom the reader counts as following the conversation. */
+const NEAR_BOTTOM_PX = 80;
+/** Consecutive messages from one sender inside this window share one avatar and name. */
+const GROUP_WINDOW_MS = 5 * 60 * 1000;
 
 interface MessageListProps {
   messages: Message[];
   onlineUsers: Set<string>;
+  /** False until the first presence snapshot: the dots stay neutral instead of "offline" (SPEC-005 AC-005-6). */
+  presenceKnown?: boolean;
   formatDate: (d: Date) => string;
   formatTime: (d: Date) => string;
   messagesEndRef: React.RefObject<HTMLDivElement | null>;
@@ -29,10 +36,36 @@ interface MessageListProps {
   onLoadOlder?: () => void;
 }
 
+const isNearBottom = (el: HTMLElement) =>
+  el.scrollHeight - el.scrollTop - el.clientHeight <= NEAR_BOTTOM_PX;
+
+/** True when the row starts a new group: a date change, a system row, another sender or a long pause. */
+const startsGroup = (messages: Message[], index: number, showDate: boolean) => {
+  if (index === 0 || showDate) return true;
+  const previous = messages[index - 1];
+  const current = messages[index];
+  if (previous.type === MessageType.SYSTEM || current.type === MessageType.SYSTEM) return true;
+  if (previous.senderId !== current.senderId) return true;
+  return Date.parse(current.createdAt) - Date.parse(previous.createdAt) > GROUP_WINDOW_MS;
+};
+
 const MessageList: React.FC<MessageListProps> = (props) => {
-  const { messages, messagesEndRef, hasMore = false, loadingOlder = false, olderError = null, onLoadOlder } = props;
+  const { messages, messagesEndRef, hasMore = false, loadingOlder = false, olderError = null, onLoadOlder, loading = false, error = null } = props;
   const scrollRef = useRef<HTMLDivElement>(null);
   const edgesRef = useRef<{ first?: string; last?: string; scrollHeight: number }>({ scrollHeight: 0 });
+  // Read at the moment a message arrives, before the list grows, so content growth alone never counts as scrolling away.
+  const atBottomRef = useRef(true);
+  const [unseenCount, setUnseenCount] = useState(0);
+  const [needsLoadOlder, setNeedsLoadOlder] = useState(false);
+
+  const scrollToBottom = useCallback(
+    (behavior: ScrollBehavior) => {
+      atBottomRef.current = true;
+      setUnseenCount(0);
+      messagesEndRef.current?.scrollIntoView({ behavior });
+    },
+    [messagesEndRef]
+  );
 
   useLayoutEffect(() => {
     const el = scrollRef.current;
@@ -43,33 +76,73 @@ const MessageList: React.FC<MessageListProps> = (props) => {
       // An older page was prepended: keep the message the user was reading where it was.
       el.scrollTop += el.scrollHeight - previous.scrollHeight;
     } else if (last !== previous.last) {
-      // A first load jumps straight to the bottom, so its scroll never passes the load-older threshold.
-      messagesEndRef.current?.scrollIntoView({ behavior: previous.last === undefined ? "auto" : "smooth" });
+      if (previous.last === undefined) {
+        // A first load jumps straight to the bottom, so its scroll never passes the load-older threshold.
+        scrollToBottom("auto");
+      } else if (messages[messages.length - 1]?.isOwn || atBottomRef.current) {
+        scrollToBottom("smooth");
+      } else {
+        const index = messages.findIndex((m) => m.id === previous.last);
+        const added = index === -1 ? 1 : messages.length - index - 1;
+        setUnseenCount((count) => count + added);
+      }
     }
     edgesRef.current = { first, last, scrollHeight: el?.scrollHeight ?? 0 };
-  }, [messages, messagesEndRef]);
+  }, [messages, scrollToBottom]);
+
+  // When the loaded page does not fill the viewport there is nothing to scroll, so offer the button.
+  useLayoutEffect(() => {
+    const el = scrollRef.current;
+    setNeedsLoadOlder(!!el && hasMore && el.scrollHeight <= el.clientHeight);
+  }, [messages, hasMore, loading, error]);
 
   const handleScroll = () => {
     const el = scrollRef.current;
-    if (!el || !onLoadOlder || !hasMore || loadingOlder || olderError) return;
+    if (!el) return;
+    atBottomRef.current = isNearBottom(el);
+    if (atBottomRef.current) setUnseenCount(0);
+    if (!onLoadOlder || !hasMore || loadingOlder || olderError) return;
     if (el.scrollTop <= LOAD_OLDER_THRESHOLD_PX) onLoadOlder();
   };
 
   return (
-    // Scroll anchoring is off because the prepend adjustment above already keeps the position.
-    <div
-      ref={scrollRef}
-      onScroll={handleScroll}
-      className="h-full overflow-y-auto [overflow-anchor:none]"
-    >
-      <MessageListContent {...props} />
+    <div className="relative h-full">
+      {/* Scroll anchoring is off because the prepend adjustment above already keeps the position. */}
+      <div
+        ref={scrollRef}
+        data-testid="message-scroll"
+        onScroll={handleScroll}
+        className="h-full overflow-y-auto [overflow-anchor:none]"
+      >
+        <MessageListContent
+          {...props}
+          showLoadOlder={needsLoadOlder && !loadingOlder && !olderError && !loading && !error}
+        />
+      </div>
+      {unseenCount > 0 && (
+        <div className="pointer-events-none absolute inset-x-0 bottom-3 flex justify-center">
+          <Button
+            size="sm"
+            className="pointer-events-auto rounded-full shadow-md"
+            onClick={() => scrollToBottom("smooth")}
+          >
+            <ArrowDown className="w-4 h-4 mr-1" aria-hidden="true" />
+            New messages
+          </Button>
+        </div>
+      )}
     </div>
   );
 };
 
-const MessageListContent: React.FC<MessageListProps> = ({
+interface MessageListContentProps extends MessageListProps {
+  showLoadOlder: boolean;
+}
+
+const MessageListContent: React.FC<MessageListContentProps> = ({
   messages,
   onlineUsers,
+  presenceKnown = true,
   formatDate,
   formatTime,
   messagesEndRef,
@@ -83,6 +156,7 @@ const MessageListContent: React.FC<MessageListProps> = ({
   loadingOlder = false,
   olderError = null,
   onLoadOlder,
+  showLoadOlder,
 }) => {
   if (loading && messages.length === 0) {
     return (
@@ -172,11 +246,18 @@ const MessageListContent: React.FC<MessageListProps> = ({
           )}
         </div>
       )}
+      {showLoadOlder && onLoadOlder && (
+        <div className="flex justify-center pt-3">
+          <Button variant="outline" size="sm" onClick={onLoadOlder}>
+            Load older messages
+          </Button>
+        </div>
+      )}
       {onLoadOlder && !hasMore && !loading && !error && messages.length > 0 && (
         <p className="pt-3 text-center text-xs text-gray-400">Beginning of conversation</p>
       )}
       <div
-        className="p-3 sm:p-4 space-y-3 sm:space-y-4"
+        className="p-3 sm:p-4 space-y-1"
         role="log"
         aria-live="polite"
         aria-label="Messages"
@@ -197,11 +278,12 @@ const MessageListContent: React.FC<MessageListProps> = ({
             index === 0 ||
             formatDate(messageDate) !==
               formatDate(new Date(messages[index - 1].createdAt));
+          const groupStart = startsGroup(messages, index, showDate);
           const online = onlineUsers.has(message.senderId);
           const failed = message.isOwn && message.status === "failed";
 
           return (
-            <div key={`${message.id}-${index}`}>
+            <div key={message.id}>
               {showDate && (
                 <div className="flex justify-center my-3 sm:my-4">
                   <span className="px-3 py-1 text-xs bg-gray-100 text-gray-600 rounded-full">
@@ -210,97 +292,124 @@ const MessageListContent: React.FC<MessageListProps> = ({
                 </div>
               )}
 
-              <div
-                className={`flex ${
-                  message.isOwn ? "justify-end" : "justify-start"
-                }`}
-              >
+              {message.type === MessageType.SYSTEM ? (
+                <div data-message-type={message.type} className="flex justify-center py-1">
+                  <p className="text-center text-xs text-gray-500 break-words max-w-[90%]">
+                    {message.content}
+                  </p>
+                </div>
+              ) : (
                 <div
-                  className={`min-w-0 max-w-[85%] sm:max-w-sm md:max-w-md lg:max-w-lg ${
-                    message.isOwn ? "order-2" : "order-1"
-                  }`}
+                  data-message-type={message.type}
+                  className={`flex items-end gap-2 ${
+                    message.isOwn ? "justify-end" : "justify-start"
+                  } ${groupStart ? "mt-3 sm:mt-4" : "mt-0.5"}`}
                 >
                   {!message.isOwn && (
-                    <div className="flex items-center space-x-1 mb-1 px-3">
-                      <p className="text-xs text-gray-500 truncate">
-                        {message.senderName}
-                      </p>
-                      <div
-                        className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${
-                          online ? "bg-green-500" : "bg-gray-400"
-                        }`}
-                        role="img"
-                        aria-label={online ? "Online" : "Offline"}
-                        title={online ? "Online" : "Offline"}
-                      />
+                    <div className="w-8 flex-shrink-0">
+                      {groupStart && (
+                        <UserAvatar name={message.senderName} size="sm" />
+                      )}
                     </div>
                   )}
-                  <div
-                    className={`px-3 sm:px-4 py-2 rounded-2xl break-words ${
-                      message.isOwn
-                        ? failed
-                          ? "bg-blue-500/70 text-white"
-                          : "bg-blue-500 text-white"
-                        : "bg-gray-100 text-gray-900"
-                    }`}
-                  >
-                    <p className="text-sm whitespace-pre-wrap break-words">
-                      {message.content}
-                    </p>
+                  <div className="min-w-0 max-w-[85%] sm:max-w-sm md:max-w-md lg:max-w-lg">
+                    {!message.isOwn && groupStart && (
+                      <div className="flex items-center space-x-1 mb-1 px-3">
+                        <p className="text-xs text-gray-500 truncate">
+                          {message.senderName}
+                        </p>
+                        <div
+                          className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${
+                            !presenceKnown
+                              ? "bg-gray-300"
+                              : online
+                              ? "bg-green-500"
+                              : "bg-gray-400"
+                          }`}
+                          role="img"
+                          aria-label={!presenceKnown ? "Status unknown" : online ? "Online" : "Offline"}
+                          title={!presenceKnown ? "Status unknown" : online ? "Online" : "Offline"}
+                        />
+                      </div>
+                    )}
                     <div
-                      className={`flex items-center justify-between mt-1 ${
-                        message.isOwn ? "text-blue-100" : "text-gray-500"
+                      className={`px-3 sm:px-4 py-2 rounded-2xl break-words ${
+                        message.isOwn
+                          ? failed
+                            ? "border border-destructive bg-background text-foreground"
+                            : "bg-blue-500 text-white"
+                          : "bg-gray-100 text-gray-900"
                       }`}
                     >
-                      <p className="text-xs">
-                        <time dateTime={message.createdAt}>
-                          {formatTime(messageDate)}
-                        </time>
+                      <p className="text-sm whitespace-pre-wrap break-words">
+                        {message.content}
                       </p>
-                      {message.isOwn && (
-                        <div className="text-xs ml-2">
-                          {message.status === "sending" && (
-                            <span className="opacity-70" role="img" aria-label="Sending">⏳</span>
-                          )}
-                          {message.status === "sent" && (
-                            <span className="opacity-70" role="img" aria-label="Sent">✓</span>
-                          )}
-                          {message.status === "failed" && (
-                            <span className="text-red-300" role="img" aria-label="Failed to send" title={message.errorMessage || "Failed to send"}>✗</span>
-                          )}
-                        </div>
-                      )}
+                      <div
+                        className={`flex items-center justify-between mt-1 ${
+                          message.isOwn && !failed ? "text-blue-100" : "text-gray-500"
+                        }`}
+                      >
+                        <p className="text-xs">
+                          <time dateTime={message.createdAt}>
+                            {formatTime(messageDate)}
+                          </time>
+                        </p>
+                        {message.isOwn && (
+                          <div className="ml-2">
+                            {message.status === "sending" && (
+                              <span role="img" aria-label="Sending" className="opacity-70">
+                                <Clock className="w-3 h-3" aria-hidden="true" />
+                              </span>
+                            )}
+                            {message.status === "sent" && (
+                              <span role="img" aria-label="Sent" className="opacity-70">
+                                <Check className="w-3 h-3" aria-hidden="true" />
+                              </span>
+                            )}
+                            {message.status === "failed" && (
+                              <span
+                                role="img"
+                                aria-label="Failed to send"
+                                title={message.errorMessage || "Failed to send"}
+                                className="text-destructive"
+                              >
+                                <AlertCircle className="w-3 h-3" aria-hidden="true" />
+                              </span>
+                            )}
+                          </div>
+                        )}
+                      </div>
                     </div>
-                  </div>
 
-                  {failed && message.tempId && (
-                    <div className="mt-1 flex flex-wrap items-center justify-end gap-x-2 gap-y-1 px-1 text-xs">
-                      <span className="text-red-600 break-words">
-                        {message.errorMessage || "Failed to send"}
-                      </span>
-                      {onResend && (
-                        <button
-                          type="button"
-                          onClick={() => onResend(message.tempId as string)}
-                          disabled={!canResend}
-                          className="rounded font-medium text-blue-600 hover:underline disabled:cursor-not-allowed disabled:opacity-50 disabled:no-underline"
-                        >
-                          Resend
-                        </button>
-                      )}
-                      {onDiscard && (
-                        <button
-                          type="button"
-                          onClick={() => onDiscard(message.tempId as string)}
-                          className="rounded font-medium text-gray-600 hover:underline"
-                        >
-                          Discard
-                        </button>
-                      )}
-                    </div>
-                  )}
+                    {failed && message.tempId && (
+                      <div className="mt-1 flex flex-wrap items-center justify-end gap-x-2 gap-y-1 px-1 text-xs">
+                        <span className="text-red-600 break-words">
+                          {message.errorMessage || "Failed to send"}
+                        </span>
+                        {onResend && (
+                          <button
+                            type="button"
+                            onClick={() => onResend(message.tempId as string)}
+                            disabled={!canResend}
+                            className="rounded font-medium text-blue-600 hover:underline disabled:cursor-not-allowed disabled:opacity-50 disabled:no-underline"
+                          >
+                            Resend
+                          </button>
+                        )}
+                        {onDiscard && (
+                          <button
+                            type="button"
+                            onClick={() => onDiscard(message.tempId as string)}
+                            className="rounded font-medium text-gray-600 hover:underline"
+                          >
+                            Discard
+                          </button>
+                        )}
+                      </div>
+                    )}
+                  </div>
                 </div>
-              </div>
+              )}
             </div>
           );
         })}

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useReducer, useRef, useState } from "react";
 import { StompError, useWebSocket } from "./useWebSocket";
 import { messageApi } from "@/lib/api/messageApi";
+import { chatRoomApi } from "@/lib/api/chatRoomApi";
 import { useAuthStore } from "@/lib/stores/authStore";
 import { Message, MessageResponse, MessageType } from "@/lib/types";
 import {
@@ -338,4 +339,24 @@ export const useRoomMessages = (roomId: string, options: RoomMessagesOptions = {
         reload,
         loadOlder,
     };
+};
+
+/** Display names of a room's members by user id, from GET /rooms/{id}/members (UX-14). Reloads when the member count changes. */
+export const useRoomMemberNames = (roomId: string, memberCount: number): Record<string, string> => {
+    const [names, setNames] = useState<Record<string, string>>({});
+    useEffect(() => {
+        let active = true;
+        chatRoomApi.getMembers(roomId)
+            .then((res) => {
+                if (!active || !res.success || !Array.isArray(res.data)) return;
+                setNames(Object.fromEntries(res.data.map((member) => [member.id, member.name])));
+            })
+            .catch(() => {
+                // Typing falls back to "Someone" when the member list is unavailable.
+            });
+        return () => {
+            active = false;
+        };
+    }, [roomId, memberCount]);
+    return names;
 };

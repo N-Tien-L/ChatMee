@@ -2,12 +2,16 @@ import React from "react";
 import { Button } from "../ui/button";
 import { Send } from "lucide-react";
 
+/** Server limit after trim (AC-004-3): 1-5000 characters. */
+export const MESSAGE_MAX_LENGTH = 5000;
+/** The counter appears once the draft is within 10% of the limit (U-5). */
+const COUNTER_THRESHOLD = 4500;
+
 interface MessageInputProps {
   value: string;
   onChange: (e: React.ChangeEvent<HTMLTextAreaElement>) => void;
   onSubmit: (e: React.FormEvent) => void;
   disabled: boolean;
-  sending: boolean;
   inputRef: React.RefObject<HTMLTextAreaElement | null>;
 }
 
@@ -18,7 +22,6 @@ const MessageInput: React.FC<MessageInputProps> = ({
   onChange,
   onSubmit,
   disabled,
-  sending,
   inputRef,
 }) => {
   // Enter sends, Shift+Enter inserts a newline; Enter while an IME is composing is left alone.
@@ -39,6 +42,7 @@ const MessageInput: React.FC<MessageInputProps> = ({
             id={MESSAGE_INPUT_ID}
             ref={inputRef}
             rows={1}
+            maxLength={MESSAGE_MAX_LENGTH}
             placeholder="Type a message..."
             value={value}
             onChange={onChange}
@@ -49,6 +53,11 @@ const MessageInput: React.FC<MessageInputProps> = ({
           <span id={`${MESSAGE_INPUT_ID}-hint`} className="sr-only">
             Press Enter to send, Shift+Enter for a new line.
           </span>
+          {value.length >= COUNTER_THRESHOLD && (
+            <p className="absolute right-3 -top-5 text-xs text-gray-500" aria-live="polite">
+              {`${value.length}/${MESSAGE_MAX_LENGTH}`}
+            </p>
+          )}
         </div>
         <Button
           type="submit"
@@ -56,14 +65,7 @@ const MessageInput: React.FC<MessageInputProps> = ({
           aria-label="Send message"
           className="rounded-full p-2.5 sm:p-3 bg-blue-500 hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed flex-shrink-0"
         >
-          {sending ? (
-            <div
-              className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"
-              aria-hidden="true"
-            />
-          ) : (
-            <Send size={18} className="sm:w-5 sm:h-5" aria-hidden="true" />
-          )}
+          <Send size={18} className="sm:w-5 sm:h-5" aria-hidden="true" />
         </Button>
       </form>
     </div>

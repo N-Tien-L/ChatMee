@@ -1,4 +1,4 @@
-import { ApiResponse, ChatRoomResponse, PagedResponse, PublicRoomSummary } from "@/lib/types";
+import { ApiResponse, ChatRoomResponse, MemberResponse, PagedResponse, PublicRoomSummary } from "@/lib/types";
 import {
     CreateChatRoomRequest,
     UpdateChatRoomRequest,
@@ -112,6 +112,12 @@ export const chatRoomApi = {
     // mark a room as read for the caller (204 No Content)
     markRoomRead: async (roomId: string): Promise<void> => {
         await apiClient.put(`/api/v1/rooms/${roomId}/members/me/read`)
+    },
+
+    // members of a room with their roles (the caller must be a member)
+    getMembers: async (roomId: string): Promise<ApiResponse<MemberResponse[]>> => {
+        const response = await apiClient.get<ApiResponse<MemberResponse[]>>(`/api/v1/rooms/${roomId}/members`)
+        return response.data;
     },
 
     // ids of the users that are online right now (a plain JSON array, not wrapped in ApiResponse)
