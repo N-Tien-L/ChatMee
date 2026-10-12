@@ -6,6 +6,8 @@ import java.util.Map;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.messaging.Message;
 import org.springframework.messaging.MessageChannel;
+import org.springframework.messaging.simp.SimpMessageHeaderAccessor;
+import org.springframework.messaging.simp.SimpMessageType;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.messaging.simp.stomp.StompCommand;
 import org.springframework.messaging.simp.stomp.StompHeaderAccessor;
@@ -78,9 +80,18 @@ public class WsRateLimitInterceptor implements ChannelInterceptor {
                     .code(ErrorCode.RATE_LIMITED.name())
                     .message("Too many messages. Try again in " + decision.retryAfterSeconds() + " s")
                     .build();
-            messagingTemplate.getObject().convertAndSendToUser(user.getName(), "/queue/errors", error);
+            // Only the session that sent the frame gets the error; other tabs of the same user do not (AC-008-15).
+            messagingTemplate.getObject().convertAndSendToUser(user.getName(), "/queue/errors", error,
+                    sessionHeaders(accessor.getSessionId()));
         }
         return null;
+    }
+
+    private static Map<String, Object> sessionHeaders(String sessionId) {
+        SimpMessageHeaderAccessor headers = SimpMessageHeaderAccessor.create(SimpMessageType.MESSAGE);
+        headers.setSessionId(sessionId);
+        headers.setLeaveMutable(true);
+        return headers.getMessageHeaders();
     }
 
     private String readTempId(Object payload) {

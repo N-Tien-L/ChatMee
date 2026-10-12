@@ -1,7 +1,9 @@
 package com.lnt.chatmee.service;
 
+import com.lnt.chatmee.dto.request.ChatMessageRequest;
 import com.lnt.chatmee.dto.response.ChatMessageResponse;
 import com.lnt.chatmee.exception.ChatRoomNotFoundException;
+import com.lnt.chatmee.exception.DatabaseOperationException;
 import com.lnt.chatmee.exception.ForbiddenActionException;
 import com.lnt.chatmee.model.Message;
 import com.lnt.chatmee.model.User;
@@ -11,6 +13,7 @@ import com.lnt.chatmee.repository.ParticipantRepository;
 import com.lnt.chatmee.repository.UserRepository;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.springframework.dao.DuplicateKeyException;
 import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
@@ -18,6 +21,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.time.Instant;
 import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
 import java.util.Base64;
 import java.util.List;
 import java.util.Optional;
@@ -51,6 +55,68 @@ class MessageServiceTest {
 
     @InjectMocks
     private MessageService messageService;
+
+    @Test
+    void sendMessage_sameClientMessageIdTwice_storesOnlyOneMessage() {
+        List<Message> rows = simulateUniqueClientIdIndex();
+        when(participantService.isUserParticipant("room1", "user1")).thenReturn(true);
+
+        ChatMessageResponse first = messageService.sendMessage(textRequest("client-1"), "user1");
+        ChatMessageResponse second = messageService.sendMessage(textRequest("client-1"), "user1");
+
+        assertThat(rows).hasSize(1);
+        assertThat(second.id()).isEqualTo(first.id());
+        assertThat(second.tempId()).isEqualTo("client-1");
+        assertThat(second.clientMessageId()).isEqualTo("client-1");
+    }
+
+    @Test
+    void sendMessage_differentClientMessageIds_storesEachMessage() {
+        List<Message> rows = simulateUniqueClientIdIndex();
+        when(participantService.isUserParticipant("room1", "user1")).thenReturn(true);
+
+        ChatMessageResponse first = messageService.sendMessage(textRequest("client-1"), "user1");
+        ChatMessageResponse second = messageService.sendMessage(textRequest("client-2"), "user1");
+
+        assertThat(rows).hasSize(2);
+        assertThat(second.id()).isNotEqualTo(first.id());
+    }
+
+    @Test
+    void persistMessage_duplicateWithoutClientMessageId_throwsDatabaseOperationException() {
+        when(messageRepository.save(any(Message.class))).thenThrow(new DuplicateKeyException("E11000 duplicate key"));
+        Message message = Message.builder().id("m1").chatRoomId("room1").senderId("user1").build();
+
+        assertThatThrownBy(() -> messageService.persistMessage(message))
+                .isInstanceOf(DatabaseOperationException.class);
+        verify(messageRepository, never()).findFirstByChatRoomIdAndSenderIdAndClientMessageId(any(), any(), any());
+    }
+
+    /** Mimics the unique partial index (room, sender, clientMessageId): a second insert with the same key fails. */
+    private List<Message> simulateUniqueClientIdIndex() {
+        List<Message> rows = new ArrayList<>();
+        when(messageRepository.save(any(Message.class))).thenAnswer(invocation -> {
+            Message incoming = invocation.getArgument(0);
+            boolean duplicate = rows.stream()
+                    .anyMatch(row -> incoming.getClientMessageId().equals(row.getClientMessageId()));
+            if (duplicate) throw new DuplicateKeyException("E11000 duplicate key");
+            rows.add(incoming);
+            return incoming;
+        });
+        lenient().when(messageRepository.findFirstByChatRoomIdAndSenderIdAndClientMessageId(eq("room1"), eq("user1"), anyString()))
+                .thenAnswer(invocation -> rows.stream()
+                        .filter(row -> invocation.getArgument(2).equals(row.getClientMessageId()))
+                        .findFirst());
+        return rows;
+    }
+
+    private static ChatMessageRequest textRequest(String tempId) {
+        ChatMessageRequest request = new ChatMessageRequest();
+        request.setRoomId("room1");
+        request.setContent("hello");
+        request.setTempId(tempId);
+        return request;
+    }
 
     @Test
     void getRecentMessages_roomNotFound_throwsException() {

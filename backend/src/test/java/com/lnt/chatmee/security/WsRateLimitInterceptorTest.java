@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
@@ -12,12 +13,14 @@ import static org.mockito.Mockito.when;
 
 import java.nio.charset.StandardCharsets;
 import java.util.List;
+import java.util.Map;
 
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.messaging.Message;
 import org.springframework.messaging.MessageChannel;
+import org.springframework.messaging.simp.SimpMessageHeaderAccessor;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.messaging.simp.stomp.StompCommand;
 import org.springframework.messaging.simp.stomp.StompHeaderAccessor;
@@ -60,7 +63,7 @@ class WsRateLimitInterceptorTest {
 
         assertThat(result).isNull();
         ArgumentCaptor<StompError> error = ArgumentCaptor.forClass(StompError.class);
-        verify(messaging).convertAndSendToUser(eq("user-1"), eq("/queue/errors"), error.capture());
+        verify(messaging).convertAndSendToUser(eq("user-1"), eq("/queue/errors"), error.capture(), privateTo("session-1"));
         assertThat(error.getValue().getTempId()).isEqualTo("t-1");
         assertThat(error.getValue().getCode()).isEqualTo("RATE_LIMITED");
         assertThat(error.getValue().getMessage()).contains("3 s");
@@ -75,7 +78,7 @@ class WsRateLimitInterceptorTest {
                 channel)).isNull();
 
         ArgumentCaptor<StompError> error = ArgumentCaptor.forClass(StompError.class);
-        verify(messaging).convertAndSendToUser(eq("user-1"), eq("/queue/errors"), error.capture());
+        verify(messaging).convertAndSendToUser(eq("user-1"), eq("/queue/errors"), error.capture(), privateTo("session-1"));
         assertThat(error.getValue().getTempId()).isNull();
     }
 
@@ -111,8 +114,14 @@ class WsRateLimitInterceptorTest {
         verifyNoInteractions(limits);
     }
 
+    /** Private errors carry the originating STOMP session id, so only that session receives them. */
+    private static Map<String, Object> privateTo(String sessionId) {
+        return argThat(headers -> sessionId.equals(headers.get(SimpMessageHeaderAccessor.SESSION_ID_HEADER)));
+    }
+
     private static Message<byte[]> frame(StompCommand command, String destination, String userId, String body) {
         StompHeaderAccessor headers = StompHeaderAccessor.create(command);
+        headers.setSessionId("session-1");
         if (destination != null) {
             headers.setDestination(destination);
         }

@@ -31,11 +31,12 @@ class ResponseContractTest {
     @Test void responseFactories_records_preserveJsonPropertiesAndTimestamps() throws Exception {
         var time = Instant.parse("2026-10-09T01:02:03Z");
         var message = Message.builder().id("message").chatRoomId("room").senderId("user")
+                .clientMessageId("temporary")
                 .content("hello").type(Message.MessageType.TEXT).createdAt(time).updatedAt(time)
                 .isUpdated(true).isDeleted(false).build();
         var messageJson = json.valueToTree(ChatMessageResponse.from(message, "Alice", "temporary"));
         assertThat(messageJson).isEqualTo(json.readTree("""
-                {"id":"message","tempId":"temporary","chatRoomId":"room","senderId":"user",
+                {"id":"message","tempId":"temporary","clientMessageId":"temporary","chatRoomId":"room","senderId":"user",
                  "senderName":"Alice","content":"hello","type":"TEXT",
                  "createdAt":"2026-10-09T01:02:03Z","updatedAt":"2026-10-09T01:02:03Z",
                  "isUpdated":true,"isDeleted":false}

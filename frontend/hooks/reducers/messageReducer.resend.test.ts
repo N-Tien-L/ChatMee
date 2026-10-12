@@ -84,7 +84,7 @@ describe('useRoomMessages resend, reload and resync', () => {
         return { ...hook, roomId };
     }
 
-    it('resendMessage_rateLimitedMessage_publishesNewAttemptAndReplacesFailedCopy', async () => {
+    it('resendMessage_rateLimitedMessage_reusesClientIdAndReplacesFailedCopy', async () => {
         const { result } = await mountRoom();
         act(() => { void result.current.sendMessage('hello'); });
         const first = result.current.messages[0];
@@ -96,7 +96,8 @@ describe('useRoomMessages resend, reload and resync', () => {
         expect(result.current.messages).toHaveLength(1);
         const retry = result.current.messages[0];
         expect(retry.status).toBe('sending');
-        expect(retry.tempId).not.toBe(first.tempId);
+        // A Resend keeps the failed message's client id, so the server can recognise a retry of a stored send.
+        expect(retry.tempId).toBe(first.tempId);
         expect(transport.sendMessage).toHaveBeenLastCalledWith(expect.any(String), 'hello', retry.tempId);
         expect(vi.getTimerCount()).toBe(1);
     });

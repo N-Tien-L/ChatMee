@@ -7,6 +7,7 @@ import {
     StompClientCallbacks,
     StompClientLike,
     StompSessionOptions,
+    WsUnauthorizedError,
 } from "./stompSession";
 
 interface FakeSubscription {
@@ -82,6 +83,8 @@ function setup(overrides: Partial<StompSessionOptions> = {}) {
         initialRetryDelayMs: 1000,
         maxRetryDelayMs: 4000,
         stableAfterMs: 10_000,
+        // Full capped delay by default, so the exact backoff expectations below hold; jitter has its own tests.
+        random: () => 1,
         ...overrides,
     });
     session.start();
@@ -196,6 +199,43 @@ describe("stompSession", () => {
         expect(client().activate).toHaveBeenCalledTimes(2);
         await client().connect();
         expect(client().connectHeaders).toEqual({ "X-WS-Token": "token-ok" });
+    });
+
+    it("stops retrying and reports unauthorized when the ws-token is rejected with 401", async () => {
+        const onUnauthorized = vi.fn();
+        const getToken = vi.fn().mockRejectedValue(new WsUnauthorizedError());
+        const { session, client } = setup({ getToken, onUnauthorized });
+        await client().connect();
+        const activations = client().activate.mock.calls.length;
+
+        await vi.advanceTimersByTimeAsync(60_000);
+
+        expect(getToken).toHaveBeenCalledTimes(1);
+        expect(client().activate.mock.calls.length).toBe(activations);
+        expect(session.getStatus()).toBe("idle");
+        expect(onUnauthorized).toHaveBeenCalledTimes(1);
+    });
+
+    it("waits between half and all of the capped delay after a network error (jitter)", async () => {
+        const getToken = vi.fn().mockRejectedValue(new TypeError("Failed to fetch"));
+        const { client } = setup({ getToken, random: () => 0 });
+        await client().connect();
+        const before = client().activate.mock.calls.length;
+
+        await vi.advanceTimersByTimeAsync(499);
+        expect(client().activate.mock.calls.length).toBe(before);
+        await vi.advanceTimersByTimeAsync(1);
+        expect(client().activate.mock.calls.length).toBe(before + 1);
+    });
+
+    it("never waits longer than the capped delay (jitter upper bound)", async () => {
+        const getToken = vi.fn().mockRejectedValue(new TypeError("Failed to fetch"));
+        const { client } = setup({ getToken, random: () => 0.999999 });
+        await client().connect();
+        const before = client().activate.mock.calls.length;
+
+        await vi.advanceTimersByTimeAsync(1000);
+        expect(client().activate.mock.calls.length).toBe(before + 1);
     });
 
     it("backs off with a capped delay when the server keeps answering with ERROR", async () => {

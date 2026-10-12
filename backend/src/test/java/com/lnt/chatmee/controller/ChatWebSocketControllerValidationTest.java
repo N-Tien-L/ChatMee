@@ -58,12 +58,17 @@ class ChatWebSocketControllerValidationTest {
         context.close();
     }
 
+    /** Private errors carry the originating STOMP session id, so only that session receives them. */
+    private static Map<String, Object> privateTo(String sessionId) {
+        return argThat(headers -> sessionId.equals(headers.get(SimpMessageHeaderAccessor.SESSION_ID_HEADER)));
+    }
+
     @Test
     void sendMessage_contentOf5001Characters_reportsErrorWithoutSavingOrBroadcasting() {
         dispatch("/app/chat.sendMessage", 5001);
         verifyNoInteractions(messages, users, participants);
         ArgumentCaptor<StompError> error = ArgumentCaptor.forClass(StompError.class);
-        verify(messaging).convertAndSendToUser(eq("test-user"), eq("/queue/errors"), error.capture());
+        verify(messaging).convertAndSendToUser(eq("test-user"), eq("/queue/errors"), error.capture(), privateTo("test-session"));
         assertEquals("test-temp", error.getValue().getTempId());
         assertTrue(error.getValue().getMessage().contains("5000"));
         verifyNoMoreInteractions(messaging);
@@ -86,7 +91,7 @@ class ChatWebSocketControllerValidationTest {
         dispatch("/app/chat.sendMessage", 10, com.lnt.chatmee.model.Message.MessageType.SYSTEM);
         verifyNoInteractions(messages, users, participants);
         ArgumentCaptor<StompError> error = ArgumentCaptor.forClass(StompError.class);
-        verify(messaging).convertAndSendToUser(eq("test-user"), eq("/queue/errors"), error.capture());
+        verify(messaging).convertAndSendToUser(eq("test-user"), eq("/queue/errors"), error.capture(), privateTo("test-session"));
         assertEquals("test-temp", error.getValue().getTempId());
         assertEquals("VALIDATION_FAILED", error.getValue().getCode());
         assertTrue(error.getValue().getMessage().contains("Only TEXT messages can be sent"));

@@ -20,14 +20,20 @@ import lombok.Setter;
 @Builder
 @Document(collection = "messages")
 @CompoundIndex(name = "messages_room_created_id", def = "{'chatRoomId': 1, 'createdAt': -1, '_id': -1}")
+// A retried or resent send with the same client id stores one row (SPEC-008 AC-008-13).
+@CompoundIndex(name = "messages_room_sender_client", def = "{'chatRoomId': 1, 'senderId': 1, 'clientMessageId': 1}",
+        unique = true, partialFilter = "{'clientMessageId': {'$exists': true}}")
 public class Message {
-    
+
     @Id
     private String id;
 
     private String chatRoomId;
 
     private String senderId;
+
+    /** The client's tempId; unique per (chatRoomId, senderId) when present. */
+    private String clientMessageId;
 
     private MessageType type;
 

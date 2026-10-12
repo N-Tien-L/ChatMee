@@ -39,13 +39,13 @@ All payloads below are JSON. Directions are relative to the client.
 
 | Destination | Direction / command | Payload | Authorization | Error behavior |
 |---|---|---|---|---|
-| `/app/chat.sendMessage` | Client to server / SEND | `{roomId, content, messageType: "TEXT", tempId?}` | Authenticated Principal; member of payload room; at most 10 frames per 5 s per user; only `TEXT` is accepted (SYSTEM messages are server-generated) | Validation, membership, and synchronous processing errors go to the Principal's `/user/queue/errors`; validation/membership rejection prevents publication and persistence |
+| `/app/chat.sendMessage` | Client to server / SEND | `{roomId, content, messageType: "TEXT", tempId?}` | Authenticated Principal; member of payload room; at most 10 frames per 5 s per user; only `TEXT` is accepted (SYSTEM messages are server-generated) | Validation, membership, and synchronous processing errors go to `/user/queue/errors` of the sending STOMP session only; validation/membership rejection prevents publication and persistence |
 | `/app/rooms/{roomId}/typing` | Client to server / SEND | `{typing}`; roomId comes from the path, any `userId` is ignored | Authenticated Principal; member of payload room | Nonmembers and missing/blank room IDs are dropped without a broadcast |
 | `/app/presence` | Client to server / SEND | `{online}`; legacy `userId` is ignored | Any authenticated Principal; heartbeat for its known session only | Missing Principal is rejected by the interceptor; `online` and `userId` are ignored |
 | `/topic/rooms/{roomId}` | Server to client / SUBSCRIBE | `ChatMessageResponse`: server message ID, optional tempId, chatRoomId, senderId, senderName, content, type, timestamps, update/delete flags | Member of the exact room | Unauthorized SUBSCRIBE receives STOMP ERROR and connection closure |
 | `/topic/rooms/{roomId}/typing` | Server to client / SUBSCRIBE | `{roomId, userId, typing}`; server supplies userId | Member of the exact room | Unauthorized SUBSCRIBE receives STOMP ERROR and connection closure |
 | `/topic/presence` | Server to client / SUBSCRIBE | `{userId, online}`; server supplies userId | Any authenticated Principal | Missing Principal receives STOMP ERROR and connection closure |
-| `/user/queue/errors` | Server to client / SUBSCRIBE | `{tempId?, code, message}` (`StompError`; `code` is an `ErrorCode` name such as `VALIDATION_FAILED`, `FORBIDDEN_ACTION`, `RATE_LIMITED`, `INTERNAL_ERROR`) | Any authenticated Principal, for its own user destination | Application errors are private to that Principal; never sent to a room topic |
+| `/user/queue/errors` | Server to client / SUBSCRIBE | `{tempId?, code, message}` (`StompError`; `code` is an `ErrorCode` name such as `VALIDATION_FAILED`, `FORBIDDEN_ACTION`, `RATE_LIMITED`, `INTERNAL_ERROR`) | Any authenticated Principal, for its own user destination | Errors are sent only to the STOMP session that sent the failing frame (`simpSessionId`); other sessions of the same user do not receive them. Never sent to a room topic |
 
 ## Message delivery (CM-029)
 
@@ -54,10 +54,20 @@ Principal's stored identity, and checks room membership. It then calls
 `MessageService.persistMessage` synchronously. Only after the repository returns
 successfully does it broadcast the saved message to `/topic/rooms/{roomId}`.
 The payload uses the saved `id`, `createdAt`, and `updatedAt`, plus the original
-`tempId`. Database failure sends `{tempId, message}` to the sender's
+`tempId` and the stored `clientMessageId` (the same value; `clientMessageId` is
+also in history). Database failure sends `{tempId, message}` to the sender's
 `/user/queue/errors` and produces no room broadcast. There is no background
-message persistence executor. This is not an exactly-once delivery guarantee:
-a disconnect or broker failure after saving can still prevent confirmation.
+message persistence executor.
+
+Idempotency (CM-068, SPEC-008 AC-008-13): a message stored with a `tempId` is
+keyed by `(chatRoomId, senderId, clientMessageId)` in a unique partial index
+(`messages_room_sender_client`, see `data-model.md`). A repeated send with the
+same `tempId` from the same sender in the same room does not store a second row:
+the stored message is returned and broadcast again. A client Resend reuses the
+failed message's `tempId`. A broadcast failure after a successful save is logged
+without message content and sends no `INTERNAL_ERROR`; the sender sees the
+message on the next resync. This is still not an exactly-once delivery
+guarantee: a disconnect or broker failure after saving can still prevent confirmation.
 
 Message entity and response timestamps are `Instant`; JSON timestamps are
 ISO-8601 UTC strings ending in `Z`. Join announcements use the same timestamp
@@ -318,6 +328,16 @@ fail-open local sessions, unknown heartbeat rejection), `PresenceEventListenerTe
 (authenticated session identity), `PresenceWebSocketControllerTest` (ignored flags),
 `RedisPresenceSubscriberTest` (fan-out without registry writes).
 
+CM-068 regression coverage:
+- `MessageServiceTest`: a repeated client id stores one row and returns the stored message; a duplicate without a client id is an error.
+- `MessageRepositoryIT`: the unique partial index exists; a duplicate row is rejected; eight concurrent duplicates store one row.
+- `ChatWebSocketControllerTest`: a broadcast failure after the save sends no `INTERNAL_ERROR`.
+- `ChatWebSocketControllerAuthTest`, `ChatWebSocketControllerValidationTest`, `WsRateLimitInterceptorTest`: private errors target the originating session.
+- `StompMessagingIT`: two sessions of one user; CONNECT while Redis is unavailable gets an ERROR without the token.
+- `AuthChannelInterceptorTest`: Redis unavailable rejects CONNECT without the token or a chained cause.
+- `stompSession.test.ts`: 401 from the token request stops retries; jitter stays within the capped backoff.
+- `messageUtils.resync.test.ts`, `useRoomMessage.test.ts`, `messageReducer.resend.test.ts`: resync matches by client id; Resend reuses the id; new sends get distinct ids.
+
 ## Per-user events (SPEC-008 AC-008-1, planned: CM-060)
 Destination `/user/queue/events`, server to client, SUBSCRIBE by any authenticated Principal for its own user destination. The
 `/user/queue/*` SUBSCRIBE allowlist becomes exactly `/user/queue/events` and `/user/queue/errors`. Events go to **every** session of the
@@ -343,16 +363,19 @@ Rules:
 - Publishing goes through one `UserEventPublisher` service so every event type has one place and one test.
 - Cost: one `ROOM_ACTIVITY` per member per message. Accepted for v0; measure before v1 (rooms up to 1000 members).
 
-## Private errors and ordering (SPEC-008 AC-008-15/16, planned: CM-068)
-- `/user/queue/errors` is delivered only to the STOMP session that sent the failing frame (`@SendToUser(broadcast = false)` or a
-  session-targeted header), in `ChatWebSocketController` and `WsRateLimitInterceptor`. `/user/queue/events` stays user-wide.
-- Inbound frames of one session are processed in order (`setPreserveReceiveOrder(true)`), so a SUBSCRIBE sent right before a SEND is
-  registered first.
-- `/app/chat.sendMessage` payload keeps `tempId`; the server stores it as `clientMessageId` and echoes both on the broadcast and in history.
-  A repeated `(roomId, senderId, clientMessageId)` returns and re-broadcasts the stored message. A Resend reuses the failed message's id.
-- Persist and broadcast are separate steps: a broadcast failure after a successful save is logged (without content) and does not send
-  `INTERNAL_ERROR`; the message reaches the room on the next resync.
-- CONNECT while Redis is unavailable gets a STOMP ERROR without the token in the frame or the log (fail closed).
+## Private errors, ordering and connection setup (SPEC-008 AC-008-13..16, CM-068)
+- Implemented: `/user/queue/errors` is delivered only to the STOMP session that sent the failing frame (a `simpSessionId` header on
+  `convertAndSendToUser`), in `ChatWebSocketController` and `WsRateLimitInterceptor`. `/user/queue/events` stays user-wide.
+- Implemented: `/app/chat.sendMessage` idempotency and the persist/broadcast split (see Message delivery above).
+- Implemented: CONNECT while Redis is unavailable gets a STOMP ERROR `WebSocket authentication unavailable`. The Redis exception is not
+  chained, so neither the token nor the Redis detail reaches the frame or the log (fail closed).
+- Implemented: a socket that never sends CONNECT is closed after 60 s (`WebSocketTransportRegistration.setTimeToFirstMessage(60000)`, equal to
+  the Spring default, set explicitly).
+- **Not implemented (blocked, CM-068): inbound ordering.** `setPreserveReceiveOrder(true)` on the STOMP endpoint registry wraps each session's
+  inbound channel in `OrderedMessageChannelDecorator` (Spring 7.0.9). That decorator logs and drops any exception from the inbound
+  interceptors, so CONNECT rejections and denied SUBSCRIBE frames lose their ERROR frame and the connection close. Measured in
+  `AuthChannelInterceptorTest$WireConnect` and `StompMessagingIT`. Until this is resolved, a SUBSCRIBE sent right before a SEND can still
+  be processed out of order (WS-A14). Options are in the CM-068 report; the owner decides.
 
 New STOMP error codes (SPEC-009): `DM_REQUEST_PENDING` (second message in a REQUESTED DM by the sender), `FORBIDDEN_ACTION` with the
 generic message "Cannot message this user" (block). Both go to `/user/queue/errors` of the sending session.
