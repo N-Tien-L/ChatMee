@@ -55,6 +55,8 @@ class MessageServiceTest {
 
     @Mock UserEventPublisher userEvents;
 
+    @Mock DirectMessageRequestService dmRequests;
+
     @InjectMocks
     private MessageService messageService;
 
@@ -437,4 +439,104 @@ class MessageServiceTest {
         assertThat(messageService.sendMessage(textRequest("client-1"), "user1").id()).isNotBlank();
     }
 
+    // CM-072 AC2: one message while REQUESTED; the recipient's reply accepts (AC-009-10, AC-009-12)
+
+    @Test
+    void sendMessage_senderFirstMessageInRequestedRoom_claimsPreviewSavesAndNotifiesRecipient() {
+        when(participantService.isUserParticipant("room1", "user1")).thenReturn(true);
+        when(chatRoomRepository.findByIdAndIsActiveTrue("room1")).thenReturn(Optional.of(requestedRoom()));
+        when(chatRoomRepository.claimRequestMessage(eq("room1"), any(Instant.class), any())).thenReturn(1L);
+        when(messageRepository.save(any())).thenAnswer(call -> call.getArgument(0));
+
+        ChatMessageResponse response = messageService.sendMessage(textRequest("client-1"), "user1");
+
+        ArgumentCaptor<com.lnt.chatmee.dto.event.LastMessageSummary> claimed =
+            ArgumentCaptor.forClass(com.lnt.chatmee.dto.event.LastMessageSummary.class);
+        verify(chatRoomRepository).claimRequestMessage(eq("room1"), eq(response.createdAt()), claimed.capture());
+        assertThat(claimed.getValue().id()).isEqualTo(response.id());
+        assertThat(claimed.getValue().preview()).isEqualTo("hello");
+        verify(dmRequests).previewChanged("room1");
+    }
+
+    @Test
+    void sendMessage_senderSecondMessageInRequestedRoom_throwsDmRequestPendingWithoutSaving() {
+        when(participantService.isUserParticipant("room1", "user1")).thenReturn(true);
+        when(chatRoomRepository.findByIdAndIsActiveTrue("room1")).thenReturn(Optional.of(requestedRoom()));
+        when(chatRoomRepository.claimRequestMessage(eq("room1"), any(Instant.class), any())).thenReturn(0L);
+
+        assertThatThrownBy(() -> messageService.sendMessage(textRequest("client-2"), "user1"))
+                .isInstanceOf(com.lnt.chatmee.exception.DmRequestPendingException.class)
+                .satisfies(error -> assertThat(((com.lnt.chatmee.exception.ChatMeeException) error).getErrorCode())
+                        .isEqualTo(com.lnt.chatmee.exception.ErrorCode.DM_REQUEST_PENDING));
+        verify(messageRepository, never()).save(any());
+        verify(dmRequests, never()).previewChanged(anyString());
+    }
+
+    @Test
+    void sendMessage_retryOfStoredRequestMessage_returnsStoredMessageWithoutClaim() {
+        Message stored = Message.builder().id("m1").chatRoomId("room1").senderId("user1").clientMessageId("client-1")
+                .content("hello").type(Message.MessageType.TEXT).createdAt(Instant.now()).build();
+        when(participantService.isUserParticipant("room1", "user1")).thenReturn(true);
+        when(chatRoomRepository.findByIdAndIsActiveTrue("room1")).thenReturn(Optional.of(requestedRoom()));
+        when(messageRepository.findFirstByChatRoomIdAndSenderIdAndClientMessageId("room1", "user1", "client-1"))
+                .thenReturn(Optional.of(stored));
+        when(messageRepository.save(any())).thenThrow(new DuplicateKeyException("E11000 duplicate key"));
+
+        assertThat(messageService.sendMessage(textRequest("client-1"), "user1").id()).isEqualTo("m1");
+        verify(chatRoomRepository, never()).claimRequestMessage(anyString(), any(), any());
+    }
+
+    @Test
+    void sendMessage_requestMessageSaveFails_releasesClaim() {
+        when(participantService.isUserParticipant("room1", "user1")).thenReturn(true);
+        when(chatRoomRepository.findByIdAndIsActiveTrue("room1")).thenReturn(Optional.of(requestedRoom()));
+        when(chatRoomRepository.claimRequestMessage(eq("room1"), any(Instant.class), any())).thenReturn(1L);
+        when(messageRepository.save(any())).thenThrow(new org.springframework.dao.DataAccessResourceFailureException("down"));
+
+        assertThatThrownBy(() -> messageService.sendMessage(textRequest("client-1"), "user1"))
+                .isInstanceOf(DatabaseOperationException.class);
+        verify(chatRoomRepository).releaseRequestMessage(eq("room1"), anyString());
+    }
+
+    @Test
+    void sendMessage_senderInExpiredRequest_throwsForbiddenWithoutSaving() {
+        when(participantService.isUserParticipant("room1", "user1")).thenReturn(true);
+        when(chatRoomRepository.findByIdAndIsActiveTrue("room1")).thenReturn(Optional.of(requestedRoom()));
+        when(dmRequests.expireIfDue("room1")).thenReturn(true);
+
+        assertThatThrownBy(() -> messageService.sendMessage(textRequest("client-1"), "user1"))
+                .isInstanceOf(ForbiddenActionException.class);
+        verify(messageRepository, never()).save(any());
+    }
+
+    @Test
+    void sendMessage_recipientRepliesToRequest_acceptsThenSavesMessage() {
+        when(participantService.isUserParticipant("room1", "user1")).thenReturn(false);
+        when(dmRequests.acceptByReply("room1", "user1")).thenReturn(true);
+        when(messageRepository.save(any())).thenAnswer(call -> call.getArgument(0));
+
+        ChatMessageResponse response = messageService.sendMessage(textRequest("client-1"), "user1");
+
+        assertThat(response.senderId()).isEqualTo("user1");
+        var order = inOrder(dmRequests, messageRepository);
+        order.verify(dmRequests).acceptByReply("room1", "user1");
+        order.verify(messageRepository).save(any());
+        verify(chatRoomRepository, never()).claimRequestMessage(anyString(), any(), any());
+    }
+
+    @Test
+    void sendMessage_nonMemberWithoutRequest_throwsForbiddenWithoutSaving() {
+        when(participantService.isUserParticipant("room1", "user1")).thenReturn(false);
+        when(dmRequests.acceptByReply("room1", "user1")).thenReturn(false);
+
+        assertThatThrownBy(() -> messageService.sendMessage(textRequest("client-1"), "user1"))
+                .isInstanceOf(ForbiddenActionException.class);
+        verify(messageRepository, never()).save(any());
+    }
+
+    private static com.lnt.chatmee.model.ChatRoom requestedRoom() {
+        return com.lnt.chatmee.model.ChatRoom.builder().id("room1")
+                .type(com.lnt.chatmee.model.ChatRoom.RoomType.DIRECT_MESSAGE)
+                .state(com.lnt.chatmee.model.RoomState.REQUESTED).isActive(true).build();
+    }
 }

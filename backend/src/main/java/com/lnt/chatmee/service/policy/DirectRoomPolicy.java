@@ -12,6 +12,7 @@ import com.lnt.chatmee.exception.UserNotFoundException;
 import com.lnt.chatmee.model.ChatRoom;
 import com.lnt.chatmee.model.ChatRoom.RoomType;
 import com.lnt.chatmee.model.Participant.Role;
+import com.lnt.chatmee.model.RoomState;
 
 @Component
 public class DirectRoomPolicy implements RoomTypePolicy {
@@ -54,9 +55,10 @@ public class DirectRoomPolicy implements RoomTypePolicy {
         if (creatorId.equals(request.getParticipantId())) {
             throw new InvalidRequestException("Cannot create direct message with yourself");
         }
+        // AC-009-9: a request until the recipient accepts; their seat is reserved on accept (ADR-0005).
         return ChatRoom.builder().type(type()).createdBy(creatorId).lastActivity(LocalDateTime.now())
-            .memberKey(memberKey(creatorId, request.getParticipantId()))
-            .maxParticipants(2).memberCount(2).isActive(true)
+            .memberKey(memberKey(creatorId, request.getParticipantId())).state(RoomState.REQUESTED)
+            .maxParticipants(2).memberCount(1).isActive(true)
             .settings(ChatRoom.RoomSettings.builder().allowFileSharing(true).allowGuestUsers(false)
                 .moderationRequired(false).build()).build();
     }
@@ -70,7 +72,7 @@ public class DirectRoomPolicy implements RoomTypePolicy {
         return true;
     }
 
-    /** Order-independent key of a user pair: one active DM per pair. */
+    /** Order-independent key of a user pair: one DM per pair; also the DM request's {@code pairKey}. */
     public static String memberKey(String firstUserId, String secondUserId) {
         return firstUserId.compareTo(secondUserId) <= 0
             ? firstUserId + ":" + secondUserId
@@ -79,6 +81,7 @@ public class DirectRoomPolicy implements RoomTypePolicy {
 
     @Override
     public Map<String, Role> initialMembers(CreateChatRoomRequest request, String creatorId) {
-        return Map.of(creatorId, Role.OWNER, request.getParticipantId(), Role.MEMBER);
+        // The recipient becomes a MEMBER only by accepting the request (DirectMessageRequestService).
+        return Map.of(creatorId, Role.OWNER);
     }
 }

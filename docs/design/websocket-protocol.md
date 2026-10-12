@@ -343,8 +343,10 @@ CM-060 implements the queue, create/PUBLIC join, leave/delete, editable room upd
 CM-062 implements member listing/removal and persisted join/leave/removal SYSTEM announcements.
 CM-061 implements activity/read fields in `ChatRoomResponse` and shares the saved-message summary with `ROOM_ACTIVITY`.
 CM-070 implements `INVITATION_RECEIVED`, `INVITATION_CHANGED` and `ROOM_ADDED` on an accepted invitation (see "Invitations" below).
+CM-072 implements `DM_REQUEST_RECEIVED`, `ROOM_ADDED`/`ROOM_UPDATED` on an accepted DM request and `ROOM_REMOVED` with `DECLINED`/`EXPIRED`
+(see "DM requests" below). A new DM notifies only its sender with `ROOM_ADDED`; the recipient gets `DM_REQUEST_RECEIVED`.
 Other SPEC-009 extensions remain with the later tickets in the table.
-New DMs notify both initial members with their respective room views. Unchanged name/description/capacity emits no update event.
+New rooms notify their creator with the room view (a new DM: the sender only). Unchanged name/description/capacity emits no update event.
 Delivery failures log metadata only and do not stop other recipients; clients recover missed events by refetching after reconnect.
 CM-061 also isolates activity-update and recipient-lookup failures after persistence: they do not fail the saved message send.
 Destination `/user/queue/events`, server to client, SUBSCRIBE by any authenticated Principal for its own user destination. The
@@ -357,13 +359,13 @@ that user (with `myRole`, `unreadCount`, `lastMessage`, `state`, `blocked`).
 
 | `type` | `payload` | To | Sent when | Ticket |
 |---|---|---|---|---|
-| `ROOM_ADDED` | `{room}` | the user who entered | create, PUBLIC join, invitation accepted, DM request accepted (recipient) | CM-060, CM-070 implemented, CM-072 |
-| `ROOM_REMOVED` | `{roomId, reason}`; `reason` = `LEFT` \| `REMOVED` \| `DELETED` \| `HIDDEN` \| `DECLINED` \| `EXPIRED` | the affected user | leave; removed by owner/admin; room deleted (every member); DM hidden (caller's other sessions); DM request declined or expired (sender) | CM-060, CM-062, CM-072, CM-075 |
-| `ROOM_UPDATED` | `{room}` | every member, or only the affected user | name/description/capacity change (all members); role change or owner transfer (affected user); DM request accepted (sender) | CM-060, CM-072, CM-076 |
+| `ROOM_ADDED` | `{room}` | the user who entered | create, PUBLIC join, invitation accepted, DM request accepted (recipient) | CM-060, CM-070, CM-072 implemented |
+| `ROOM_REMOVED` | `{roomId, reason}`; `reason` = `LEFT` \| `REMOVED` \| `DELETED` \| `HIDDEN` \| `DECLINED` \| `EXPIRED` | the affected user | leave; removed by owner/admin; room deleted (every member); DM hidden (caller's other sessions); DM request declined or expired (sender) | CM-060, CM-062, CM-072 implemented; CM-075 |
+| `ROOM_UPDATED` | `{room}` | every member, or only the affected user | name/description/capacity change (all members); role change or owner transfer (affected user); DM request accepted (sender) | CM-060, CM-072, CM-076 implemented |
 | `ROOM_ACTIVITY` | `{roomId, lastMessage: {id, senderId, senderName, preview, createdAt}}` | every member, after persist | non-SYSTEM message persisted; `preview` <= 100 chars; a member whose `hiddenAt` is cleared by this message receives it too | CM-060, CM-061 (shared persisted summary), CM-075 |
 | `INVITATION_RECEIVED` | `{invitation: {id, room: {id, name, memberCount}, inviter: {id, name, avatarUrl}, invitee: {id, name, avatarUrl}, createdAt, expiresAt}}` | invitee | invitation created | CM-070 implemented |
 | `INVITATION_CHANGED` | `{invitationId, roomId, status}` | invitee and inviter | accepted, declined, revoked | CM-070 implemented |
-| `DM_REQUEST_RECEIVED` | `{request: {roomId, sender: {id, name, avatarUrl}, preview, createdAt, expiresAt}}` | recipient (not when a block exists) | DM request created; `preview` is updated by the one allowed message with a second `DM_REQUEST_RECEIVED` for the same `roomId` (client upserts by `roomId`) | CM-072 |
+| `DM_REQUEST_RECEIVED` | `{request: {roomId, sender: {id, name, avatarUrl}, preview, createdAt, expiresAt}}` | recipient (not when a block exists) | DM request created; `preview` is updated by the one allowed message with a second `DM_REQUEST_RECEIVED` for the same `roomId` (client upserts by `roomId`); `preview` is null before that message | CM-072 implemented (block filter: CM-073) |
 
 Rules:
 - An event for a room that is not in the client's list makes the client fetch `GET /api/v1/rooms/{id}` once and insert it.
@@ -385,8 +387,8 @@ Rules:
   `AuthChannelInterceptorTest$WireConnect` and `StompMessagingIT`. Until this is resolved, a SUBSCRIBE sent right before a SEND can still
   be processed out of order (WS-A14). Options are in the CM-068 report; the owner decides.
 
-New STOMP error codes (SPEC-009): `DM_REQUEST_PENDING` (second message in a REQUESTED DM by the sender), `FORBIDDEN_ACTION` with the
-generic message "Cannot message this user" (block). Both go to `/user/queue/errors` of the sending session.
+New STOMP error codes (SPEC-009): `DM_REQUEST_PENDING` (second message in a REQUESTED DM by the sender; CM-072 implemented), `FORBIDDEN_ACTION` with the
+generic message "Cannot message this user" (block, CM-073). Both go to `/user/queue/errors` of the sending session.
 
 ## REST endpoints added in v0 (summary)
 Full contracts are in the specs and in OpenAPI (`/v3/api-docs`, dev/local).
@@ -399,7 +401,7 @@ Full contracts are in the specs and in OpenAPI (`/v3/api-docs`, dev/local).
 | `POST /api/v1/rooms/{roomId}/invitations`, `GET /api/v1/rooms/{roomId}/invitations` | AC-009-1, -3 | CM-070 implemented |
 | `GET /api/v1/invitations`, `POST /api/v1/invitations/{id}/accept`, `POST .../decline`, `DELETE /api/v1/invitations/{id}` | AC-009-2, -3 | CM-070 implemented |
 | removed: `POST /api/v1/rooms/{roomId}/members` | AC-009-5 | CM-070 implemented (405) |
-| `GET /api/v1/dm-requests`, `POST /api/v1/rooms/{roomId}/dm-request/accept`, `POST .../dm-request/decline` | AC-009-11, -12 | CM-072 |
+| `GET /api/v1/dm-requests`, `POST /api/v1/rooms/{roomId}/dm-request/accept`, `POST .../dm-request/decline` | AC-009-11, -12 | CM-072 implemented |
 | `PUT` / `DELETE /api/v1/users/{userId}/block`, `GET /api/v1/users/me/blocks` | AC-009-15 | CM-073 |
 | `POST /api/v1/reports` | AC-009-20 | CM-074 |
 | `POST /api/v1/rooms/{roomId}/hide` | AC-009-21 | CM-075 |
@@ -423,6 +425,35 @@ Full contracts are in the specs and in OpenAPI (`/v3/api-docs`, dev/local).
   "X joined" SYSTEM message, `INVITATION_CHANGED` to invitee and inviter, `ROOM_ADDED` to the invitee. Decline and revoke send
   `INVITATION_CHANGED` to both.
 - Block checks (AC-009-4) are added in CM-073 at `InvitationService.checkConsentAllowed`, which runs on invite and on accept.
+
+## DM requests (SPEC-009 AC-009-9..13, CM-072 implemented)
+
+- `POST /api/v1/rooms` with `roomType=DIRECT_MESSAGE` answers 201 with `state: REQUESTED`. Only the sender has a participant row
+  (OWNER, `memberCount` 1); a `DM_REQUEST` row (`pairKey`, `expiresAt` = now + 14 days) is stored and the recipient gets
+  `DM_REQUEST_RECEIVED`. `ChatRoomResponse.state` is `ACTIVE` or `REQUESTED` (a missing stored value is `ACTIVE`).
+- Same pair again: the sender gets the existing room with 200, whatever its state; the recipient creating the same DM accepts the
+  request and gets the ACTIVE room with 200 (D-04). While a decline cooldown exists for the pair (either direction), creation answers
+  403 `FORBIDDEN_ACTION` "Cannot message this user".
+- While `REQUESTED`, the sender may send one message: it takes the room's `lastMessage` slot with one conditional update before it
+  is saved, so concurrent sends let exactly one through; a retry with the same `tempId` returns the stored message. Its summary is the
+  request preview, and the recipient gets `DM_REQUEST_RECEIVED` again. A further message answers `DM_REQUEST_PENDING` on
+  `/user/queue/errors` (409 `DM_REQUEST_PENDING` as a REST ProblemDetail). The sender gets `ROOM_ACTIVITY` as a member; the
+  recipient, not yet a member, gets none.
+- A message from the recipient (`/app/chat.sendMessage`) to a REQUESTED room addressed to them accepts the request, then is saved.
+- `GET /api/v1/dm-requests` lists the caller's PENDING, unexpired requests as `{roomId, sender{id, name, avatarUrl}, preview,
+  createdAt, expiresAt}`, newest first. The recipient's `GET /rooms` leaves REQUESTED rooms out (no participant row); the
+  sender's includes them with `state: REQUESTED`.
+- `POST /api/v1/rooms/{roomId}/dm-request/accept` and `.../decline` answer 204 for the recipient only. Anyone else, a request
+  that is no longer PENDING (decided, or lost a concurrent decision) and an expired request answer 404 `ROOM_NOT_FOUND`
+  "DM request not found".
+- Accept: conditional `PENDING -> ACCEPTED`, then the recipient's seat and MEMBER row (ADR-0005; the request goes back to PENDING
+  if that fails), then `REQUESTED -> ACTIVE` (conditional). The recipient gets `ROOM_ADDED`, the sender `ROOM_UPDATED`, both with
+  `state: ACTIVE`. No SYSTEM message is posted.
+- Decline: conditional `PENDING -> DECLINED` with `cooldownUntil` = now + 30 days, then the REQUESTED room is soft-deleted (clearing
+  `memberKey`) and the sender's row removed; the sender gets `ROOM_REMOVED {reason: DECLINED}`.
+- Expiry: on access (create, list, accept, decline, send) and by `MembershipRequestExpiryJob` (hourly, batches of 100; it also
+  expires INVITE rows). The room is soft-deleted, `memberKey` cleared, the sender gets `ROOM_REMOVED {reason: EXPIRED}`; no cooldown.
+- Block checks (AC-009-16) are added in CM-073 at `DirectMessageRequestService.checkConsentAllowed`, which runs on create and accept.
 
 ## Role changes and owner transfer (CM-076 implemented)
 

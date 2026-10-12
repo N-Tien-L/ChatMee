@@ -26,8 +26,10 @@ import com.lnt.chatmee.dto.response.ChatMessageResponse;
 import com.lnt.chatmee.dto.response.MessagePageResponse;
 import com.lnt.chatmee.exception.ChatRoomNotFoundException;
 import com.lnt.chatmee.exception.DatabaseOperationException;
+import com.lnt.chatmee.exception.DmRequestPendingException;
 import com.lnt.chatmee.exception.ForbiddenActionException;
 import com.lnt.chatmee.model.Message;
+import com.lnt.chatmee.model.RoomState;
 import com.lnt.chatmee.model.User;
 import com.lnt.chatmee.repository.ChatRoomRepository;
 import com.lnt.chatmee.repository.MessageRepository;
@@ -47,11 +49,14 @@ public class MessageService {
     private final MessageRepository messageRepository;
     private final UserRepository userRepository;
     private final UserEventPublisher userEvents;
+    private final DirectMessageRequestService dmRequests;
 
     public ChatMessageResponse sendMessage(ChatMessageRequest request, String userId) {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new UserNotFoundException("Authenticated user not found"));
-        if (!participantService.isUserParticipant(request.getRoomId(), userId)) {
+        boolean member = participantService.isUserParticipant(request.getRoomId(), userId);
+        // A reply from the recipient of a REQUESTED DM accepts the request first (AC-009-12).
+        if (!member && !dmRequests.acceptByReply(request.getRoomId(), userId)) {
             throw new ForbiddenActionException("Room membership required");
         }
         Message message = Message.builder()
@@ -61,15 +66,23 @@ public class MessageService {
                 .type(request.getMessageType()).content(request.getContent())
                 .createdAt(Instant.now()).updatedAt(Instant.now())
                 .isUpdated(false).isDeleted(false).build();
+        // SYSTEM messages never write the activity summary, so they never take the request-message slot.
+        boolean requestMessage = member && message.getType() != Message.MessageType.SYSTEM
+                && claimRequestMessage(message, user.getName());
         // Only the successfully persisted message may be acknowledged to the room.
-        Message saved = persistMessage(message);
+        Message saved;
+        try {
+            saved = persistMessage(message);
+        } catch (RuntimeException ex) {
+            if (requestMessage) {
+                chatRoomRepository.releaseRequestMessage(message.getChatRoomId(), message.getId());
+            }
+            throw ex;
+        }
         ChatMessageResponse response = ChatMessageResponse.from(saved, user.getName(), request.getTempId());
 
         if (saved.getType() != Message.MessageType.SYSTEM) {
-            String content = saved.getContent() == null ? "" : saved.getContent();
-            int end = content.offsetByCodePoints(0, Math.min(100, content.codePointCount(0, content.length())));
-            var summary = new LastMessageSummary(saved.getId(), saved.getSenderId(), user.getName(),
-                content.substring(0, end), saved.getCreatedAt());
+            var summary = summary(saved, user.getName());
             try {
                 chatRoomRepository.updateActivity(saved.getChatRoomId(), saved.getCreatedAt(), summary);
             } catch (DataAccessException | MessagingException ex) {
@@ -82,7 +95,49 @@ public class MessageService {
                 logger.warn("Failed to publish room activity for room {} message {}", saved.getChatRoomId(), saved.getId());
             }
         }
+        if (requestMessage) {
+            try {
+                dmRequests.previewChanged(saved.getChatRoomId());
+            } catch (DataAccessException | MessagingException ex) {
+                logger.warn("Failed to publish DM request preview for room {} message {}", saved.getChatRoomId(), saved.getId());
+            }
+        }
         return response;
+    }
+
+    /**
+     * In a REQUESTED DM the sender may send one message (AC-009-10): it takes the room's request-message slot before
+     * it is saved, so concurrent sends let exactly one through. A retry of that stored message needs no slot.
+     *
+     * @return true if this message is the request message (its slot must be released if the save fails)
+     */
+    private boolean claimRequestMessage(Message message, String senderName) {
+        String roomId = message.getChatRoomId();
+        boolean requested = chatRoomRepository.findByIdAndIsActiveTrue(roomId)
+                .map(room -> room.getState() == RoomState.REQUESTED).orElse(false);
+        if (!requested || findStoredDuplicate(message).isPresent()) {
+            return false;
+        }
+        if (dmRequests.expireIfDue(roomId)) {
+            throw new ForbiddenActionException("Room membership required");
+        }
+        if (chatRoomRepository.claimRequestMessage(roomId, message.getCreatedAt(), summary(message, senderName)) > 0) {
+            return true;
+        }
+        boolean stillRequested = chatRoomRepository.findByIdAndIsActiveTrue(roomId)
+                .map(room -> room.getState() == RoomState.REQUESTED).orElse(false);
+        if (stillRequested) {
+            throw new DmRequestPendingException("Wait until the recipient accepts your request");
+        }
+        // Accepted meanwhile: an ordinary message.
+        return false;
+    }
+
+    private static LastMessageSummary summary(Message message, String senderName) {
+        String content = message.getContent() == null ? "" : message.getContent();
+        int end = content.offsetByCodePoints(0, Math.min(100, content.codePointCount(0, content.length())));
+        return new LastMessageSummary(message.getId(), message.getSenderId(), senderName,
+            content.substring(0, end), message.getCreatedAt());
     }
 
     /** A blank tempId is no idempotency key, so the message is stored without a client id. */

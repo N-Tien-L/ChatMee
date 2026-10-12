@@ -14,6 +14,7 @@ import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
 import com.lnt.chatmee.security.RoomSubscriptionInterceptor;
 import com.lnt.chatmee.model.ChatRoom;
+import com.lnt.chatmee.model.RoomState;
 import com.lnt.chatmee.model.Message;
 import com.lnt.chatmee.model.Participant;
 import com.lnt.chatmee.model.Participant.Role;
@@ -66,12 +67,13 @@ class ChatRoomServiceTest {
     @Spy RoomTypePolicyRegistry policies = new RoomTypePolicyRegistry(List.of(
         new PublicRoomPolicy(), new PrivateRoomPolicy(), new DirectRoomPolicy()));
     @Mock UserEventPublisher userEvents;
+    @Mock DirectMessageRequestService dmRequests;
 
     @InjectMocks
     private ChatRoomService chatRoomService;
 
     @Test
-    void createRoom_directRoom_createsSuccessfully() {
+    void createRoom_directRoom_createsRequestedRoomWithOnlySenderAndOpensRequest() {
         User creator = User.builder().id("user1").build();
         User participant = User.builder().id("user2").build();
 
@@ -86,24 +88,62 @@ class ChatRoomServiceTest {
         ChatRoom savedRoom = ChatRoom.builder()
                 .id("room1")
                 .type(ChatRoom.RoomType.DIRECT_MESSAGE)
+                .state(RoomState.REQUESTED)
                 .createdBy("user1")
                 .build();
         when(chatRoomRepository.save(any(ChatRoom.class))).thenReturn(savedRoom);
-        when(participantService.getParticipantUserIds(List.of("room1"))).thenReturn(Map.of("room1", Set.of("user1", "user2")));
+        when(participantService.getParticipantUserIds(List.of("room1"))).thenReturn(Map.of("room1", Set.of("user1")));
 
         ChatRoomResponse response = chatRoomService.createRoom(request, "user1");
 
+        // AC-009-9: only the sender is a member until the recipient accepts; the recipient gets DM_REQUEST_RECEIVED.
         verify(userEvents).roomAdded("user1", response);
-        verify(userEvents).roomAdded(eq("user2"), any(ChatRoomResponse.class));
         verifyNoMoreInteractions(userEvents);
         assertThat(response.id()).isEqualTo("room1");
-        assertThat(response.participants()).containsExactlyInAnyOrder("user1", "user2");
+        assertThat(response.state()).isEqualTo(RoomState.REQUESTED);
+        assertThat(response.participants()).containsExactly("user1");
         ArgumentCaptor<ChatRoom> saved = ArgumentCaptor.forClass(ChatRoom.class);
         verify(chatRoomRepository).save(saved.capture());
-        assertThat(saved.getValue().getMemberCount()).isEqualTo(2);
+        assertThat(saved.getValue().getState()).isEqualTo(RoomState.REQUESTED);
+        assertThat(saved.getValue().getMemberCount()).isEqualTo(1);
         assertThat(saved.getValue().getMaxParticipants()).isEqualTo(2);
-        verify(participantService).createParticipant("room1", "user1", Participant.Role.OWNER);
-        verify(participantService).createParticipant("room1", "user2", Participant.Role.MEMBER);
+        assertThat(saved.getValue().getMemberKey()).isEqualTo("user1:user2");
+        InOrder order = inOrder(dmRequests, chatRoomRepository, participantService);
+        order.verify(dmRequests).checkCanRequest("user1", "user2");
+        order.verify(chatRoomRepository).save(any(ChatRoom.class));
+        order.verify(participantService).createParticipant("room1", "user1", Participant.Role.OWNER);
+        order.verify(dmRequests).open(savedRoom, "user1", "user2");
+        verify(participantService, never()).createParticipant(eq("room1"), eq("user2"), any());
+    }
+
+    @Test
+    void createRoom_directRoomDuringDeclineCooldown_throwsForbiddenWithoutSaving() {
+        when(userRepository.findById("user1")).thenReturn(Optional.of(User.builder().id("user1").build()));
+        when(userRepository.findById("user2")).thenReturn(Optional.of(User.builder().id("user2").build()));
+        CreateChatRoomRequest request = new CreateChatRoomRequest();
+        request.setRoomType(ChatRoom.RoomType.DIRECT_MESSAGE);
+        request.setParticipantId("user2");
+        doThrow(new com.lnt.chatmee.exception.ForbiddenActionException("Cannot message this user"))
+                .when(dmRequests).checkCanRequest("user1", "user2");
+
+        assertThatThrownBy(() -> chatRoomService.createRoom(request, "user1"))
+                .isInstanceOf(com.lnt.chatmee.exception.ForbiddenActionException.class)
+                .hasMessage("Cannot message this user");
+        verify(chatRoomRepository, never()).save(any());
+    }
+
+    @Test
+    void findExistingDirectRoom_requestedPair_appliesSamePairRulesForCaller() {
+        CreateChatRoomRequest request = new CreateChatRoomRequest();
+        request.setRoomType(ChatRoom.RoomType.DIRECT_MESSAGE);
+        request.setParticipantId("user1");
+        ChatRoom requested = ChatRoom.builder().id("dm").type(ChatRoom.RoomType.DIRECT_MESSAGE)
+                .state(RoomState.REQUESTED).memberKey("user1:user2").build();
+        when(chatRoomRepository.findByMemberKeyAndIsActiveTrue("user1:user2")).thenReturn(Optional.of(requested));
+        ChatRoomResponse accepted = ChatRoomResponse.builder().id("dm").state(RoomState.ACTIVE).build();
+        when(dmRequests.resolveRequested(requested, "user2")).thenReturn(Optional.of(accepted));
+
+        assertThat(chatRoomService.findExistingDirectRoom(request, "user2")).contains(accepted);
     }
 
     @Test
@@ -907,4 +947,34 @@ class ChatRoomServiceTest {
         assertThat(chatRoomService.getList("user1")).extracting(ChatRoom::getId).containsExactly("new", "empty", "old");
     }
 
+    // CM-072 AC4: REQUESTED rooms are listed for the sender only (AC-009-11)
+
+    @Test
+    void getList_requestedDm_includedForSenderWithStateAndExcludedForRecipient() {
+        when(userRepository.findById("sender")).thenReturn(Optional.of(User.builder().id("sender").build()));
+        when(userRepository.findById("recipient")).thenReturn(Optional.of(User.builder().id("recipient").build()));
+        ChatRoom requested = ChatRoom.builder().id("dm").type(ChatRoom.RoomType.DIRECT_MESSAGE)
+                .state(RoomState.REQUESTED).isActive(true).build();
+        when(participantService.getRoomIdsOfUser("sender")).thenReturn(List.of("dm"));
+        when(participantService.getRoomIdsOfUser("recipient")).thenReturn(List.of());
+        when(chatRoomRepository.findByIdInAndIsActiveTrue(List.of("dm"))).thenReturn(List.of(requested));
+        when(participantService.getParticipantUserIds(List.of("dm"))).thenReturn(Map.of("dm", Set.of("sender")));
+
+        List<ChatRoomResponse> senderRooms = chatRoomService.toResponses(chatRoomService.getList("sender"), "sender");
+        List<ChatRoom> recipientRooms = chatRoomService.getList("recipient");
+
+        assertThat(senderRooms).singleElement().satisfies(view -> {
+            assertThat(view.id()).isEqualTo("dm");
+            assertThat(view.state()).isEqualTo(RoomState.REQUESTED);
+        });
+        assertThat(recipientRooms).isEmpty();
+    }
+
+    @Test
+    void toResponses_roomWithoutStoredState_reportsActive() {
+        ChatRoom legacy = ChatRoom.builder().id("old").type(ChatRoom.RoomType.PUBLIC).build();
+        when(participantService.getParticipantUserIds(List.of("old"))).thenReturn(Map.of("old", Set.of("user1")));
+
+        assertThat(chatRoomService.toResponse(legacy, "user1").state()).isEqualTo(RoomState.ACTIVE);
+    }
 }

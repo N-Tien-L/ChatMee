@@ -83,6 +83,7 @@ class StompMessagingIT {
         client.stop();
         mongo.remove(Query.query(Criteria.where("chatRoomId").is(roomId)), Message.class);
         mongo.remove(Query.query(Criteria.where("chatRoomId").is(roomId)), Participant.class);
+        mongo.remove(Query.query(Criteria.where("roomId").is(roomId)), com.lnt.chatmee.model.MembershipRequest.class);
         mongo.remove(Query.query(Criteria.where("id").is(roomId)), ChatRoom.class);
         for (User user : users) mongo.remove(user);
         for (String token : issuedTokens) redis.delete("ws-token:" + token);
@@ -150,6 +151,48 @@ class StompMessagingIT {
         assertThat(persisted.getChatRoomId()).isEqualTo(roomId);
         assertThat(persisted.getContent()).isEqualTo("Integration message");
         assertThat(persisted.getType()).isEqualTo(Message.MessageType.TEXT);
+    }
+
+    @Test
+    void sendMessage_requestedDm_secondSenderMessageGetsDmRequestPendingAndRecipientReplyActivates() throws Exception {
+        User sender = seedUser(true);
+        User recipient = seedUser(false);
+        String pairKey = com.lnt.chatmee.service.policy.DirectRoomPolicy.memberKey(sender.getId(), recipient.getId());
+        mongo.updateFirst(Query.query(Criteria.where("id").is(roomId)), new org.springframework.data.mongodb.core.query.Update()
+                .set("type", ChatRoom.RoomType.DIRECT_MESSAGE).set("state", com.lnt.chatmee.model.RoomState.REQUESTED)
+                .set("maxParticipants", 2).set("memberCount", 1).set("memberKey", pairKey), ChatRoom.class);
+        java.time.Instant now = java.time.Instant.now();
+        mongo.insert(com.lnt.chatmee.model.MembershipRequest.builder()
+                .kind(com.lnt.chatmee.model.MembershipRequestKind.DM_REQUEST).roomId(roomId)
+                .inviterId(sender.getId()).targetUserId(recipient.getId())
+                .status(com.lnt.chatmee.model.MembershipRequestStatus.PENDING).pairKey(pairKey)
+                .createdAt(now).expiresAt(now.plus(java.time.Duration.ofDays(14))).build());
+        StompSession senderSession = connect(issueToken(sender), new ProtocolEvents());
+        BlockingQueue<String> senderErrors = subscribeReady(senderSession, "/user/queue/errors", sender.getId());
+        BlockingQueue<String> roomFrames = subscribeReady(senderSession, "/topic/rooms/" + roomId, null);
+
+        sendJson(senderSession, payload(UUID.randomUUID().toString(), "Hi, can we talk?", sender.getId()));
+        assertThat(mapper.readTree(take(roomFrames)).path("content").asString()).isEqualTo("Hi, can we talk?");
+        String secondTempId = UUID.randomUUID().toString();
+        sendJson(senderSession, payload(secondTempId, "Hello?", sender.getId()));
+
+        JsonNode error = mapper.readTree(take(senderErrors));
+        assertThat(error.path("code").asString()).isEqualTo("DM_REQUEST_PENDING");
+        assertThat(error.path("tempId").asString()).isEqualTo(secondTempId);
+        assertThat(mongo.count(Query.query(Criteria.where("chatRoomId").is(roomId)), Message.class)).isEqualTo(1);
+
+        StompSession recipientSession = connect(issueToken(recipient), new ProtocolEvents());
+        sendJson(recipientSession, payload(UUID.randomUUID().toString(), "Sure", recipient.getId()));
+
+        JsonNode reply = mapper.readTree(take(roomFrames));
+        assertThat(reply.path("senderId").asString()).isEqualTo(recipient.getId());
+        assertThat(reply.path("content").asString()).isEqualTo("Sure");
+        ChatRoom activated = mongo.findById(roomId, ChatRoom.class);
+        assertThat(activated.getState()).isEqualTo(com.lnt.chatmee.model.RoomState.ACTIVE);
+        assertThat(activated.getMemberCount()).isEqualTo(2);
+        assertThat(mongo.exists(Query.query(Criteria.where("chatRoomId").is(roomId).and("userId").is(recipient.getId())),
+                Participant.class)).isTrue();
+        assertThat(senderErrors.poll(1, TimeUnit.SECONDS)).isNull();
     }
 
     @Test
