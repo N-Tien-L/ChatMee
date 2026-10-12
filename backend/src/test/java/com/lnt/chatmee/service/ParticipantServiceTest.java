@@ -85,6 +85,20 @@ class ParticipantServiceTest {
     }
 
     @Test
+    void insertMember_privateRoom_seatsMemberWithoutAnnouncement() {
+        room.setType(RoomType.PRIVATE);
+        when(rooms.findByIdAndIsActiveTrue("room")).thenReturn(Optional.of(room));
+        User target = User.builder().id("target").name("Tara").build();
+        when(users.findById("target")).thenReturn(Optional.of(target));
+        when(rooms.reserveSeat(eq("room"), any())).thenReturn(1L);
+
+        assertEquals(target, service.insertMember("room", "target", Role.MEMBER));
+
+        verify(participants).save(argThat(p -> p.getUserId().equals("target") && p.getRole() == Role.MEMBER));
+        verifyNoInteractions(messageService);
+    }
+
+    @Test
     void addParticipant_insertLosesUniqueIndexRace_releasesSeatAndThrowsAlreadyParticipant() {
         when(rooms.findByIdAndIsActiveTrue("room")).thenReturn(Optional.of(room));
         when(users.findById("target")).thenReturn(Optional.of(User.builder().id("target").build()));
@@ -169,75 +183,10 @@ class ParticipantServiceTest {
     }
 
     @Test
-    void addParticipant_ownerAssigningAdmin_addsAdmin() { allowAssignment(Role.OWNER, "ADMIN", Role.ADMIN); }
-
-    @Test
-    void addParticipant_ownerAssigningMember_addsMember() { allowAssignment(Role.OWNER, "MEMBER", Role.MEMBER); }
-
-    @Test
-    void addParticipant_adminAssigningMember_addsMember() { allowAssignment(Role.ADMIN, "MEMBER", Role.MEMBER); }
-
-    @Test
-    void addParticipant_adminAssigningAdmin_throwsForbidden() { rejectAssignment(Role.ADMIN, "ADMIN"); }
-
-    @Test
-    void addParticipant_ownerAssigningOwner_throwsForbidden() { rejectAssignment(Role.OWNER, "OWNER"); }
-
-    @Test
-    void addParticipant_adminAssigningOwner_throwsForbidden() { rejectAssignment(Role.ADMIN, "OWNER"); }
-
-    @Test
-    void addParticipant_memberAssigningOwner_throwsForbidden() { rejectAssignment(Role.MEMBER, "OWNER"); }
-
-    @Test
-    void addParticipant_memberCaller_throwsForbidden() { rejectAssignment(Role.MEMBER, "MEMBER"); }
-
-    @Test
-    void addParticipant_nonParticipantCaller_throwsForbidden() {
-        joinUser();
-        assertThrows(ForbiddenActionException.class,
-                () -> service.addParticipant("room", "actor", "target", "MEMBER"));
-        verifyNoInteractions(rooms);
-        verify(participants, never()).save(any());
-    }
-
-    @Test
-    void addParticipant_invalidRole_throwsBadRequestException() {
-        actor(Role.OWNER);
-        assertThrows(com.lnt.chatmee.exception.InvalidRequestException.class,
-                () -> service.addParticipant("room", "actor", "target", "INVALID"));
-        verifyNoInteractions(rooms);
-        verify(participants, never()).save(any());
-    }
-
-    @Test
-    void addParticipant_missingRole_defaultsToMember() { allowAssignment(Role.ADMIN, null, Role.MEMBER); }
-
-    @Test
-    void addParticipant_blankRole_defaultsToMember() { allowAssignment(Role.ADMIN, "  ", Role.MEMBER); }
-
-    @Test
-    void addParticipant_lowercaseRole_addsMember() { allowAssignment(Role.ADMIN, "member", Role.MEMBER); }
-
-    @Test
     void createParticipant_uniqueIndexRace_throwsAlreadyParticipant() {
         when(participants.save(any())).thenThrow(new org.springframework.dao.DuplicateKeyException("duplicate"));
         assertThrows(UserAlreadyInRoomException.class,
                 () -> service.createParticipant("room", "actor", Role.MEMBER));
-    }
-
-    @Test
-    void addParticipant_directRoom_throwsForbiddenWithoutReservingSeat() {
-        actor(Role.OWNER);
-        room.setType(RoomType.DIRECT_MESSAGE);
-        when(rooms.findByIdAndIsActiveTrue("room")).thenReturn(Optional.of(room));
-        lenient().when(users.findById("target")).thenReturn(Optional.of(User.builder().id("target").build()));
-        lenient().when(rooms.reserveSeat(eq("room"), any())).thenReturn(1L);
-        ForbiddenActionException failure = assertThrows(ForbiddenActionException.class,
-                () -> service.addParticipant("room", "actor", "target", "MEMBER"));
-        assertEquals(com.lnt.chatmee.exception.ErrorCode.FORBIDDEN_ACTION, failure.getErrorCode());
-        verify(rooms, never()).reserveSeat(any(), any());
-        verify(participants, never()).save(any());
     }
 
     @Test
@@ -287,28 +236,6 @@ class ParticipantServiceTest {
     private static Participant member(String userId, Role role, int joinedMinute) {
         return Participant.builder().chatRoomId("room").userId(userId).role(role)
             .joinedAt(java.time.LocalDateTime.of(2026, 10, 1, 10, joinedMinute)).build();
-    }
-
-    private void actor(Role role) {
-        joinUser();
-        when(participants.findByChatRoomIdAndUserId("room", "actor"))
-                .thenReturn(Optional.of(Participant.builder().role(role).build()));
-    }
-
-    private void allowAssignment(Role actorRole, String requestedRole, Role expectedRole) {
-        actor(actorRole);
-        targetAndRoom("target");
-        service.addParticipant("room", "actor", "target", requestedRole);
-        verify(participants).save(argThat(p -> p.getUserId().equals("target") && p.getRole() == expectedRole));
-        verify(rooms).reserveSeat(eq("room"), any());
-    }
-
-    private void rejectAssignment(Role actorRole, String requestedRole) {
-        actor(actorRole);
-        assertThrows(ForbiddenActionException.class,
-                () -> service.addParticipant("room", "actor", "target", requestedRole));
-        verifyNoInteractions(rooms);
-        verify(participants, never()).save(any());
     }
 
     private void rejectJoin(RoomType type) {
@@ -383,7 +310,6 @@ class ParticipantServiceTest {
         verifyNoInteractions(rooms, users, participants);
         verify(userEvents, never()).roomActivity(any(), anyString(), any());
     }
-
 
     @Test
     void membershipChanges_joinLeaveRemove_persistAndBroadcastSystemMessagesWithoutActivity() {

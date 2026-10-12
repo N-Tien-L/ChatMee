@@ -342,7 +342,8 @@ CM-068 regression coverage:
 CM-060 implements the queue, create/PUBLIC join, leave/delete, editable room updates and non-SYSTEM activity.
 CM-062 implements member listing/removal and persisted join/leave/removal SYSTEM announcements.
 CM-061 implements activity/read fields in `ChatRoomResponse` and shares the saved-message summary with `ROOM_ACTIVITY`.
-SPEC-009 extensions remain with the later tickets in the table.
+CM-070 implements `INVITATION_RECEIVED`, `INVITATION_CHANGED` and `ROOM_ADDED` on an accepted invitation (see "Invitations" below).
+Other SPEC-009 extensions remain with the later tickets in the table.
 New DMs notify both initial members with their respective room views. Unchanged name/description/capacity emits no update event.
 Delivery failures log metadata only and do not stop other recipients; clients recover missed events by refetching after reconnect.
 CM-061 also isolates activity-update and recipient-lookup failures after persistence: they do not fail the saved message send.
@@ -356,12 +357,12 @@ that user (with `myRole`, `unreadCount`, `lastMessage`, `state`, `blocked`).
 
 | `type` | `payload` | To | Sent when | Ticket |
 |---|---|---|---|---|
-| `ROOM_ADDED` | `{room}` | the user who entered | create, PUBLIC join, invitation accepted, DM request accepted (recipient) | CM-060, CM-070, CM-072 |
+| `ROOM_ADDED` | `{room}` | the user who entered | create, PUBLIC join, invitation accepted, DM request accepted (recipient) | CM-060, CM-070 implemented, CM-072 |
 | `ROOM_REMOVED` | `{roomId, reason}`; `reason` = `LEFT` \| `REMOVED` \| `DELETED` \| `HIDDEN` \| `DECLINED` \| `EXPIRED` | the affected user | leave; removed by owner/admin; room deleted (every member); DM hidden (caller's other sessions); DM request declined or expired (sender) | CM-060, CM-062, CM-072, CM-075 |
 | `ROOM_UPDATED` | `{room}` | every member, or only the affected user | name/description/capacity change (all members); role change or owner transfer (affected user); DM request accepted (sender) | CM-060, CM-072, CM-076 |
 | `ROOM_ACTIVITY` | `{roomId, lastMessage: {id, senderId, senderName, preview, createdAt}}` | every member, after persist | non-SYSTEM message persisted; `preview` <= 100 chars; a member whose `hiddenAt` is cleared by this message receives it too | CM-060, CM-061 (shared persisted summary), CM-075 |
-| `INVITATION_RECEIVED` | `{invitation: {id, room: {id, name, memberCount}, inviter: {id, name, avatarUrl}, createdAt, expiresAt}}` | invitee | invitation created | CM-070 |
-| `INVITATION_CHANGED` | `{invitationId, roomId, status}` | invitee and inviter | accepted, declined, revoked | CM-070 |
+| `INVITATION_RECEIVED` | `{invitation: {id, room: {id, name, memberCount}, inviter: {id, name, avatarUrl}, invitee: {id, name, avatarUrl}, createdAt, expiresAt}}` | invitee | invitation created | CM-070 implemented |
+| `INVITATION_CHANGED` | `{invitationId, roomId, status}` | invitee and inviter | accepted, declined, revoked | CM-070 implemented |
 | `DM_REQUEST_RECEIVED` | `{request: {roomId, sender: {id, name, avatarUrl}, preview, createdAt, expiresAt}}` | recipient (not when a block exists) | DM request created; `preview` is updated by the one allowed message with a second `DM_REQUEST_RECEIVED` for the same `roomId` (client upserts by `roomId`) | CM-072 |
 
 Rules:
@@ -395,14 +396,33 @@ Full contracts are in the specs and in OpenAPI (`/v3/api-docs`, dev/local).
 | `PUT /api/v1/rooms/{roomId}/members/me/read` | AC-008-3: caller-only marker, 204; non-member or inactive room 404 | CM-061 implemented |
 | `GET /api/v1/rooms/{roomId}/members` | AC-008-5: member data batched in two queries, plus active-room authorization | CM-062 implemented |
 | `DELETE /api/v1/rooms/{roomId}/members/{userId}` | AC-008-6: 204; OWNER removes others, ADMIN removes MEMBER; DMs 403; unknown member/non-member caller 404 | CM-062 implemented |
-| `POST /api/v1/rooms/{roomId}/invitations`, `GET /api/v1/rooms/{roomId}/invitations` | AC-009-1, -3 | CM-070 |
-| `GET /api/v1/invitations`, `POST /api/v1/invitations/{id}/accept`, `POST .../decline`, `DELETE /api/v1/invitations/{id}` | AC-009-2, -3 | CM-070 |
-| removed: `POST /api/v1/rooms/{roomId}/members` | AC-009-5 | CM-070 |
+| `POST /api/v1/rooms/{roomId}/invitations`, `GET /api/v1/rooms/{roomId}/invitations` | AC-009-1, -3 | CM-070 implemented |
+| `GET /api/v1/invitations`, `POST /api/v1/invitations/{id}/accept`, `POST .../decline`, `DELETE /api/v1/invitations/{id}` | AC-009-2, -3 | CM-070 implemented |
+| removed: `POST /api/v1/rooms/{roomId}/members` | AC-009-5 | CM-070 implemented (405) |
 | `GET /api/v1/dm-requests`, `POST /api/v1/rooms/{roomId}/dm-request/accept`, `POST .../dm-request/decline` | AC-009-11, -12 | CM-072 |
 | `PUT` / `DELETE /api/v1/users/{userId}/block`, `GET /api/v1/users/me/blocks` | AC-009-15 | CM-073 |
 | `POST /api/v1/reports` | AC-009-20 | CM-074 |
 | `POST /api/v1/rooms/{roomId}/hide` | AC-009-21 | CM-075 |
 | `PATCH /api/v1/rooms/{roomId}/members/{userId}/role` | AC-009-23 | CM-076 |
+
+## Invitations (SPEC-009 AC-009-1..3, AC-009-5, CM-070 implemented)
+
+- `POST /api/v1/rooms/{roomId}/invitations` body `{userId}` answers 201 with the invitation. The inviter is the authenticated caller
+  (a body field is ignored) and must be OWNER or ADMIN by participant role. Non-member 404 `ROOM_NOT_FOUND`, MEMBER 403, PUBLIC room
+  400 `INVALID_ARGUMENT`, DM 403, unknown invitee 404 `USER_NOT_FOUND`, invitee already a member 409 `ALREADY_PARTICIPANT`, pending
+  invitation 409 `DUPLICATE_RESOURCE`, full room 409 `ROOM_FULL`. The invitation expires 7 days after creation.
+- `GET /api/v1/invitations` (the caller's) and `GET /api/v1/rooms/{roomId}/invitations` (OWNER/ADMIN) list PENDING, unexpired
+  invitations, newest first, as `{id, room{id, name, memberCount}, inviter{id, name, avatarUrl}, invitee{id, name, avatarUrl},
+  createdAt, expiresAt}`. `invitee` is added so OWNER/ADMIN can tell the room's invitations apart. Invitations of deleted rooms are left out.
+- `POST /api/v1/invitations/{id}/accept` and `.../decline` (invitee only) and `DELETE /api/v1/invitations/{id}` (inviter, or OWNER/ADMIN
+  of the room) answer 204. An invitation is visible only to its invitee, its inviter and the room's OWNER/ADMIN: others get 404
+  `INVITATION_NOT_FOUND`, and so does anyone but the invitee on accept/decline. The invitee revoking gets 403. A decided or expired
+  invitation answers 409 `INVITATION_NOT_PENDING`; an expired PENDING row is set to `EXPIRED` when it is accessed.
+- Accept: one conditional update `PENDING -> ACCEPTED` (`_id`, `status: PENDING`, `expiresAt > now`), then the seat and the member row
+  (ADR-0005). If the seat or insert fails (room full 409, room deleted 404), the invitation goes back to `PENDING`. On success:
+  "X joined" SYSTEM message, `INVITATION_CHANGED` to invitee and inviter, `ROOM_ADDED` to the invitee. Decline and revoke send
+  `INVITATION_CHANGED` to both.
+- Block checks (AC-009-4) are added in CM-073 at `InvitationService.checkConsentAllowed`, which runs on invite and on accept.
 
 ## Role changes and owner transfer (CM-076 implemented)
 

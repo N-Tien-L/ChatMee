@@ -24,8 +24,8 @@ public class DirectRoomPolicy implements RoomTypePolicy {
         throw new ForbiddenActionException("Only PUBLIC rooms can be joined");
     }
     @Override
-    public void checkAddParticipant() {
-        throw new ForbiddenActionException("Cannot add participants to direct message rooms");
+    public void checkInvite() {
+        throw new ForbiddenActionException("Cannot invite users to direct message rooms");
     }
     @Override
     public void checkRoleChange() {

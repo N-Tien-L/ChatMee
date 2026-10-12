@@ -194,7 +194,7 @@ Status: Approved (SPEC-009, ADR-0006). Join requests, `room_removals` and mute a
   `OWNER` with a conditional update (still the role it was read with), then delete the leaving owner's row with a conditional delete
   (`role = OWNER`) and release the seat. If that delete finds no row, the promotion is reverted so one OWNER remains. Implemented in CM-076.
 
-### membership_requests (new, CM-070 and CM-072)
+### membership_requests (new, CM-070 implemented for `INVITE`; CM-072)
 | Field | Notes |
 |---|---|
 | `_id` | id |
@@ -215,6 +215,12 @@ Indexes:
 
 Accept path (ADR-0005 style): `findAndModify` `{_id, status: PENDING, expiresAt > now}` -> `ACCEPTED`; then `reserveSeat` and insert the
 participant; if either fails, set the request back to `PENDING` and return the error.
+CM-070: the four indexes are declared on `MembershipRequest` (names `membership_requests_room_target_pending`,
+`membership_requests_target_kind_status`, `membership_requests_room_status`, `membership_requests_pair_cooldown`) and created by
+auto-index creation. The conditional transition is an atomic `updateFirst` on that filter (`decidePending`, returns the match count);
+the document is not needed back. An expired `PENDING` row found by an invite for the same person is set to `EXPIRED` first, so the
+partial unique index admits the new invitation. Inviting checks `memberCount < maxParticipants` (409) as a fast path; the seat
+reservation on accept stays the authority.
 
 ### user_blocks (new, CM-073)
 - `{blockerId, blockedId, createdAt}`; unique `{blockerId: 1, blockedId: 1}`; `{blockedId: 1, blockerId: 1}` for the reverse check.

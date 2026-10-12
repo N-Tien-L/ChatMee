@@ -11,7 +11,8 @@ import com.lnt.chatmee.model.Participant.Role;
 public interface RoomTypePolicy {
     ChatRoom.RoomType type();
     void checkJoin();
-    void checkAddParticipant();
+    /** Whether OWNER/ADMIN may invite users into this room type (AC-009-1). */
+    void checkInvite();
 
     default void checkRemoveMember(String callerId, Role callerRole, String targetId, Role targetRole) {
         if (callerId.equals(targetId) || (callerRole != Role.OWNER

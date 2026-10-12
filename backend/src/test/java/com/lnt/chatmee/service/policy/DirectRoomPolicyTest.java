@@ -16,8 +16,8 @@ class DirectRoomPolicyTest {
     @Test void checkJoin_directRoom_throwsForbidden() {
         assertEquals("Only PUBLIC rooms can be joined", assertThrows(ForbiddenActionException.class, policy::checkJoin).getMessage());
     }
-    @Test void checkAddParticipant_directRoom_throwsForbiddenAction() {
-        assertEquals(ErrorCode.FORBIDDEN_ACTION, assertThrows(ForbiddenActionException.class, policy::checkAddParticipant).getErrorCode());
+    @Test void checkInvite_directRoom_throwsForbiddenAction() {
+        assertEquals(ErrorCode.FORBIDDEN_ACTION, assertThrows(ForbiddenActionException.class, policy::checkInvite).getErrorCode());
     }
     @Test void checkUpdate_capacityChange_throwsInvalidRequest() {
         var request = new UpdateChatRoomRequest(); request.setMaxUsers(2);

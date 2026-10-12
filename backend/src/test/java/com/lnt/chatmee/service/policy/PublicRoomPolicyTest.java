@@ -14,7 +14,9 @@ import com.lnt.chatmee.model.Participant.Role;
 class PublicRoomPolicyTest {
     private final PublicRoomPolicy policy = new PublicRoomPolicy();
     @Test void checkJoin_roomType_preservesJoinRule() { assertDoesNotThrow(policy::checkJoin); }
-    @Test void checkAddParticipant_groupRoom_allowsAddition() { assertDoesNotThrow(policy::checkAddParticipant); }
+    @Test void checkInvite_publicRoom_throwsInvalidArgument() {
+        assertEquals(ErrorCode.INVALID_ARGUMENT, assertThrows(InvalidRequestException.class, policy::checkInvite).getErrorCode());
+    }
     @Test void checkUpdate_capacityChange_allowsUpdate() {
         var request = new UpdateChatRoomRequest(); request.setMaxUsers(5);
         assertDoesNotThrow(() -> policy.checkUpdate(request));

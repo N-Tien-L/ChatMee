@@ -22,7 +22,6 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.lnt.chatmee.dto.request.CreateChatRoomRequest;
-import com.lnt.chatmee.dto.request.JoinChatRoomRequest;
 import com.lnt.chatmee.dto.request.UpdateChatRoomRequest;
 import com.lnt.chatmee.dto.request.UpdateMemberRoleRequest;
 import com.lnt.chatmee.dto.response.ApiResponse;
@@ -148,16 +147,6 @@ public class ChatRoomController {
             @PathVariable String userId, @Validated @RequestBody UpdateMemberRoleRequest request) {
         participantService.changeMemberRole(roomId, user.userId(), userId, request.role());
         return ResponseEntity.noContent().build();
-    }
-
-    @Operation(summary = "Add a participant (owner or admin only)")
-    @PostMapping("/{roomId}/members")
-    public ResponseEntity<ApiResponse<String>> addParticipantToChatRoom(
-            @CurrentUser UserPrincipal user,
-            @PathVariable String roomId,
-            @Validated @RequestBody JoinChatRoomRequest request) {
-        participantService.addParticipant(roomId, user.userId(), request.getUserId(), request.getRole());
-        return ResponseEntity.ok(ApiResponse.success("Participant successfully added to the chat room"));
     }
 
     @Operation(summary = "Leave a room")

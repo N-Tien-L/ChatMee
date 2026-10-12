@@ -231,10 +231,11 @@ class ChatRoomControllerWebMvcTest extends SecuredWebMvcTestSupport {
     }
 
     @Test
-    void addParticipant_missingUserId_returns400ValidationProblem() throws Exception {
-        expectProblem(mvc.perform(post("/api/v1/rooms/room-1/members").with(oauth2Login().oauth2User(com.lnt.chatmee.support.TestUsers.principal("u1"))).with(csrf().asHeader())
-                .contentType(MediaType.APPLICATION_JSON).content("{}")), 400, "VALIDATION_FAILED")
-                .andExpect(jsonPath("$.errors[?(@.field == 'userId')]").isNotEmpty());
+    void addParticipant_directAddRemoved_returns405WithoutAddingMember() throws Exception {
+        // AC-009-5: members enter a PRIVATE room only by accepting an invitation.
+        mvc.perform(post("/api/v1/rooms/room-1/members").with(oauth2Login().oauth2User(com.lnt.chatmee.support.TestUsers.principal("u1"))).with(csrf().asHeader())
+                .contentType(MediaType.APPLICATION_JSON).content("{\"userId\":\"u2\",\"role\":\"MEMBER\"}"))
+                .andExpect(status().isMethodNotAllowed());
         verifyNoInteractions(participantService);
     }
 
