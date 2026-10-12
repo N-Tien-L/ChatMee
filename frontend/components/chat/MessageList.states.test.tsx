@@ -77,7 +77,7 @@ describe('MessageInput keyboard', () => {
     function setup(disabled = false) {
         const onSubmit = vi.fn((e: React.FormEvent) => e.preventDefault());
         render(<MessageInput value="hi" onChange={vi.fn()} onSubmit={onSubmit} disabled={disabled}
-            sending={false} inputRef={createRef<HTMLTextAreaElement>()} />);
+            inputRef={createRef<HTMLTextAreaElement>()} />);
         return { onSubmit, input: screen.getByLabelText('Message') };
     }
 

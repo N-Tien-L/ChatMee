@@ -65,6 +65,14 @@ export interface ChatRoomResponse {
     state?: "ACTIVE" | "REQUESTED";
 }
 
+/** One row of GET /api/v1/rooms/{roomId}/members (CM-062): members only, with their role. */
+export interface MemberResponse {
+    id: string;
+    name: string;
+    avatarUrl?: string | null;
+    role: ParticipantRole;
+}
+
 /** Envelope of every frame on `/user/queue/events`. */
 export interface UserEventEnvelope {
     type: string;

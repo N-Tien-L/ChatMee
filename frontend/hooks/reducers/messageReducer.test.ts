@@ -65,14 +65,13 @@ describe('messageReducer', () => {
             type: 'ADD_OPTIMISTIC_MESSAGE',
             payload: msg
         });
-        expect(nextState.sending).toBe(false);
         expect(nextState.messages).toHaveLength(1);
         expect(nextState.messages[0]).toEqual(msg);
     });
 
     it('CONFIRM_SENT_MESSAGE replaces optimistic message with confirmed state', () => {
         const msg: Message = { ...baseMessage, id: 'tmp1', isOwn: true, status: 'sending', isOptimistic: true, tempId: 'tmp1' };
-        const state: MessageState = { ...initialState, sending: true, messages: [msg] };
+        const state: MessageState = { ...initialState, messages: [msg] };
         
         const confirmedMsg: Message = { ...msg, id: 'real1', status: 'sent', isOptimistic: false, isOwn: true };
         const nextState = messageReducer(state, {
@@ -80,7 +79,6 @@ describe('messageReducer', () => {
             payload: confirmedMsg
         });
         
-        expect(nextState.sending).toBe(false);
         expect(nextState.messages).toHaveLength(1);
         expect(nextState.messages[0].id).toBe('real1');
         expect(nextState.messages[0].status).toBe('sent');
@@ -89,14 +87,13 @@ describe('messageReducer', () => {
 
     it('FAIL_SENT_MESSAGE marks optimistic message as failed with error message', () => {
         const msg: Message = { ...baseMessage, id: 'tmp1', isOwn: true, status: 'sending', isOptimistic: true, tempId: 'tmp1' };
-        const state: MessageState = { ...initialState, sending: true, messages: [msg] };
+        const state: MessageState = { ...initialState, messages: [msg] };
         
         const nextState = messageReducer(state, {
             type: 'FAIL_SENT_MESSAGE',
             payload: { tempId: 'tmp1', error: 'Network error' }
         });
         
-        expect(nextState.sending).toBe(false);
         expect(nextState.messages).toHaveLength(1);
         expect(nextState.messages[0].status).toBe('failed');
         expect(nextState.messages[0].errorMessage).toBe('Network error');
@@ -174,7 +171,6 @@ describe('useRoomMessages delivery timeout', () => {
     it('fails only after 10 seconds and allows another send while pending', async () => {
         const { result } = await mountRoom();
         act(() => { void result.current.sendMessage('first'); });
-        expect(result.current.sending).toBe(false);
         expect(result.current.messages[0].status).toBe('sending');
         act(() => { void result.current.sendMessage('second'); });
         expect(transport.sendMessage).toHaveBeenCalledTimes(2);
