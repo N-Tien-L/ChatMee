@@ -506,7 +506,7 @@ Checked against the code on `develop` (d6ce0f3) on 2026-10-11 by reading, not by
 | WS-A11 | Mass reconnect | v0 · CM-068 | No jitter |
 | WS-A12 | 401 on reconnect loops | v0 · CM-068 | `beforeConnect` reschedules on every error |
 | WS-A13 | Token stolen before consume | Accepted | Bearer limit; WSS/HTTPS, header stripped, not logged |
-| WS-A14 | SUBSCRIBE then SEND ordering | v0 · CM-068 | Inbound thread pool does not preserve order |
+| WS-A14 | SUBSCRIBE then SEND ordering | v1, known gap (owner 2026-10-12) | `setPreserveReceiveOrder(true)` breaks CONNECT/SUBSCRIBE rejection on Spring 7.0.9 (CM-068 report); AC-008-16 partial |
 
 ## Findings triage (all review IDs)
 | Source | ID | Where it goes |
