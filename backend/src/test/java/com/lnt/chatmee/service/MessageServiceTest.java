@@ -362,7 +362,7 @@ class MessageServiceTest {
         ChatMessageResponse response = messageService.sendMessage(request, "user1");
         var order = inOrder(messageRepository, userEvents);
         order.verify(messageRepository).save(any());
-        order.verify(userEvents).roomActivity(Set.of("user1", "user2"), response);
+        order.verify(userEvents).roomActivity(eq(Set.of("user1", "user2")), eq("room1"), any(com.lnt.chatmee.dto.event.LastMessageSummary.class));
         verifyNoMoreInteractions(userEvents);
     }
 
@@ -373,7 +373,7 @@ class MessageServiceTest {
         when(participantService.isUserParticipant("room1", "user1")).thenReturn(true);
         when(messageRepository.save(any())).thenAnswer(call -> call.getArgument(0));
         messageService.sendMessage(request, "user1");
-        verifyNoInteractions(userEvents);
+        verifyNoInteractions(userEvents, chatRoomRepository);
         verify(participantService, never()).getParticipantUserIds(anyString());
     }
 
@@ -386,6 +386,55 @@ class MessageServiceTest {
         assertThatThrownBy(() -> messageService.sendMessage(request, "user1"))
             .isInstanceOf(com.lnt.chatmee.exception.DatabaseOperationException.class);
         verifyNoInteractions(userEvents);
+    }
+
+
+    @Test
+    void sendMessage_postSaveWorkFails_returnsSavedMessage() {
+        when(participantService.isUserParticipant("room1", "user1")).thenReturn(true);
+        when(messageRepository.save(any())).thenAnswer(call -> call.getArgument(0));
+        when(participantService.getParticipantUserIds("room1"))
+            .thenThrow(new org.springframework.dao.DataAccessResourceFailureException("unavailable"));
+        var response = messageService.sendMessage(textRequest("client-1"), "user1");
+        assertThat(response.id()).isNotBlank();
+        assertThat(response.clientMessageId()).isEqualTo("client-1");
+    }
+
+
+    @Test
+    void sendMessage_activityUpdateFails_returnsSavedMessage() {
+        when(participantService.isUserParticipant("room1", "user1")).thenReturn(true);
+        when(messageRepository.save(any())).thenAnswer(call -> call.getArgument(0));
+        when(chatRoomRepository.updateActivity(eq("room1"), any(), any()))
+            .thenThrow(new org.springframework.dao.DataAccessResourceFailureException("unavailable"));
+        assertThat(messageService.sendMessage(textRequest("client-1"), "user1").id()).isNotBlank();
+    }
+
+    @Test
+    void sendMessage_savedText_updatesActivityWithSameSummaryAsEvent() {
+        when(participantService.isUserParticipant("room1", "user1")).thenReturn(true);
+        when(messageRepository.save(any())).thenAnswer(call -> call.getArgument(0));
+        when(participantService.getParticipantUserIds("room1")).thenReturn(Set.of("user2"));
+        var request = textRequest("client-1");
+        request.setContent("😀".repeat(101));
+        var response = messageService.sendMessage(request, "user1");
+        var summary = ArgumentCaptor.forClass(com.lnt.chatmee.dto.event.LastMessageSummary.class);
+        var order = inOrder(messageRepository, chatRoomRepository, userEvents);
+        order.verify(messageRepository).save(any());
+        order.verify(chatRoomRepository).updateActivity(eq("room1"), eq(response.createdAt()), summary.capture());
+        order.verify(userEvents).roomActivity(Set.of("user2"), "room1", summary.getValue());
+        assertThat(summary.getValue().id()).isEqualTo(response.id());
+        assertThat(summary.getValue().preview()).isEqualTo("😀".repeat(100));
+        assertThat(summary.getValue().createdAt()).isEqualTo(response.createdAt());
+    }
+
+    @Test
+    void sendMessage_eventPublishingFails_returnsSavedMessage() {
+        when(participantService.isUserParticipant("room1", "user1")).thenReturn(true);
+        when(messageRepository.save(any())).thenAnswer(call -> call.getArgument(0));
+        doThrow(new org.springframework.messaging.MessagingException("unavailable"))
+            .when(userEvents).roomActivity(any(), anyString(), any());
+        assertThat(messageService.sendMessage(textRequest("client-1"), "user1").id()).isNotBlank();
     }
 
 }

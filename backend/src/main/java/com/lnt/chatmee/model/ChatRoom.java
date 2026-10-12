@@ -1,6 +1,8 @@
 package com.lnt.chatmee.model;
 
 import java.time.LocalDateTime;
+import java.time.Instant;
+import com.lnt.chatmee.dto.event.LastMessageSummary;
 
 import org.springframework.data.annotation.CreatedDate;
 import org.springframework.data.annotation.Id;
@@ -35,6 +37,10 @@ public class ChatRoom {
     private LocalDateTime createdAt;
 
     private LocalDateTime lastActivity;
+
+    private Instant lastActivityAt;
+
+    private LastMessageSummary lastMessage;
 
     private RoomType type;
 

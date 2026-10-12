@@ -32,6 +32,7 @@ import com.lnt.chatmee.service.policy.*;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -740,4 +741,46 @@ class ChatRoomServiceTest {
         assertThat(response.id()).isEqualTo("dm");
         verify(participantService, never()).createParticipant(anyString(), anyString(), any());
     }
+
+    @Mock private com.lnt.chatmee.repository.MessageRepository messageRepository;
+
+    @Test
+    void toResponses_readMarker_countsUnreadAndIncludesRole() {
+        var marker = Instant.parse("2026-10-12T10:00:00Z");
+        var room = ChatRoom.builder().id("room1").build();
+        var member = com.lnt.chatmee.model.Participant.builder().chatRoomId("room1").userId("user1")
+            .role(com.lnt.chatmee.model.Participant.Role.ADMIN).lastReadAt(marker).build();
+        when(participantService.getParticipantUserIds(List.of("room1"))).thenReturn(Map.of("room1", Set.of("user1")));
+        when(participantService.getMemberships("user1")).thenReturn(List.of(member));
+        when(messageRepository.countUnread("room1", "user1", marker)).thenReturn(2L);
+        var response = chatRoomService.toResponse(room, "user1");
+        assertThat(response.unreadCount()).isEqualTo(2);
+        assertThat(response.myRole()).isEqualTo(com.lnt.chatmee.model.Participant.Role.ADMIN);
+    }
+
+    @Test
+    void toResponses_missingReadMarker_returnsZeroWithoutCounting() {
+        var room = ChatRoom.builder().id("room1").build();
+        when(participantService.getMemberships("user1")).thenReturn(List.of(
+            com.lnt.chatmee.model.Participant.builder().chatRoomId("room1").userId("user1")
+                .role(com.lnt.chatmee.model.Participant.Role.MEMBER).build()));
+        var response = chatRoomService.toResponse(room, "user1");
+        assertThat(response.unreadCount()).isZero();
+        verifyNoInteractions(messageRepository);
+    }
+
+    @Test
+    void getList_activityAndCreatedAtFallback_sortsDescending() {
+        when(userRepository.findById("user1")).thenReturn(Optional.of(User.builder().id("user1").build()));
+        when(participantService.getRoomIdsOfUser("user1")).thenReturn(List.of("old", "new", "empty"));
+        var time = Instant.parse("2026-10-12T10:00:00Z");
+        var old = ChatRoom.builder().id("old").lastActivityAt(time.minusSeconds(10)).build();
+        var latest = ChatRoom.builder().id("new").lastActivityAt(time).build();
+        var empty = ChatRoom.builder().id("empty").createdAt(java.time.LocalDateTime.ofInstant(
+            time.minusSeconds(5), java.time.ZoneId.systemDefault())).build();
+        when(chatRoomRepository.findByIdInAndIsActiveTrue(List.of("old", "new", "empty")))
+            .thenReturn(List.of(old, empty, latest));
+        assertThat(chatRoomService.getList("user1")).extracting(ChatRoom::getId).containsExactly("new", "empty", "old");
+    }
+
 }

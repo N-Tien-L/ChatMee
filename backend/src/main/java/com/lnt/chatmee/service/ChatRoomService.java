@@ -1,6 +1,9 @@
 package com.lnt.chatmee.service;
 
 import java.util.HashMap;
+import java.util.Comparator;
+import com.lnt.chatmee.model.Participant;
+import com.lnt.chatmee.repository.MessageRepository;
 import java.util.HashSet;
 import java.util.Optional;
 import java.util.Objects;
@@ -59,6 +62,7 @@ public class ChatRoomService {
 
     private final ChatRoomRepository chatRoomRepository;
     private final UserRepository userRepository;
+    private final MessageRepository messageRepository;
     private final UserEventPublisher userEvents;
     private final ParticipantService participantService;
     private final SimpMessagingTemplate messagingTemplate;
@@ -132,10 +136,18 @@ public class ChatRoomService {
             userRepository.findAllById(new HashSet<>(counterpartIds.values())).forEach(user ->
                 summaries.put(user.getId(), new UserSummaryResponse(user.getId(), user.getName(), user.getAvatarUrl())));
         }
+        Map<String, Participant> memberships = new HashMap<>();
+        participantService.getMemberships(callerId).forEach(row -> memberships.put(row.getChatRoomId(), row));
         return rooms.stream()
             .map(room -> ChatRoomResponse.from(room, members.getOrDefault(room.getId(), Set.of()),
-                summaries.get(counterpartIds.get(room.getId()))))
+                summaries.get(counterpartIds.get(room.getId())), unreadCount(room.getId(), callerId, memberships.get(room.getId())),
+                memberships.containsKey(room.getId()) ? memberships.get(room.getId()).getRole() : null))
             .toList();
+    }
+
+    private long unreadCount(String roomId, String callerId, Participant membership) {
+        return membership == null || membership.getLastReadAt() == null ? 0
+            : messageRepository.countUnread(roomId, callerId, membership.getLastReadAt());
     }
 
     public ChatRoom findById(String roomId) {
@@ -196,7 +208,9 @@ public class ChatRoomService {
         if (roomIds.isEmpty()) {
             return List.of();
         }
-        return chatRoomRepository.findByIdInAndIsActiveTrue(roomIds);
+        return chatRoomRepository.findByIdInAndIsActiveTrue(roomIds).stream()
+            .sorted(Comparator.comparing(ChatRoomResponse::activityAt, Comparator.nullsLast(Comparator.reverseOrder())))
+            .toList();
     }
 
     /** Page is clamped to >= 0 and size to 1..MAX_PAGE_SIZE (non-positive size falls back to the default). */

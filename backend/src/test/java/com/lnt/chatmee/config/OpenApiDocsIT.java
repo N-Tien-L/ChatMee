@@ -39,6 +39,7 @@ class OpenApiDocsIT {
                 "/api/v1/auth/ws-token", "/api/v1/auth/me",
                 "/api/v1/rooms", "/api/v1/rooms/{roomId}",
                 "/api/v1/rooms/{roomId}/members", "/api/v1/rooms/{roomId}/members/me",
+                "/api/v1/rooms/{roomId}/members/me/read",
                 "/api/v1/rooms/{roomId}/messages", "/api/v1/online-users",
                 "/api/v1/users", "/api/v1/users/{userId}");
     }

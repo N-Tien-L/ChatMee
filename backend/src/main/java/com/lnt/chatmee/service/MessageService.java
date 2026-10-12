@@ -1,6 +1,10 @@
 package com.lnt.chatmee.service;
 
 import java.util.List;
+import com.lnt.chatmee.dto.event.LastMessageSummary;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.messaging.MessagingException;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
@@ -36,6 +40,8 @@ import lombok.RequiredArgsConstructor;
 public class MessageService {
 
 
+    private static final Logger logger = LoggerFactory.getLogger(MessageService.class);
+
     private final ChatRoomRepository chatRoomRepository;
     private final ParticipantService participantService;
     private final MessageRepository messageRepository;
@@ -60,7 +66,21 @@ public class MessageService {
         ChatMessageResponse response = ChatMessageResponse.from(saved, user.getName(), request.getTempId());
 
         if (saved.getType() != Message.MessageType.SYSTEM) {
-            userEvents.roomActivity(participantService.getParticipantUserIds(saved.getChatRoomId()), response);
+            String content = saved.getContent() == null ? "" : saved.getContent();
+            int end = content.offsetByCodePoints(0, Math.min(100, content.codePointCount(0, content.length())));
+            var summary = new LastMessageSummary(saved.getId(), saved.getSenderId(), user.getName(),
+                content.substring(0, end), saved.getCreatedAt());
+            try {
+                chatRoomRepository.updateActivity(saved.getChatRoomId(), saved.getCreatedAt(), summary);
+            } catch (DataAccessException | MessagingException ex) {
+                logger.warn("Failed to update room activity for room {} message {}", saved.getChatRoomId(), saved.getId());
+            }
+            try {
+                userEvents.roomActivity(participantService.getParticipantUserIds(saved.getChatRoomId()),
+                    saved.getChatRoomId(), summary);
+            } catch (DataAccessException | MessagingException ex) {
+                logger.warn("Failed to publish room activity for room {} message {}", saved.getChatRoomId(), saved.getId());
+            }
         }
         return response;
     }

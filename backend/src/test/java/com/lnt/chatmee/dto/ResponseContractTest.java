@@ -52,12 +52,13 @@ class ResponseContractTest {
         var room = ChatRoom.builder().id("room").name("Room").description("description")
                 .createdBy("user").type(ChatRoom.RoomType.PUBLIC).maxParticipants(10)
                 .createdAt(LocalDateTime.parse("2026-10-09T01:02:03"))
-                .lastActivity(LocalDateTime.parse("2026-10-09T01:02:03")).build();
-        var roomJson = json.valueToTree(ChatRoomResponse.from(room, Set.of("user")));
+                .lastActivity(LocalDateTime.parse("2026-10-09T01:02:03")).lastActivityAt(time).build();
+        var roomJson = json.readTree(json.writeValueAsString(ChatRoomResponse.from(room, Set.of("user"))));
         assertThat(roomJson).isEqualTo(json.readTree("""
                 {"id":"room","roomName":"Room","roomType":"PUBLIC","description":"description",
                  "createdBy":"user","createdAt":"2026-10-09T01:02:03","updatedAt":"2026-10-09T01:02:03",
-                 "maxUsers":10,"settings":null,"participants":["user"],"counterpart":null}
+                 "maxUsers":10,"settings":null,"participants":["user"],"counterpart":null,
+                 "lastActivityAt":"2026-10-09T01:02:03Z","lastMessage":null,"unreadCount":0,"myRole":null}
                 """));
         for (Class<?> type : new Class<?>[]{AuthResponse.class, UserResponse.class,
                 ChatRoomResponse.class, ChatMessageResponse.class}) assertThat(type.isRecord()).isTrue();

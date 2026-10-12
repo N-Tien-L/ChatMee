@@ -1,6 +1,7 @@
 package com.lnt.chatmee.service;
 
 import java.time.LocalDateTime;
+import java.time.Instant;
 import java.util.Collection;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -59,6 +60,7 @@ public class ParticipantService {
             .chatRoomId(chatRoomId)
             .userId(userId)
             .role(role)
+            .lastReadAt(Instant.now())
             .lastSeenAt(LocalDateTime.now())
             .isMuted(false)
             .isBlocked(false)
@@ -82,7 +84,7 @@ public class ParticipantService {
         addParticipant(roomId, user.getId(), Role.MEMBER);
         chatRoomRepository.findByIdAndIsActiveTrue(roomId).ifPresent(joinedRoom ->
             userEvents.roomAdded(user.getId(), ChatRoomResponse.from(
-                joinedRoom, getParticipantUserIds(roomId))));
+                joinedRoom, getParticipantUserIds(roomId), null, 0, Role.MEMBER)));
     }
 
     public void addParticipant(String roomId, String userId, String targetUserId, String requestedRole) {
@@ -176,6 +178,18 @@ public class ParticipantService {
         return participantRepository.findByChatRoomIdIn(roomIds).stream()
             .collect(Collectors.groupingBy(Participant::getChatRoomId,
                 Collectors.mapping(Participant::getUserId, Collectors.toCollection(LinkedHashSet::new))));
+    }
+
+    public List<Participant> getMemberships(String userId) {
+        return participantRepository.findByUserId(userId);
+    }
+
+    public void markRead(String roomId, String userId) {
+        if (chatRoomRepository.findByIdAndIsActiveTrue(roomId).isEmpty()
+                || (participantRepository.markRead(roomId, userId, Instant.now()) == 0
+                    && !participantRepository.existsByChatRoomIdAndUserId(roomId, userId))) {
+            throw new ChatRoomNotFoundException("Room membership not found");
+        }
     }
 
     public List<String> getRoomIdsOfUser(String userId) {
