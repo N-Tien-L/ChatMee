@@ -6,7 +6,6 @@ import java.util.Collection;
 import java.util.Comparator;
 import java.util.LinkedHashSet;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
@@ -95,42 +94,29 @@ public class ParticipantService {
                 joinedRoom, getParticipantUserIds(roomId), null, 0, Role.MEMBER)));
     }
 
-    public void addParticipant(String roomId, String userId, String targetUserId, String requestedRole) {
-        User actor = userRepository.findById(userId)
-            .orElseThrow(() -> new UserNotFoundException("Authenticated user not found"));
-        Participant participant = participantRepository.findByChatRoomIdAndUserId(roomId, actor.getId())
-            .orElseThrow(() -> new ForbiddenActionException("User is not a participant of the chat room"));
-        Role actorRole = participant.getRole();
-        if (actorRole != Role.ADMIN && actorRole != Role.OWNER) {
-            throw new ForbiddenActionException("Only ADMIN or OWNER can add participants to the chat room");
-        }
-        Role role = Role.MEMBER;
-        if (requestedRole != null && !requestedRole.trim().isEmpty()) {
-            try {
-                role = Role.valueOf(requestedRole.toUpperCase(Locale.ROOT));
-            } catch (IllegalArgumentException e) {
-                throw new InvalidRequestException("Invalid role specified: " + requestedRole);
-            }
-        }
-        if (role == Role.OWNER || (actorRole == Role.ADMIN && role != Role.MEMBER)) {
-            throw new ForbiddenActionException("The requested role cannot be assigned by this participant");
-        }
-        addParticipant(roomId, targetUserId, role);
+    /**
+     * Shared entry path (PUBLIC join, accepted invitation): seat and membership row, then the "X joined" message.
+     * Callers check the entry rules (policy, consent) first.
+     */
+    public void addParticipant(String roomId, String userId, Role role) {
+        User target = insertMember(roomId, userId, role);
+        announceJoin(roomId, target);
     }
 
     /**
      * Adds a member without a multi-document transaction: a seat is reserved with a conditional {@code $inc}
      * on the room, then the participant row is inserted (the unique index rejects duplicates), and the seat
-     * is given back if the insert fails. See ADR-0005.
+     * is given back if the insert fails. See ADR-0005. Posts no announcement.
+     *
+     * @return the new member's account
      */
-    public void addParticipant(String roomId, String userId, Role role) {
+    public User insertMember(String roomId, String userId, Role role) {
         // Validate IDs
         ValidationUtil.validateId(roomId, "Room ID");
         ValidationUtil.validateId(userId, "User ID");
 
-        ChatRoom room = chatRoomRepository.findByIdAndIsActiveTrue(roomId)
+        chatRoomRepository.findByIdAndIsActiveTrue(roomId)
             .orElseThrow(() -> new ChatRoomNotFoundException("Can't find chat room with id: " + roomId));
-        policies.get(room.getType()).checkAddParticipant();
 
         User target = userRepository.findById(userId)
             .orElseThrow(() -> new UserNotFoundException("Participant not found"));
@@ -149,8 +135,12 @@ public class ParticipantService {
             chatRoomRepository.releaseSeat(roomId, LocalDateTime.now());
             throw ex;
         }
-        messages.getObject().postSystemMessage(roomId, displayName(target) + " joined");
         logger.info("Added participant {} to room {}", userId, roomId);
+        return target;
+    }
+
+    public void announceJoin(String roomId, User member) {
+        messages.getObject().postSystemMessage(roomId, displayName(member) + " joined");
     }
 
     /**

@@ -14,7 +14,7 @@ import com.lnt.chatmee.model.Participant.Role;
 class PrivateRoomPolicyTest {
     private final PrivateRoomPolicy policy = new PrivateRoomPolicy();
     @Test void checkJoin_roomType_preservesJoinRule() { assertEquals("Only PUBLIC rooms can be joined", assertThrows(ForbiddenActionException.class, policy::checkJoin).getMessage()); }
-    @Test void checkAddParticipant_groupRoom_allowsAddition() { assertDoesNotThrow(policy::checkAddParticipant); }
+    @Test void checkInvite_privateRoom_allowsInvitation() { assertDoesNotThrow(policy::checkInvite); }
     @Test void checkUpdate_capacityChange_allowsUpdate() {
         var request = new UpdateChatRoomRequest(); request.setMaxUsers(5);
         assertDoesNotThrow(() -> policy.checkUpdate(request));

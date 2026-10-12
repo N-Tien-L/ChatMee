@@ -43,6 +43,29 @@ class UserEventPublisherTest {
     }
 
     @Test
+    void invitationEvents_inviteeAndInviter_deliverInvitationPayloads() {
+        var publisher = new UserEventPublisher(messaging);
+        var invitation = new com.lnt.chatmee.dto.response.InvitationResponse("inv",
+            new com.lnt.chatmee.dto.response.InvitationResponse.RoomSummary("room", "Secret", 3),
+            new com.lnt.chatmee.dto.response.UserSummaryResponse("alice", "Alice", null),
+            new com.lnt.chatmee.dto.response.UserSummaryResponse("bob", "Bob", null), Instant.EPOCH, Instant.EPOCH);
+        publisher.invitationReceived("bob", invitation);
+        publisher.invitationChanged(Set.of("bob", "alice"), "inv", "room",
+            com.lnt.chatmee.model.MembershipRequestStatus.ACCEPTED);
+        var events = ArgumentCaptor.forClass(UserEvent.class);
+        verify(messaging, times(2)).convertAndSendToUser(eq("bob"), eq("/queue/events"), events.capture());
+        verify(messaging).convertAndSendToUser(eq("alice"), eq("/queue/events"), events.capture());
+        assertThat(events.getAllValues()).extracting(UserEvent::type)
+            .containsExactly("INVITATION_RECEIVED", "INVITATION_CHANGED", "INVITATION_CHANGED");
+        assertThat(events.getAllValues().get(0).payload()).isEqualTo(Map.of("invitation", invitation));
+        assertThat(events.getAllValues().get(1).payload()).isEqualTo(Map.of("invitationId", "inv", "roomId", "room",
+            "status", com.lnt.chatmee.model.MembershipRequestStatus.ACCEPTED));
+        verifyNoMoreInteractions(messaging);
+        var json = new tools.jackson.databind.json.JsonMapper().writeValueAsString(events.getAllValues().get(1));
+        assertThat(json).contains("\"type\":\"INVITATION_CHANGED\"", "\"status\":\"ACCEPTED\"");
+    }
+
+    @Test
     void roomActivity_textMessage_sendsBoundedPreviewToEveryMemberOnly() {
         var publisher = new UserEventPublisher(messaging);
         var message = ChatMessageResponse.builder().id("saved").chatRoomId("room").senderId("alice")

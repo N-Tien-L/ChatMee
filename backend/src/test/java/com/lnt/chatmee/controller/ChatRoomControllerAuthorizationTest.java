@@ -62,40 +62,39 @@ class ChatRoomControllerAuthorizationTest {
     }
 
     @Test
-    void addParticipant_adminAssigningAdmin_returnsForbidden() throws Exception {
+    void addParticipant_adminAssigningAdmin_returnsMethodNotAllowed() throws Exception {
         actor(Role.ADMIN);
         when(rooms.findByIdAndIsActiveTrue("room")).thenReturn(Optional.of(ChatRoom.builder()
                 .id("room").type(RoomType.PRIVATE).isActive(true).build()));
         when(users.findById("target")).thenReturn(Optional.of(User.builder().id("target").build()));
-        add("ADMIN", 403);
+        add("ADMIN", 405);
         verify(participants, never()).save(any());
         verify(rooms, never()).save(any());
     }
 
     @Test
-    void addParticipant_directRoom_returnsForbiddenAction() throws Exception {
+    void addParticipant_directRoom_returnsMethodNotAllowed() throws Exception {
         actor(Role.OWNER);
         when(rooms.findByIdAndIsActiveTrue("room")).thenReturn(Optional.of(ChatRoom.builder()
                 .id("room").type(RoomType.DIRECT_MESSAGE).isActive(true).build()));
         mvc.perform(post("/api/v1/rooms/room/members")
                 .with(oauth2Login().oauth2User(com.lnt.chatmee.support.TestUsers.principal("actor"))).with(csrf())
                 .contentType(MediaType.APPLICATION_JSON).content("{\"userId\":\"target\",\"role\":\"MEMBER\"}"))
-                .andExpect(status().isForbidden())
-                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath("$.code").value("FORBIDDEN_ACTION"));
+                .andExpect(status().isMethodNotAllowed());
         verify(participants, never()).save(any());
         verify(rooms, never()).reserveSeat(any(), any());
     }
 
     @Test
-    void addParticipant_invalidRole_returnsBadRequest() throws Exception {
+    void addParticipant_invalidRole_returnsMethodNotAllowed() throws Exception {
         actor(Role.OWNER);
-        add("INVALID", 400);
+        add("INVALID", 405);
         verify(participants, never()).save(any());
     }
 
     @Test
-    void addParticipant_nonParticipant_returnsForbidden() throws Exception {
-        add("MEMBER", 403);
+    void addParticipant_nonParticipant_returnsMethodNotAllowed() throws Exception {
+        add("MEMBER", 405);
         verify(participants, never()).save(any());
     }
 
@@ -120,13 +119,14 @@ class ChatRoomControllerAuthorizationTest {
     }
 
     @Test
-    void addParticipant_ownerAssigningAdmin_returnsOk() throws Exception {
+    void addParticipant_ownerAssigningAdmin_returnsMethodNotAllowedWithoutMember() throws Exception {
         actor(Role.OWNER);
         when(rooms.findByIdAndIsActiveTrue("room")).thenReturn(Optional.of(ChatRoom.builder()
                 .id("room").type(RoomType.PRIVATE).isActive(true).build()));
         when(users.findById("target")).thenReturn(Optional.of(User.builder().id("target").build()));
-        add("ADMIN", 200);
-        verify(participants).save(argThat(p -> p.getUserId().equals("target") && p.getRole() == Role.ADMIN));
+        add("ADMIN", 405);
+        verify(participants, never()).save(any());
+        verify(rooms, never()).reserveSeat(any(), any());
     }
 
     private void actor(Role role) {
@@ -134,6 +134,7 @@ class ChatRoomControllerAuthorizationTest {
                 .thenReturn(Optional.of(Participant.builder().role(role).build()));
     }
 
+    /** AC-009-5: direct add is removed for every caller role; members enter a PRIVATE room only by invitation. */
     private void add(String role, int expectedStatus) throws Exception {
         mvc.perform(post("/api/v1/rooms/room/members").with(oauth2Login().oauth2User(com.lnt.chatmee.support.TestUsers.principal("actor"))).with(csrf())
                 .contentType(MediaType.APPLICATION_JSON)

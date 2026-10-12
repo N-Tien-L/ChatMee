@@ -10,10 +10,6 @@ import com.lnt.chatmee.model.Participant.Role;
 
 public abstract class GroupRoomPolicy implements RoomTypePolicy {
     @Override
-    public void checkAddParticipant() {
-        // Group rooms use the caller role rules in ParticipantService.
-    }
-    @Override
     public void checkUpdate(UpdateChatRoomRequest request) {
         // Capacity is checked atomically by the repository for group rooms.
     }

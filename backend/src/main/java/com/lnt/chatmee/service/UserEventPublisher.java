@@ -9,6 +9,8 @@ import com.lnt.chatmee.dto.event.RoomActivityPayload;
 import com.lnt.chatmee.dto.event.LastMessageSummary;
 import com.lnt.chatmee.dto.response.ChatMessageResponse;
 import com.lnt.chatmee.dto.response.ChatRoomResponse;
+import com.lnt.chatmee.dto.response.InvitationResponse;
+import com.lnt.chatmee.model.MembershipRequestStatus;
 import com.lnt.chatmee.model.Message.MessageType;
 import org.springframework.context.annotation.Lazy;
 import org.slf4j.Logger;
@@ -54,6 +56,17 @@ public class UserEventPublisher {
 
     public void roomActivity(Collection<String> userIds, String roomId, LastMessageSummary summary) {
         var event = new UserEvent<>("ROOM_ACTIVITY", new RoomActivityPayload(roomId, summary), Instant.now());
+        userIds.forEach(userId -> send(userId, event));
+    }
+
+    public void invitationReceived(String inviteeId, InvitationResponse invitation) {
+        send(inviteeId, new UserEvent<>("INVITATION_RECEIVED", Map.of("invitation", invitation), Instant.now()));
+    }
+
+    public void invitationChanged(Collection<String> userIds, String invitationId, String roomId,
+            MembershipRequestStatus status) {
+        var event = new UserEvent<>("INVITATION_CHANGED",
+            Map.of("invitationId", invitationId, "roomId", roomId, "status", status), Instant.now());
         userIds.forEach(userId -> send(userId, event));
     }
 

@@ -74,4 +74,20 @@ class ResponseContractTest {
                 """));
     }
 
+    @Test
+    void invitationResponse_record_serializesInvitationFieldsWithIsoTimestamps() throws Exception {
+        assertThat(InvitationResponse.class.isRecord()).isTrue();
+        var time = Instant.parse("2026-10-09T01:02:03Z");
+        var invitation = new InvitationResponse("inv", new InvitationResponse.RoomSummary("room", "Secret", 3),
+            new UserSummaryResponse("alice", "Alice", "a.png"), new UserSummaryResponse("bob", "Bob", null),
+            time, time.plusSeconds(7 * 24 * 3600));
+        tools.jackson.databind.JsonNode invitationJson = json.valueToTree(invitation);
+        assertThat(invitationJson).isEqualTo(json.readTree("""
+                {"id":"inv","room":{"id":"room","name":"Secret","memberCount":3},
+                 "inviter":{"id":"alice","name":"Alice","avatarUrl":"a.png"},
+                 "invitee":{"id":"bob","name":"Bob","avatarUrl":null},
+                 "createdAt":"2026-10-09T01:02:03Z","expiresAt":"2026-10-16T01:02:03Z"}
+                """));
+    }
+
 }

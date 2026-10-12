@@ -14,4 +14,8 @@ public class PrivateRoomPolicy extends GroupRoomPolicy {
     public void checkJoin() {
         throw new ForbiddenActionException("Only PUBLIC rooms can be joined");
     }
+    @Override
+    public void checkInvite() {
+        // A PRIVATE room is entered only by an accepted invitation (D-02).
+    }
 }
