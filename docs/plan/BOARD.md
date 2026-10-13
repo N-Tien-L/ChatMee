@@ -63,20 +63,23 @@ Lanes: BE-core is sequential (060 -> 061 -> 062 -> 076 -> 070 -> 072 -> 075 -> 0
 | CM-067 | Release v0 | Release | all | master + owner | | todo | | |
 | CM-068 | Realtime robustness (+ W-1, W-2) | BE-side | — | opus-w | fix/CM-068-realtime-robustness | done (WS-A14 -> v1) | verify 349+72, FE 121 green | 6c3aa1f |
 | CM-069 | Auth flows: login redirect, logout | FE-A | 063 | sonnet-w | fix/CM-069-auth-flows | done | FE gate green (170 tests) | d7404db |
-| CM-070 | Invitations (replaces direct add) | BE-core | 062, 076 | | | todo | | |
-| CM-072 | DM requests | BE-core | 070 | | | todo | | |
-| CM-073 | Blocking | BE-core | 070, 072, 075 | | | todo | | |
+| CM-070 | Invitations (replaces direct add) | BE-core | 062, 076 | be-w | feat/CM-070-invitations | done | verify 471+90 green | 7c75e71 |
+| CM-072 | DM requests | BE-core | 070 | be-w | feat/CM-072-dm-requests | done (owner approved `dmRequestReceived` in UserEventPublisher) | verify 503+99 green | 3a634a7 |
+| CM-073 | Blocking | BE-core | 070, 072, 075 | be-w | feat/CM-073-blocking | done | verify 565+105 green | 23ef60c |
 | CM-074 | Reports (store only) | BE-side | — | haiku-w | feat/CM-074-reports-store | done | verify 68 IT green | c70c08e |
-| CM-075 | Hide DMs, DELETE on DM forbidden | BE-core | 072 | | | todo | | |
+| CM-075 | Hide DMs, DELETE on DM forbidden | BE-core | 072 | be-w | feat/CM-075-hide-dm | done | verify 515+101 green | 44a5cad |
 | CM-076 | Roles, owner auto-transfer | BE-core | 062 | opus-w (codex at capacity) | feat/CM-076-roles-owner-transfer | done | verify 425+84 green (RoomOwnershipIT) | 72b2e61 |
-| CM-077 | "Deleted user" label | BE-core | 062, 073 | | | todo | | |
-| CM-078 | Daily action limits | BE-side | 070, 072, 074 | | | todo | | |
+| CM-077 | "Deleted user" label | BE-core | 062, 073 | be-w | fix/CM-077-deleted-user-label | done | master re-run: verify 569+105, FE 37 files/222 tests, lint/tsc/build OK | 2e1c906 |
+| CM-078 | Daily action limits | BE-side | 070, 072, 074 | haiku-w | feat/CM-078-daily-limits | done | verify 513+99 green | 8f85bd3 |
 | CM-079 | Requests inbox (frontend) | FE-B | 064, 065, 070, 072 | | | todo | | |
 | CM-080 | Safety UI: block, report, hide | FE-A | 066, 073, 074, 075 | | | todo | | |
 
 Owner actions O-1..O-6 (secrets, single Render instance, Vercel Node 22.x, backfill dry run, decisions review, docs merge) are listed in the plan.
 
 ## Notes
+- 2026-10-13 M3: SPEC-009 backend done (CM-070, 072, 075, 073, 077, 078 merged). Follow-ups: `BlockService` keeps its own "Deleted user" literal
+  (should use `DisplayNames.DELETED_USER`); RoomInfoDialog/RoomSettingsDialog drop members whose user lookup fails (CM-066 RoomPanel should use
+  `GET /rooms/{id}/members` and `components/common/deletedUser.ts`); MessageList shows an offline presence dot for "Deleted user".
 - 2026-10-12 owner confirmed: AC-008-5 "at most two queries" = member data in two batched queries (no N+1); the active-room guard is not counted.
   Room delete is OWNER-only; room update is OWNER or ADMIN. CM-067 records both in the AC lines.
 - 2026-10-12 M2: CM-061, 062, 064, 065, 069, 076 merged. Master decisions: AC-008-5 "two queries" counts member data only (participants once,
