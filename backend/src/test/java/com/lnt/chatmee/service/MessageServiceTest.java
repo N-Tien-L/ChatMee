@@ -224,7 +224,7 @@ class MessageServiceTest {
         var page = messageService.getMessages("room1", "user1", cursor("1791507723123:m2"), 2);
 
         assertThat(page.messages()).extracting(ChatMessageResponse::id).containsExactly("m1");
-        assertThat(page.messages().get(0).senderName()).isEqualTo("Unknown User");
+        assertThat(page.messages().get(0).senderName()).isEqualTo("Deleted user");
         assertThat(page.nextCursor()).isNull();
         assertThat(page.hasMore()).isFalse();
         verify(messageRepository).findPageBefore("room1", time, "m2", PageRequest.of(0, 3));
@@ -406,6 +406,35 @@ class MessageServiceTest {
         assertThat(response.clientMessageId()).isEqualTo("client-1");
     }
 
+
+    // CM-077: a sender without a stored user or name is labelled "Deleted user" (AC-009-28)
+    @Test
+    void getMessages_missingSender_labelsDeletedUser() {
+        allowHistory();
+        Instant time = Instant.ofEpochMilli(1791507723123L);
+        when(messageRepository.findPage("room1", PageRequest.of(0, 51)))
+                .thenReturn(List.of(historyMessage("m2", "gone", time), historyMessage("m1", "nameless", time)));
+        when(userRepository.findAllById(any())).thenReturn(List.of(User.builder().id("nameless").name(" ").build()));
+
+        var page = messageService.getMessages("room1", "user1", null, 50);
+
+        assertThat(page.messages()).extracting(ChatMessageResponse::senderName)
+                .containsExactly("Deleted user", "Deleted user");
+    }
+
+    @Test
+    void sendMessage_namelessSender_labelsRoomActivityDeletedUser() {
+        when(participantService.isUserParticipant("room1", "user1")).thenReturn(true);
+        when(messageRepository.save(any())).thenAnswer(call -> call.getArgument(0));
+        when(participantService.getParticipantUserIds("room1")).thenReturn(Set.of("user2"));
+
+        var response = messageService.sendMessage(textRequest("client-1"), "user1");
+
+        var summary = ArgumentCaptor.forClass(com.lnt.chatmee.dto.event.LastMessageSummary.class);
+        verify(userEvents).roomActivity(eq(Set.of("user2")), eq("room1"), summary.capture());
+        assertThat(summary.getValue().senderName()).isEqualTo("Deleted user");
+        assertThat(response.senderName()).isEqualTo("Deleted user");
+    }
 
     @Test
     void sendMessage_activityUpdateFails_returnsSavedMessage() {

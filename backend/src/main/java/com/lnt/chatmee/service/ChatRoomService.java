@@ -1,5 +1,6 @@
 package com.lnt.chatmee.service;
 
+import com.lnt.chatmee.util.DisplayNames;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Comparator;
@@ -172,16 +173,22 @@ public class ChatRoomService {
         Map<String, UserSummaryResponse> summaries = new HashMap<>();
         if (!counterpartIds.isEmpty()) {
             userRepository.findAllById(new HashSet<>(counterpartIds.values())).forEach(user ->
-                summaries.put(user.getId(), new UserSummaryResponse(user.getId(), user.getName(), user.getAvatarUrl())));
+                summaries.put(user.getId(), new UserSummaryResponse(user.getId(), DisplayNames.of(user), user.getAvatarUrl())));
         }
         Map<String, Participant> memberships = new HashMap<>();
         participantService.getMemberships(callerId).forEach(row -> memberships.put(row.getChatRoomId(), row));
         return rooms.stream()
             .map(room -> ChatRoomResponse.from(room, members.getOrDefault(room.getId(), Set.of()),
-                summaries.get(counterpartIds.get(room.getId())), unreadCount(room.getId(), callerId, memberships.get(room.getId())),
+                counterpart(counterpartIds.get(room.getId()), summaries), unreadCount(room.getId(), callerId, memberships.get(room.getId())),
                 memberships.containsKey(room.getId()) ? memberships.get(room.getId()).getRole() : null,
                 otherMembers.containsKey(room.getId()) && blockedByCaller.contains(otherMembers.get(room.getId()))))
             .toList();
+    }
+
+    /** A counterpart without a stored user is shown as "Deleted user" (AC-009-28). */
+    private static UserSummaryResponse counterpart(String userId, Map<String, UserSummaryResponse> summaries) {
+        return userId == null ? null
+            : summaries.getOrDefault(userId, new UserSummaryResponse(userId, DisplayNames.DELETED_USER, null));
     }
 
     private long unreadCount(String roomId, String callerId, Participant membership) {

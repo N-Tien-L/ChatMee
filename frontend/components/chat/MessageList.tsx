@@ -6,6 +6,7 @@ import { AlertCircle, ArrowDown, Check, Clock, MessageSquare, RotateCw } from "l
 import { Skeleton } from "../ui/skeleton";
 import { Button } from "../ui/button";
 import { UserAvatar } from "../common/UserAvatar";
+import { isDeletedUser } from "../common/deletedUser";
 
 /** Distance from the top of the list at which the next older page is requested. */
 const LOAD_OLDER_THRESHOLD_PX = 48;
@@ -308,7 +309,11 @@ const MessageListContent: React.FC<MessageListContentProps> = ({
                   {!message.isOwn && (
                     <div className="w-8 flex-shrink-0">
                       {groupStart && (
-                        <UserAvatar name={message.senderName} size="sm" />
+                        <UserAvatar
+                          name={message.senderName}
+                          size="sm"
+                          variant={isDeletedUser(message.senderName) ? "neutral" : "default"}
+                        />
                       )}
                     </div>
                   )}

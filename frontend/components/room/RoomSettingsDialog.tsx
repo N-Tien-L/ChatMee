@@ -32,6 +32,8 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
+import { UserAvatar } from "@/components/common/UserAvatar";
+import { DELETED_USER, isDeletedUser } from "@/components/common/deletedUser";
 import {
   Trash2,
   UserPlus,
@@ -377,12 +379,14 @@ export const RoomSettingsDialog: React.FC<RoomSettingsDialogProps> = ({
                       key={participant.id}
                       className="flex items-center gap-3 p-2 rounded hover:bg-gray-50"
                     >
-                      <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-400 to-purple-500 flex items-center justify-center text-white text-sm font-semibold">
-                        {(participant.name || "U").charAt(0).toUpperCase()}
-                      </div>
+                      <UserAvatar
+                        name={participant.name || DELETED_USER}
+                        avatarUrl={participant.avatarUrl}
+                        variant={isDeletedUser(participant.name || DELETED_USER) ? "neutral" : "default"}
+                      />
                       <div className="flex-1 min-w-0">
                         <p className="text-sm font-medium truncate">
-                          {participant.name || "Unknown User"}
+                          {participant.name || DELETED_USER}
                         </p>
                       </div>
                     </div>

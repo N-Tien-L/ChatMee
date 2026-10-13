@@ -880,6 +880,25 @@ class ChatRoomServiceTest {
         assertThat(responses.get(1).counterpart()).isNull();
     }
 
+    // CM-077: a DM whose other member no longer exists keeps a "Deleted user" counterpart (AC-009-28)
+    @Test
+    void toResponses_directRoomWithMissingUser_showsDeletedUserCounterpart() {
+        ChatRoom dm = ChatRoom.builder().id("dm").type(ChatRoom.RoomType.DIRECT_MESSAGE).build();
+        ChatRoom nameless = ChatRoom.builder().id("dm2").type(ChatRoom.RoomType.DIRECT_MESSAGE).build();
+        when(participantService.getParticipantUserIds(List.of("dm", "dm2")))
+                .thenReturn(Map.of("dm", Set.of("user1", "gone"), "dm2", Set.of("user1", "user3")));
+        when(userRepository.findAllById(Set.of("gone", "user3")))
+                .thenReturn(List.of(User.builder().id("user3").avatarUrl("c.png").build()));
+
+        List<ChatRoomResponse> responses = chatRoomService.toResponses(List.of(dm, nameless), "user1");
+
+        assertThat(responses.get(0).counterpart().id()).isEqualTo("gone");
+        assertThat(responses.get(0).counterpart().name()).isEqualTo("Deleted user");
+        assertThat(responses.get(0).counterpart().avatarUrl()).isNull();
+        assertThat(responses.get(1).counterpart().id()).isEqualTo("user3");
+        assertThat(responses.get(1).counterpart().name()).isEqualTo("Deleted user");
+    }
+
     // CM-073: blocked is true only in the blocker's view of the DM (AC-009-19)
 
     @Test
