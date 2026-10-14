@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>Category standard: workspace sketch</title>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Borel&display=swap" rel="stylesheet">
+<style>
+*{box-sizing:border-box;margin:0}
+body{width:1440px;height:900px;overflow:hidden;font:14px/1.45 Geist,system-ui,sans-serif;color:#111827;display:grid;grid-template-columns:72px 300px 1fr;background:#fff}
+.rail{background:#1f2937;display:flex;flex-direction:column;align-items:center;gap:14px;padding-top:16px}
+.rail span{width:40px;height:40px;border-radius:10px;background:#374151}.rail span:first-child{background:#0d9488}
+aside{background:#f9fafb;border-right:1px solid #e5e7eb;padding:14px}
+.s{height:34px;border:1px solid #e5e7eb;border-radius:8px;background:#fff;margin-bottom:12px}
+.r{display:flex;gap:10px;align-items:center;padding:8px;border-radius:8px}.r.on{background:#e0f2f1}
+.a{width:34px;height:34px;border-radius:8px;background:#e5e7eb}
+.l{height:10px;border-radius:5px;background:#d1d5db;width:140px}.l.s2{width:90px;background:#e5e7eb;margin-top:6px}
+section{display:grid;grid-template-rows:56px 1fr 72px}
+.h{border-bottom:1px solid #e5e7eb;display:flex;align-items:center;padding:0 20px;font-weight:600;font-size:16px}
+.log{padding:20px;display:flex;flex-direction:column;gap:14px}
+.m{display:flex;gap:10px}.m .b{background:#f3f4f6;border-radius:12px;padding:8px 12px;max-width:520px}
+.m.me{flex-direction:row-reverse}.m.me .b{background:#0d9488;color:#fff}
+.c{margin:12px 20px;border:1px solid #e5e7eb;border-radius:10px;display:flex;align-items:center;padding:0 12px;color:#9ca3af}
+</style></head>
+<body>
+<div class="rail"><span></span><span></span><span></span></div>
+<aside><div class="s"></div>
+ <div class="r on"><span class="a"></span><div><div class="l"></div><div class="l s2"></div></div></div>
+ <div class="r"><span class="a"></span><div><div class="l"></div><div class="l s2"></div></div></div>
+ <div class="r"><span class="a"></span><div><div class="l"></div><div class="l s2"></div></div></div></aside>
+<section><div class="h"># spring-boot-help</div>
+ <div class="log"><div class="m"><span class="a"></span><div class="b">The cursor query uses the compound index now.</div></div>
+ <div class="m me"><div class="b">Does the resync merge by clientMessageId?</div></div>
+ <div class="m"><span class="a"></span><div class="b">Yes, no duplicates after a lost echo.</div></div></div>
+ <div class="c">Message #spring-boot-help</div></section>
+</body></html>
