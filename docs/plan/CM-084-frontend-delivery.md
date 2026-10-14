@@ -1,5 +1,5 @@
 # CM-084: Unify the frontend visual system and verify the priority journeys
-- Status: proposed (2026-10-14, awaiting owner answers to the Phase 1 questions)
+- Status: in progress (2026-10-14: owner answered Phase 1 and milestone A, see D-6..D-10)
 - Type: feat
 - Spec: SPEC-001 (AC-001-1, -4, -5, -9), SPEC-002 (AC-002-2..4), SPEC-004 (AC-004-3..8), SPEC-008 (AC-008-2, -4, -10, -11, -13, -14)
   · Design: docs/design/ui-workflow.md, docs/frontend/context.md · ADR: none
@@ -21,6 +21,9 @@ journeys (OAuth sign-in, browse and join rooms, realtime room messaging, reconne
 - `frontend/components/common/*`, `frontend/components/chat/*`, `frontend/components/room/ChatRoomsList.tsx`, `ChatRoomListItem.tsx`,
   `DiscoverRoomsDialog.tsx`, `frontend/components/realtime/ConnectionBanner.tsx`, `frontend/components/LoginForm.tsx`
 - `frontend/components/fx/*`, `frontend/components/PROVENANCE.md` (new, only if a component is adopted)
+- Added at milestone B (D-11): `frontend/components/chat/DeliveryTab.tsx`, `frontend/components/landing/QslCard.tsx`,
+  `frontend/lib/stores/authStore.ts` (G1), `frontend/lib/api/apiClient.ts` and `frontend/lib/realtime/StompProvider.tsx` (G2), tests for
+  both; `frontend/app/preview/*` (temporary, deleted before milestone C)
 - `docs/frontend/*`
 
 ## Acceptance Criteria

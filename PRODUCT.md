@@ -4,7 +4,7 @@
 
 > Source: derived from the confirmed CM-084 context brief (`docs/frontend/context.md`, owner answers of 2026-10-14) and the Approved
 > specs. No separate Impeccable interview was run, to avoid repeating questions the owner already answered. Facts marked _(inferred)_
-> are not separately confirmed; the owner reviews this file at milestone A.
+> are not separately confirmed; the owner approved this file at milestone A (2026-10-14, D-10) and may correct facts later.
 
 ## Platform
 

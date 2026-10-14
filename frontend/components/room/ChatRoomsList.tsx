@@ -97,18 +97,18 @@ const ChatRoomsListContent: React.FC = () => {
   ];
 
   return (
-    <div className="h-full flex flex-col bg-white border-r min-w-0 w-full overflow-hidden">
+    <div className="h-full flex flex-col bg-sidebar min-w-0 w-full overflow-hidden">
       {/* Header */}
-      <div className="p-3 sm:p-4 border-b flex-shrink-0 sticky top-0 bg-white z-10">
-        <div className="flex items-center justify-between mb-3 sm:mb-4">
-          <h2 className="text-base sm:text-lg font-semibold text-gray-900">
+      <div className="px-3 pt-3.5 pb-3 sm:px-4 border-b flex-shrink-0 sticky top-0 bg-sidebar z-10">
+        <div className="flex items-center justify-between mb-3">
+          <h2 className="text-[15px] font-semibold text-foreground">
             Chats
           </h2>
           <div className="flex items-center gap-2">
             <button
               type="button"
               onClick={() => openDiscoverRooms()}
-              className="p-1.5 sm:p-2 rounded-lg border border-gray-300 text-gray-700 hover:bg-gray-100 transition-colors flex-shrink-0"
+              className="p-1.5 sm:p-2 rounded-md border border-border text-foreground hover:bg-accent transition-colors flex-shrink-0"
               title="Discover rooms"
               aria-label="Discover rooms"
             >
@@ -117,7 +117,7 @@ const ChatRoomsListContent: React.FC = () => {
             <button
               type="button"
               onClick={() => openCreateRoomModal()}
-              className="p-1.5 sm:p-2 rounded-lg border border-gray-300 text-gray-700 hover:bg-gray-100 transition-colors flex-shrink-0"
+              className="p-1.5 sm:p-2 rounded-md border border-border text-foreground hover:bg-accent transition-colors flex-shrink-0"
               title="New group"
               aria-label="New group"
             >
@@ -126,7 +126,7 @@ const ChatRoomsListContent: React.FC = () => {
             <button
               type="button"
               onClick={() => openCreateRoomModal()}
-              className="p-1.5 sm:p-2 rounded-lg bg-blue-500 text-white hover:bg-blue-600 transition-colors flex-shrink-0"
+              className="p-1.5 sm:p-2 rounded-md bg-primary text-primary-foreground hover:bg-primary/90 transition-colors flex-shrink-0"
               title="New message"
               aria-label="New message"
             >
@@ -138,7 +138,7 @@ const ChatRoomsListContent: React.FC = () => {
         {/* Search bar */}
         <div className="relative">
           <Search
-            className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4"
+            className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground w-4 h-4"
             aria-hidden="true"
           />
           <input
@@ -147,7 +147,7 @@ const ChatRoomsListContent: React.FC = () => {
             placeholder="Search chats..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full pl-9 pr-3 py-1.5 sm:py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            className="w-full pl-9 pr-3 py-1.5 sm:py-2 text-sm border border-border rounded-md focus:ring-2 focus:ring-ring focus:border-transparent"
           />
         </div>
 
@@ -163,10 +163,10 @@ const ChatRoomsListContent: React.FC = () => {
               onClick={() => setRoomTypeFilter(value as RoomType | "ALL")}
               aria-label={label}
               aria-pressed={roomTypeFilter === value}
-              className={`flex items-center justify-center py-1.5 sm:py-2 rounded-lg text-xs sm:text-sm font-medium transition-colors ${
+              className={`flex items-center justify-center py-1.5 sm:py-2 rounded-md text-xs sm:text-sm font-medium transition-colors ${
                 roomTypeFilter === value
-                  ? "bg-blue-100 text-blue-700 border border-blue-200"
-                  : "text-gray-600 hover:bg-gray-100"
+                  ? "bg-accent text-accent-foreground border border-primary/30"
+                  : "text-muted-foreground hover:bg-accent"
               }`}
             >
               <Icon
@@ -183,7 +183,7 @@ const ChatRoomsListContent: React.FC = () => {
       <div className="flex-1 overflow-y-auto min-h-0">
         {loading && (
           <div
-            className="divide-y divide-gray-100"
+            className="divide-y divide-border/60"
             role="status"
             aria-busy="true"
             aria-label="Loading chat rooms"
@@ -202,20 +202,20 @@ const ChatRoomsListContent: React.FC = () => {
 
         {!loading && error && (
           <div
-            className="p-4 mx-4 mt-4 bg-red-50 border border-red-200 rounded-lg"
+            className="p-4 mx-4 mt-4 bg-danger-surface border border-destructive/30 rounded-md"
             role="alert"
           >
             <div className="flex items-start gap-2">
               <AlertCircle
-                className="w-4 h-4 text-red-600 mt-0.5 flex-shrink-0"
+                className="w-4 h-4 text-destructive mt-0.5 flex-shrink-0"
                 aria-hidden="true"
               />
-              <p className="text-red-700 text-sm">{error}</p>
+              <p className="text-destructive text-sm">{error}</p>
             </div>
             <button
               type="button"
               onClick={() => fetchRooms()}
-              className="mt-3 inline-flex items-center px-3 py-1.5 text-sm font-medium text-red-700 bg-white border border-red-200 rounded-lg hover:bg-red-100"
+              className="mt-3 inline-flex items-center px-3 py-1.5 text-sm font-medium text-destructive bg-card border border-destructive/30 rounded-md hover:bg-danger-surface"
             >
               <RotateCw className="w-4 h-4 mr-1.5" aria-hidden="true" />
               Retry
@@ -226,20 +226,20 @@ const ChatRoomsListContent: React.FC = () => {
         {!loading && !error && filteredRooms.length === 0 && (
           <div className="flex flex-col items-center justify-center py-10 px-4 text-center">
             <MessageSquare
-              className="w-10 h-10 sm:w-12 sm:h-12 text-gray-400 mb-3"
+              className="w-10 h-10 sm:w-12 sm:h-12 text-muted-foreground mb-3"
               aria-hidden="true"
             />
-            <h3 className="text-base sm:text-lg font-medium text-gray-900 mb-2">
+            <h3 className="text-base sm:text-lg font-medium text-foreground mb-2">
               No chat rooms found
             </h3>
-            <p className="text-gray-500 text-xs sm:text-sm mb-4 max-w-xs">
+            <p className="text-muted-foreground text-xs sm:text-sm mb-4 max-w-xs">
               {searchQuery
                 ? "Try adjusting your search terms"
                 : "Create your first chat room to get started"}
             </p>
             <button
               onClick={() => openCreateRoomModal()}
-              className="px-3 sm:px-4 py-1.5 sm:py-2 text-sm bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors"
+              className="px-3 sm:px-4 py-1.5 sm:py-2 text-sm bg-primary text-primary-foreground rounded-md hover:bg-primary/90 transition-colors"
             >
               Create Chat Room
             </button>
@@ -247,7 +247,7 @@ const ChatRoomsListContent: React.FC = () => {
         )}
 
         {!loading && !error && filteredRooms.length > 0 && (
-          <div className="divide-y divide-gray-100">
+          <div className="divide-y divide-border/60">
             {filteredRooms.map((room) => (
               <ChatRoomListItem
                 key={room.id}
@@ -263,8 +263,8 @@ const ChatRoomsListContent: React.FC = () => {
       </div>
 
       {/* Footer */}
-      <div className="p-2 sm:p-4 border-t bg-gray-50 flex-shrink-0 text-center">
-        <p className="text-xs text-gray-500">
+      <div className="px-4 py-2 border-t flex-shrink-0">
+        <p className="font-mono text-[11px] uppercase tracking-[0.1em] tabular text-muted-foreground">
           {filteredRooms.length} {filteredRooms.length === 1 ? "room" : "rooms"}
         </p>
       </div>
@@ -276,7 +276,7 @@ const ChatRoomsListContent: React.FC = () => {
 const ChatRoomsList = () => (
   <Suspense
     fallback={
-      <div className="border-r bg-white h-full flex items-center justify-center text-gray-500">
+      <div className="border-r bg-card h-full flex items-center justify-center text-muted-foreground">
         Loading...
       </div>
     }

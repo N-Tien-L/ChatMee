@@ -25,23 +25,17 @@ const TypingIndicator: React.FC<TypingIndicatorProps> = ({
       : "Someone is typing...";
 
   return (
-    <div className="flex justify-start px-3 sm:px-4 pb-2 flex-shrink-0">
-      <div className="max-w-[85%] sm:max-w-sm md:max-w-md lg:max-w-lg">
-        <p className="text-xs text-gray-500 mb-1 px-3 truncate">{typingText}</p>
-        <div className="px-3 sm:px-4 py-2 rounded-2xl bg-gray-100">
-          <div className="flex space-x-1">
-            <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce"></div>
-            <div
-              className="w-2 h-2 bg-gray-400 rounded-full animate-bounce"
-              style={{ animationDelay: "0.1s" }}
-            ></div>
-            <div
-              className="w-2 h-2 bg-gray-400 rounded-full animate-bounce"
-              style={{ animationDelay: "0.2s" }}
-            ></div>
-          </div>
-        </div>
-      </div>
+    <div className="flex flex-shrink-0 items-center gap-2 px-3 pb-1.5 sm:px-7">
+      <span className="flex gap-0.5" aria-hidden="true">
+        {[0, 0.15, 0.3].map((delay) => (
+          <span
+            key={delay}
+            className="h-1 w-1 rounded-full bg-primary motion-safe:animate-pulse"
+            style={{ animationDelay: `${delay}s` }}
+          />
+        ))}
+      </span>
+      <p className="truncate text-xs text-muted-foreground">{typingText}</p>
     </div>
   );
 };

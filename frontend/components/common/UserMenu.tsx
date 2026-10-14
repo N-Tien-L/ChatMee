@@ -51,7 +51,7 @@ export function UserMenu({ user, onSignOut }: UserMenuProps) {
         aria-haspopup="menu"
         aria-expanded={open}
         onClick={() => setOpen((value) => !value)}
-        className="rounded-full focus-visible:outline-2"
+        className="rounded-full focus-visible:outline-2 focus-visible:outline-shell-foreground"
       >
         <UserAvatar name={user.name} avatarUrl={user.avatarUrl} />
       </button>

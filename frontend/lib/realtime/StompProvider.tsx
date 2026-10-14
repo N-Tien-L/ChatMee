@@ -40,7 +40,7 @@ export function StompProvider({ children }: { children: ReactNode }) {
     const [session] = useState(() => createStompSession({
         clientFactory: createStompClientFactory(process.env.NEXT_PUBLIC_WS_URL || "http://localhost:8080/ws"),
         getToken: fetchWsToken,
-        onUnauthorized: () => window.location.replace("/login"),
+        onUnauthorized: () => window.location.replace("/login?reason=expired"),
     }));
 
     useEffect(() => {

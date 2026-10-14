@@ -38,39 +38,38 @@ export function LoginForm({
 
   return (
     <div
-      className={cn("w-full max-w-md mx-auto px-4 sm:px-0", className)}
+      className={cn("w-full", className)}
       {...props}
     >
-      <Card className="backdrop-blur-sm bg-white/10 border-white/20 shadow-2xl rounded-2xl">
-        <CardHeader className="text-center space-y-2 p-4 sm:p-6">
-          <CardTitle className="text-xl font-semibold text-white">
+      <Card className="gap-0 rounded-md border-border bg-secondary py-0 text-foreground shadow-none">
+        <CardHeader className="space-y-1 border-b border-border p-5">
+          <CardTitle className="text-lg font-semibold text-foreground">
             Sign in to ChatMee
           </CardTitle>
-          <CardDescription className="text-white/80 text-sm sm:text-base">
-            Continue with your Google or GitHub account
+          <CardDescription className="text-sm text-muted-foreground">
+            With your GitHub or Google account. No passwords.
           </CardDescription>
         </CardHeader>
-        <CardContent className="space-y-3 sm:space-y-4 p-4 sm:p-6">
+        <CardContent className="space-y-3 p-5">
+          <Button
+            className="h-11 w-full text-sm font-semibold"
+            onClick={() => login("github")}
+            disabled={loading}
+          >
+            <Github className="w-5 h-5 mr-2 [&_g]:fill-current" />
+            <span className="truncate">
+              {loading ? "Redirecting..." : "Continue with GitHub"}
+            </span>
+          </Button>
           <Button
             variant="outline"
-            className="w-full h-12 text-sm sm:text-base bg-white/10 border-white/20 text-white hover:bg-white/20 hover:text-white"
+            className="h-11 w-full border-border bg-transparent text-sm text-foreground hover:bg-accent hover:text-foreground"
             onClick={() => login("google")}
             disabled={loading}
           >
             <Google className="w-5 h-5 mr-2" />
             <span className="truncate">
               {loading ? "Redirecting..." : "Continue with Google"}
-            </span>
-          </Button>
-          <Button
-            variant="outline"
-            className="w-full h-12 text-sm sm:text-base bg-white/10 border-white/20 text-white hover:bg-white/20 hover:text-white"
-            onClick={() => login("github")}
-            disabled={loading}
-          >
-            <Github className="w-5 h-5 mr-2" />
-            <span className="truncate">
-              {loading ? "Redirecting..." : "Continue with GitHub"}
             </span>
           </Button>
         </CardContent>

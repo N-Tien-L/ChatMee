@@ -54,7 +54,7 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ roomId }) => {
   if (!roomExists)
     return (
       <div className="flex items-center justify-center h-full">
-        <div className="text-center text-gray-500">Room not found</div>
+        <div className="text-center text-muted-foreground">Room not found</div>
       </div>
     );
 
@@ -68,7 +68,7 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ roomId }) => {
 
 const RoomEndedView: React.FC<{ reason: EndedReason }> = ({ reason }) => (
   <div className="flex items-center justify-center h-full p-6">
-    <p role="status" className="text-center text-gray-500">
+    <p role="status" className="text-center text-muted-foreground">
       {reason === "deleted" ? "This room was deleted" : "You are no longer a member"}
     </p>
   </div>
@@ -206,7 +206,7 @@ const ChatRoomView: React.FC<{ roomId: string; onDeleted: () => void }> = ({
   if (!currentRoom)
     return (
       <div className="flex items-center justify-center h-full">
-        <div className="text-center text-gray-500">Room not found</div>
+        <div className="text-center text-muted-foreground">Room not found</div>
       </div>
     );
 
@@ -217,7 +217,7 @@ const ChatRoomView: React.FC<{ roomId: string; onDeleted: () => void }> = ({
     : false;
 
   return (
-    <div className="flex flex-col h-full w-full bg-white overflow-hidden">
+    <div className="flex flex-col h-full w-full bg-background overflow-hidden">
       <ChatHeader
         room={currentRoom}
         memberCount={memberCount}
@@ -261,6 +261,11 @@ const ChatRoomView: React.FC<{ roomId: string; onDeleted: () => void }> = ({
         onSubmit={handleSendMessage}
         disabled={!newMessage.trim() || !connected}
         inputRef={inputRef}
+        pausedHint={
+          !connected && !loading
+            ? "Reconnecting. Keep typing; sending resumes when the connection is back."
+            : null
+        }
       />
     </div>
   );

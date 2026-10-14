@@ -18,7 +18,7 @@ function DashboardShell({ children }: { children: React.ReactNode }) {
   const logout = useAuthStore((state) => state.logout);
   return (
     <div className="flex h-dvh w-full flex-col overflow-hidden bg-background">
-      <AppHeader user={user} onSignOut={logout} />
+      <AppHeader user={user} onSignOut={logout} status={<ConnectionStatusBanner />} />
       <div className="min-h-0 flex-1">{children}</div>
     </div>
   );
@@ -35,7 +35,6 @@ export default function DashboardLayout({
         <SidebarProvider>
           <DashboardShell>{children}</DashboardShell>
         </SidebarProvider>
-        <ConnectionStatusBanner />
       </StompProvider>
     </AuthGate>
   );

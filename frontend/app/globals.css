@@ -38,79 +38,115 @@
   --color-popover: var(--popover);
   --color-card-foreground: var(--card-foreground);
   --color-card: var(--card);
+  --color-shell: var(--shell);
+  --color-shell-foreground: var(--shell-foreground);
+  --color-shell-muted: var(--shell-muted);
+  --color-ink-deep: var(--ink-deep);
+  --color-spot: var(--spot);
+  --color-spot-foreground: var(--spot-foreground);
+  --color-spot-on-shell: var(--spot-on-shell);
+  --color-warning-on-shell: var(--warning-on-shell);
+  --color-warning: var(--warning);
+  --color-warning-surface: var(--warning-surface);
+  --color-danger-surface: var(--danger-surface);
+  --color-success: var(--success);
+  --color-highlight: var(--highlight);
   --radius-sm: calc(var(--radius) - 4px);
   --radius-md: calc(var(--radius) - 2px);
   --radius-lg: var(--radius);
   --radius-xl: calc(var(--radius) + 4px);
 }
 
+/*
+ * ChatMee visual system (CM-084, direction "Contact confirmed", docs/frontend/decisions.md D-10).
+ * One token set, two fixed surfaces (D-7): the workspace is light (:root), public pages are dark (.theme-public).
+ * Colour marks state: teal ink is the shell and your own words, the vermilion spot is live and unread,
+ * amber is reconnecting, crimson with words is failure. No user-facing dark mode in v0.
+ */
 :root {
   --radius: 0.625rem;
-  --background: oklch(1 0 0);
-  --foreground: oklch(0.145 0 0);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.145 0 0);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.145 0 0);
-  --primary: oklch(0.5 0.09 195);
-  --primary-foreground: oklch(0.985 0 0);
-  --secondary: oklch(0.97 0 0);
-  --secondary-foreground: oklch(0.205 0 0);
-  --muted: oklch(0.97 0 0);
-  --muted-foreground: oklch(0.556 0 0);
-  --accent: oklch(0.96 0.02 195);
-  --accent-foreground: oklch(0.3 0.06 195);
-  --destructive: oklch(0.577 0.245 27.325);
-  --border: oklch(0.922 0 0);
-  --input: oklch(0.922 0 0);
-  --ring: oklch(0.6 0.1 195);
-  --chart-1: oklch(0.646 0.222 41.116);
-  --chart-2: oklch(0.6 0.118 184.704);
-  --chart-3: oklch(0.398 0.07 227.392);
-  --chart-4: oklch(0.828 0.189 84.429);
-  --chart-5: oklch(0.769 0.188 70.08);
-  --sidebar: oklch(0.985 0 0);
-  --sidebar-foreground: oklch(0.145 0 0);
-  --sidebar-primary: oklch(0.5 0.09 195);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.96 0.02 195);
-  --sidebar-accent-foreground: oklch(0.3 0.06 195);
-  --sidebar-border: oklch(0.922 0 0);
-  --sidebar-ring: oklch(0.6 0.1 195);
+  --background: #f6f8f7; /* paper */
+  --foreground: #14201f;
+  --card: #ffffff;
+  --card-foreground: #14201f;
+  --popover: #ffffff;
+  --popover-foreground: #14201f;
+  --primary: #0e4f55; /* teal ink */
+  --primary-foreground: #ffffff;
+  --secondary: #eef3f2;
+  --secondary-foreground: #14201f;
+  --muted: #eef3f2;
+  --muted-foreground: #556564;
+  --accent: #e6f0ef;
+  --accent-foreground: #0a3a3f;
+  --destructive: #b42318;
+  --border: #dde4e2;
+  --input: #cdd7d5;
+  --ring: #1b7a80;
+  /* Shell: the inked header band. */
+  --shell: #0e4f55;
+  --shell-foreground: #e9f3f2;
+  --shell-muted: #a9c9c6;
+  --ink-deep: #0a3a3f;
+  /* State colours. */
+  --spot: #d13b20; /* live, unread */
+  --spot-foreground: #ffffff;
+  --spot-on-shell: #ff7a5c; /* the live dot on the teal band (non-text, 3.6:1) */
+  --warning-on-shell: #f2c46b;
+  --warning: #8a5a0f;
+  --warning-surface: #fbf1dc;
+  --danger-surface: #fdecea;
+  --success: #1d7a4f;
+  --highlight: #0e4f55;
+  --chart-1: #0e4f55;
+  --chart-2: #1b7a80;
+  --chart-3: #d13b20;
+  --chart-4: #8a5a0f;
+  --chart-5: #556564;
+  --sidebar: #ffffff;
+  --sidebar-foreground: #14201f;
+  --sidebar-primary: #0e4f55;
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: #eef5f4;
+  --sidebar-accent-foreground: #0a3a3f;
+  --sidebar-border: #dde4e2;
+  --sidebar-ring: #1b7a80;
 }
 
-.dark {
-  --background: oklch(0.145 0 0);
-  --foreground: oklch(0.985 0 0);
-  --card: oklch(0.205 0 0);
-  --card-foreground: oklch(0.985 0 0);
-  --popover: oklch(0.205 0 0);
-  --popover-foreground: oklch(0.985 0 0);
-  --primary: oklch(0.72 0.11 195);
-  --primary-foreground: oklch(0.15 0.03 195);
-  --secondary: oklch(0.269 0 0);
-  --secondary-foreground: oklch(0.985 0 0);
-  --muted: oklch(0.269 0 0);
-  --muted-foreground: oklch(0.708 0 0);
-  --accent: oklch(0.269 0 0);
-  --accent-foreground: oklch(0.985 0 0);
-  --destructive: oklch(0.704 0.191 22.216);
-  --border: oklch(1 0 0 / 10%);
-  --input: oklch(1 0 0 / 15%);
-  --ring: oklch(0.72 0.11 195);
-  --chart-1: oklch(0.488 0.243 264.376);
-  --chart-2: oklch(0.696 0.17 162.48);
-  --chart-3: oklch(0.769 0.188 70.08);
-  --chart-4: oklch(0.627 0.265 303.9);
-  --chart-5: oklch(0.645 0.246 16.439);
-  --sidebar: oklch(0.205 0 0);
-  --sidebar-foreground: oklch(0.985 0 0);
-  --sidebar-primary: oklch(0.488 0.243 264.376);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.269 0 0);
-  --sidebar-accent-foreground: oklch(0.985 0 0);
-  --sidebar-border: oklch(1 0 0 / 10%);
-  --sidebar-ring: oklch(0.556 0 0);
+/* Public pages (landing, sign-in): teal-black ground, the card printed in paper white, one vermilion action. */
+.theme-public {
+  --background: #0b1f21;
+  --foreground: #e8f1f0;
+  --card: #f6f8f7;
+  --card-foreground: #14201f;
+  --popover: #10292c;
+  --popover-foreground: #e8f1f0;
+  --primary: #d13b20;
+  --primary-foreground: #ffffff;
+  --secondary: #143236;
+  --secondary-foreground: #e8f1f0;
+  --muted: #143236;
+  --muted-foreground: #93a9a7;
+  --accent: #143236;
+  --accent-foreground: #e8f1f0;
+  --destructive: #ff8a7a;
+  --border: rgb(255 255 255 / 12%);
+  --input: rgb(255 255 255 / 18%);
+  --ring: #5fb8b0;
+  --highlight: #5fb8b0;
+  --warning: #f2c46b;
+  --danger-surface: rgb(255 138 122 / 12%);
+  --warning-surface: rgb(242 196 107 / 12%);
+}
+
+/* Paper printed on a public page (the landing's QSL card): the workspace's light roles, scoped. */
+.theme-paper {
+  --background: #f6f8f7;
+  --foreground: #14201f;
+  --primary: #0e4f55;
+  --primary-foreground: #ffffff;
+  --muted-foreground: #556564;
+  --border: #d6dfdd;
 }
 
 @layer base {
@@ -144,3 +180,20 @@
   scrollbar-width: none;  /* Firefox */
 }
 
+
+/* Numbers and times are tabular so columns of times line up. */
+.tabular {
+  font-variant-numeric: tabular-nums;
+}
+
+/* The delivery tab presses in once when the server confirms a message; reduced motion swaps states instantly. */
+@keyframes stamp-press {
+  0% { transform: scale(1.18) rotate(-4deg); opacity: 0.4; }
+  60% { transform: scale(0.96) rotate(-1.5deg); opacity: 1; }
+  100% { transform: scale(1) rotate(-1.5deg); opacity: 1; }
+}
+@media (prefers-reduced-motion: no-preference) {
+  .animate-stamp {
+    animation: stamp-press 220ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+  }
+}

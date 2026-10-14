@@ -2,7 +2,8 @@
 
 import { LoginForm } from "@/components/LoginForm";
 import { Skeleton } from "@/components/ui/skeleton";
-import { useRouter } from "next/navigation";
+import Link from "next/link";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useRef, useState, Suspense } from "react";
 import { useAuthStore } from "@/lib/stores/authStore";
 
@@ -11,10 +12,10 @@ function LoginSkeleton() {
     <div
       role="status"
       aria-label="Checking your session"
-      className="flex flex-col items-center space-y-6 px-4"
+      className="flex w-full max-w-sm flex-col items-center gap-6"
     >
-      <Skeleton className="h-14 w-56" />
-      <Skeleton className="h-48 w-full max-w-md rounded-2xl" />
+      <Skeleton className="h-12 w-44 bg-muted" />
+      <Skeleton className="h-56 w-full rounded-md bg-muted" />
     </div>
   );
 }
@@ -26,7 +27,17 @@ const LoginContent = () => {
     routerRef.current = router;
   }, [router]);
   const checkAuthStatus = useAuthStore((state) => state.checkAuthStatus);
+  const unreachable = useAuthStore((state) => state.unreachable);
+  const expired = useSearchParams().get("reason") === "expired";
   const [checked, setChecked] = useState(false);
+  const [retrying, setRetrying] = useState(false);
+
+  const retry = async () => {
+    setRetrying(true);
+    await checkAuthStatus();
+    setRetrying(false);
+    if (useAuthStore.getState().isAuthenticated) routerRef.current.replace("/dashboard");
+  };
 
   // The server decides: /auth/me 200 -> dashboard, 401 -> the form. Nothing client-side gates this.
   useEffect(() => {
@@ -47,15 +58,32 @@ const LoginContent = () => {
   if (!checked) return <LoginSkeleton />;
 
   return (
-    <div className="flex flex-col justify-center items-center space-y-6 sm:space-y-8 px-4 sm:px-6 lg:px-8">
-      <div className="text-center">
-        <h1 className="font-brand text-5xl sm:text-6xl md:text-7xl text-white">
-          ChatMee
-        </h1>
-        <p className="mt-2 text-base sm:text-lg text-white/80">
-          Real-time chat with friends and communities
-        </p>
-      </div>
+    <div className="flex w-full max-w-sm flex-col gap-6">
+      <Link href="/" className="self-center rounded-sm pt-2 font-brand text-5xl leading-none">
+        ChatMee
+      </Link>
+      {unreachable ? (
+        <div role="alert" className="rounded-md border border-warning/40 bg-warning-surface px-4 py-3 text-sm">
+          <p className="font-semibold text-warning">Can&apos;t reach ChatMee right now.</p>
+          <p className="mt-1 text-muted-foreground">
+            The server may be waking up. Try again in a minute.
+          </p>
+          <button
+            type="button"
+            onClick={() => void retry()}
+            disabled={retrying}
+            className="mt-2 rounded-sm font-semibold text-foreground underline underline-offset-4 disabled:opacity-60"
+          >
+            {retrying ? "Checking…" : "Try again"}
+          </button>
+        </div>
+      ) : (
+        expired && (
+          <p role="status" className="rounded-md border border-border bg-secondary px-4 py-3 text-sm">
+            Your session ended. Sign in again.
+          </p>
+        )
+      )}
       <LoginForm />
     </div>
   );

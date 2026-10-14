@@ -2,11 +2,12 @@
 
 import { Message, MessageType } from "@/lib/types";
 import React, { useCallback, useLayoutEffect, useRef, useState } from "react";
-import { AlertCircle, ArrowDown, Check, Clock, MessageSquare, RotateCw } from "lucide-react";
+import { AlertCircle, ArrowDown, MessageSquare, RotateCw } from "lucide-react";
 import { Skeleton } from "../ui/skeleton";
 import { Button } from "../ui/button";
 import { UserAvatar } from "../common/UserAvatar";
 import { isDeletedUser } from "../common/deletedUser";
+import { DeliveryTab } from "./DeliveryTab";
 
 /** Distance from the top of the list at which the next older page is requested. */
 const LOAD_OLDER_THRESHOLD_PX = 48;
@@ -162,7 +163,7 @@ const MessageListContent: React.FC<MessageListContentProps> = ({
   if (loading && messages.length === 0) {
     return (
       <div
-        className="p-3 sm:p-4 space-y-4"
+        className="px-3 py-4 sm:px-7 space-y-4"
         role="status"
         aria-busy="true"
         aria-label="Loading messages"
@@ -172,7 +173,7 @@ const MessageListContent: React.FC<MessageListContentProps> = ({
             key={i}
             className={`flex ${i % 2 ? "justify-end" : "justify-start"}`}
           >
-            <Skeleton className="h-12 w-2/3 sm:w-64 rounded-2xl" />
+            <Skeleton className="h-12 w-2/3 sm:w-64 rounded-[10px]" />
           </div>
         ))}
       </div>
@@ -185,10 +186,10 @@ const MessageListContent: React.FC<MessageListContentProps> = ({
         className="flex flex-col items-center justify-center text-center gap-3 p-6 h-full"
         role="alert"
       >
-        <AlertCircle className="w-10 h-10 text-red-400" aria-hidden="true" />
+        <AlertCircle className="w-10 h-10 text-destructive" aria-hidden="true" />
         <div>
-          <p className="font-medium text-gray-900">Could not load messages</p>
-          <p className="text-sm text-gray-500 break-words">{error}</p>
+          <p className="font-medium text-foreground">Could not load messages</p>
+          <p className="text-sm text-muted-foreground break-words">{error}</p>
         </div>
         {onRetryLoad && (
           <Button variant="outline" size="sm" onClick={onRetryLoad}>
@@ -205,11 +206,11 @@ const MessageListContent: React.FC<MessageListContentProps> = ({
       {error && (
         // History failed but live or own messages are on screen: the conversation is incomplete.
         <div
-          className="mx-3 sm:mx-4 mt-3 flex flex-wrap items-center gap-2 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm"
+          className="mx-3 sm:mx-7 mt-3 flex flex-wrap items-center gap-2 rounded-md border border-destructive/30 bg-danger-surface px-3 py-2 text-sm"
           role="alert"
         >
-          <AlertCircle className="w-4 h-4 text-red-500 flex-shrink-0" aria-hidden="true" />
-          <p className="flex-1 min-w-0 break-words text-red-700">
+          <AlertCircle className="w-4 h-4 text-destructive flex-shrink-0" aria-hidden="true" />
+          <p className="flex-1 min-w-0 break-words text-destructive">
             Could not load earlier messages: {error}
           </p>
           {onRetryLoad && (
@@ -222,21 +223,21 @@ const MessageListContent: React.FC<MessageListContentProps> = ({
       )}
       {loadingOlder && (
         <div
-          className="flex items-center justify-center gap-2 pt-3 text-xs text-gray-500"
+          className="flex items-center justify-center gap-2 pt-3 text-xs text-muted-foreground"
           role="status"
           aria-live="polite"
         >
-          <RotateCw className="w-3.5 h-3.5 animate-spin" aria-hidden="true" />
+          <RotateCw className="w-3.5 h-3.5 motion-safe:animate-spin" aria-hidden="true" />
           Loading older messages…
         </div>
       )}
       {olderError && (
         <div
-          className="mx-3 sm:mx-4 mt-3 flex flex-wrap items-center gap-2 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm"
+          className="mx-3 sm:mx-7 mt-3 flex flex-wrap items-center gap-2 rounded-md border border-destructive/30 bg-danger-surface px-3 py-2 text-sm"
           role="alert"
         >
-          <AlertCircle className="w-4 h-4 text-red-500 flex-shrink-0" aria-hidden="true" />
-          <p className="flex-1 min-w-0 break-words text-red-700">
+          <AlertCircle className="w-4 h-4 text-destructive flex-shrink-0" aria-hidden="true" />
+          <p className="flex-1 min-w-0 break-words text-destructive">
             Could not load older messages: {olderError}
           </p>
           {onLoadOlder && (
@@ -255,20 +256,19 @@ const MessageListContent: React.FC<MessageListContentProps> = ({
         </div>
       )}
       {onLoadOlder && !hasMore && !loading && !error && messages.length > 0 && (
-        <p className="pt-3 text-center text-xs text-gray-400">Beginning of conversation</p>
+        <p className="pt-4 text-center font-mono text-[11px] uppercase tracking-[0.12em] text-muted-foreground">
+          Beginning of conversation
+        </p>
       )}
       <div
-        className="p-3 sm:p-4 space-y-1"
+        className="px-3 py-4 sm:px-7"
         role="log"
         aria-live="polite"
         aria-label="Messages"
       >
         {messages.length === 0 && (
-          <div className="flex flex-col items-center justify-center text-center py-12 text-gray-500">
-            <MessageSquare
-              className="w-10 h-10 mb-3 text-gray-300"
-              aria-hidden="true"
-            />
+          <div className="flex flex-col items-center justify-center text-center py-12 text-muted-foreground">
+            <MessageSquare className="w-10 h-10 mb-3 text-border" aria-hidden="true" />
             <p className="text-sm">No messages yet. Say hello!</p>
           </div>
         )}
@@ -282,113 +282,44 @@ const MessageListContent: React.FC<MessageListContentProps> = ({
           const groupStart = startsGroup(messages, index, showDate);
           const online = onlineUsers.has(message.senderId);
           const failed = message.isOwn && message.status === "failed";
+          const pending = message.isOwn && message.status === "sending";
 
           return (
             <div key={message.id}>
               {showDate && (
-                <div className="flex justify-center my-3 sm:my-4">
-                  <span className="px-3 py-1 text-xs bg-gray-100 text-gray-600 rounded-full">
+                <div className="flex justify-center my-4">
+                  <span className="rounded-[3px] border border-primary px-2.5 py-0.5 font-mono text-[11px] uppercase tracking-[0.12em] text-primary">
                     {formatDate(messageDate)}
                   </span>
                 </div>
               )}
 
               {message.type === MessageType.SYSTEM ? (
-                <div data-message-type={message.type} className="flex justify-center py-1">
-                  <p className="text-center text-xs text-gray-500 break-words max-w-[90%]">
+                <div data-message-type={message.type} className="flex justify-center py-1.5">
+                  <p className="text-center text-xs text-muted-foreground break-words max-w-[90%]">
                     {message.content}
                   </p>
                 </div>
-              ) : (
+              ) : message.isOwn ? (
                 <div
                   data-message-type={message.type}
-                  className={`flex items-end gap-2 ${
-                    message.isOwn ? "justify-end" : "justify-start"
-                  } ${groupStart ? "mt-3 sm:mt-4" : "mt-0.5"}`}
+                  className={`flex flex-col items-end gap-1 ${groupStart ? "mt-4" : "mt-1"}`}
                 >
-                  {!message.isOwn && (
-                    <div className="w-8 flex-shrink-0">
-                      {groupStart && (
-                        <UserAvatar
-                          name={message.senderName}
-                          size="sm"
-                          variant={isDeletedUser(message.senderName) ? "neutral" : "default"}
-                        />
-                      )}
-                    </div>
-                  )}
-                  <div className="min-w-0 max-w-[85%] sm:max-w-sm md:max-w-md lg:max-w-lg">
-                    {!message.isOwn && groupStart && (
-                      <div className="flex items-center space-x-1 mb-1 px-3">
-                        <p className="text-xs text-gray-500 truncate">
-                          {message.senderName}
-                        </p>
-                        <div
-                          className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${
-                            !presenceKnown
-                              ? "bg-gray-300"
-                              : online
-                              ? "bg-green-500"
-                              : "bg-gray-400"
-                          }`}
-                          role="img"
-                          aria-label={!presenceKnown ? "Status unknown" : online ? "Online" : "Offline"}
-                          title={!presenceKnown ? "Status unknown" : online ? "Online" : "Offline"}
-                        />
-                      </div>
-                    )}
-                    <div
-                      className={`px-3 sm:px-4 py-2 rounded-2xl break-words ${
-                        message.isOwn
-                          ? failed
-                            ? "border border-destructive bg-background text-foreground"
-                            : "bg-blue-500 text-white"
-                          : "bg-gray-100 text-gray-900"
-                      }`}
-                    >
-                      <p className="text-sm whitespace-pre-wrap break-words">
-                        {message.content}
-                      </p>
-                      <div
-                        className={`flex items-center justify-between mt-1 ${
-                          message.isOwn && !failed ? "text-blue-100" : "text-gray-500"
-                        }`}
-                      >
-                        <p className="text-xs">
-                          <time dateTime={message.createdAt}>
-                            {formatTime(messageDate)}
-                          </time>
-                        </p>
-                        {message.isOwn && (
-                          <div className="ml-2">
-                            {message.status === "sending" && (
-                              <span role="img" aria-label="Sending" className="opacity-70">
-                                <Clock className="w-3 h-3" aria-hidden="true" />
-                              </span>
-                            )}
-                            {message.status === "sent" && (
-                              <span role="img" aria-label="Sent" className="opacity-70">
-                                <Check className="w-3 h-3" aria-hidden="true" />
-                              </span>
-                            )}
-                            {message.status === "failed" && (
-                              <span
-                                role="img"
-                                aria-label="Failed to send"
-                                title={message.errorMessage || "Failed to send"}
-                                className="text-destructive"
-                              >
-                                <AlertCircle className="w-3 h-3" aria-hidden="true" />
-                              </span>
-                            )}
-                          </div>
-                        )}
-                      </div>
-                    </div>
-
+                  <div
+                    className={`max-w-[85%] sm:max-w-md lg:max-w-xl rounded-[10px] px-3 py-2 break-words ${
+                      failed
+                        ? "border-[1.5px] border-destructive bg-card text-foreground"
+                        : pending
+                          ? "border-[1.5px] border-dashed border-primary bg-card text-foreground"
+                          : "border border-primary bg-primary text-primary-foreground"
+                    }`}
+                  >
+                    <p className="text-sm whitespace-pre-wrap break-words">{message.content}</p>
+                  </div>
+                  <div className="flex flex-wrap items-center justify-end gap-x-2 gap-y-1 text-xs">
                     {failed && message.tempId && (
-                      <div className="mt-1 flex flex-wrap items-center justify-end gap-x-2 gap-y-1 px-1 text-xs">
-                        <span className="text-red-600 break-words">
+                      <>
+                        <span className="text-destructive break-words">
                           {message.errorMessage || "Failed to send"}
                         </span>
                         {onResend && (
@@ -396,7 +327,7 @@ const MessageListContent: React.FC<MessageListContentProps> = ({
                             type="button"
                             onClick={() => onResend(message.tempId as string)}
                             disabled={!canResend}
-                            className="rounded font-medium text-blue-600 hover:underline disabled:cursor-not-allowed disabled:opacity-50 disabled:no-underline"
+                            className="rounded font-semibold text-destructive underline underline-offset-2 disabled:cursor-not-allowed disabled:opacity-50 disabled:no-underline"
                           >
                             Resend
                           </button>
@@ -405,13 +336,65 @@ const MessageListContent: React.FC<MessageListContentProps> = ({
                           <button
                             type="button"
                             onClick={() => onDiscard(message.tempId as string)}
-                            className="rounded font-medium text-gray-600 hover:underline"
+                            className="rounded font-medium text-muted-foreground hover:underline"
                           >
                             Discard
                           </button>
                         )}
+                      </>
+                    )}
+                    <DeliveryTab message={message} formatTime={formatTime} />
+                  </div>
+                </div>
+              ) : (
+                <div
+                  data-message-type={message.type}
+                  className={`group flex items-start gap-2.5 ${groupStart ? "mt-4" : "mt-1"}`}
+                >
+                  <div className="w-8 flex-shrink-0">
+                    {groupStart && (
+                      <UserAvatar
+                        name={message.senderName}
+                        size="sm"
+                        variant={isDeletedUser(message.senderName) ? "neutral" : "default"}
+                      />
+                    )}
+                  </div>
+                  <div className="min-w-0 max-w-[85%] sm:max-w-md lg:max-w-xl">
+                    {groupStart && (
+                      <div className="flex items-baseline gap-2 mb-1">
+                        <p className="text-[13px] font-semibold text-foreground truncate">
+                          {message.senderName}
+                        </p>
+                        <span
+                          className={`h-1.5 w-1.5 flex-shrink-0 self-center rounded-full ${
+                            !presenceKnown ? "bg-border" : online ? "bg-success" : "bg-muted-foreground/50"
+                          }`}
+                          role="img"
+                          aria-label={!presenceKnown ? "Status unknown" : online ? "Online" : "Offline"}
+                          title={!presenceKnown ? "Status unknown" : online ? "Online" : "Offline"}
+                        />
+                        <time
+                          dateTime={message.createdAt}
+                          className="font-mono text-[11px] tabular text-muted-foreground"
+                        >
+                          {formatTime(messageDate)}
+                        </time>
                       </div>
                     )}
+                    <div className="flex items-end gap-2">
+                      <div className="rounded-[10px] border border-border bg-card px-3 py-2 break-words text-card-foreground">
+                        <p className="text-sm whitespace-pre-wrap break-words">{message.content}</p>
+                      </div>
+                      {!groupStart && (
+                        <time
+                          dateTime={message.createdAt}
+                          className="pb-1 font-mono text-[11px] tabular text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100"
+                        >
+                          {formatTime(messageDate)}
+                        </time>
+                      )}
+                    </div>
                   </div>
                 </div>
               )}

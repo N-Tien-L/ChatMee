@@ -2,6 +2,38 @@
 
 Newest first. A decision changes only through a new entry that supersedes it.
 
+## D-11: Milestone B build choices
+
+- Date: 2026-10-14 · Phase: 3 · Status: confirmed within delegated scope (agent), owner reviews at milestone B
+- Decided by: agent (D-10 delegated the recommendations)
+- Decision:
+  1. Preview: a development-only route `/preview` (404 in production) renders the real workspace components on labelled mock data with a
+     state switcher, because no backend runs before milestone C (D-9). It is temporary machinery and is deleted before milestone C.
+  2. G1 needs `authStore` to tell "no session" from "server unreachable" (network error or 5xx from the /api rewrite): a new
+     `unreachable` flag. This touches a store, which the ticket scoped out except for journey defects; recorded here as the one exception.
+  3. G2: every in-app 401 (`apiClient`, STOMP ws-token) now lands on `/login?reason=expired`; `AuthGate` keeps `/login`.
+  4. The delivery tab uses the list's own time format (HH:MM) for every state, so the tab and the conversation read the same; the
+     existing UTC display test stays unchanged as the guard.
+  5. The floating connection banner moved into the header as "On air / Reconnecting… / Off air · retrying"; its live region stays.
+  6. Landing mobile: the From column folds into the message cell and the confirmation mark shows only its check below 640 px.
+- Revisit if: the owner rejects the preview approach or any of the visible choices at milestone B.
+
+## D-10: Milestone A answers: principal direction and agent recommendations adopted
+
+- Date: 2026-10-14 · Phase: 3 · Status: confirmed (owner may edit later)
+- Decided by: owner chat ("do everything as you recommend, I will edit later")
+- Decision:
+  1. Direction: principal "Contact confirmed" (QSL card world). The airmail alternative is rejected for this run (loud for a working
+     screen, red action competes with unread).
+  2. Delivery tab wording: plain check mark plus server time; no "QSL" label in the workspace (the reference is niche; plain words
+     read as "confirmed" to everyone). The QSL card stays the landing's frame, where there is room to explain it.
+  3. Gaps G1 (backend unreachable on /login), G2 (`/login?reason=expired` notice), G3 (composer hint while reconnecting) are in
+     CM-084 scope.
+  4. `PRODUCT.md` approved as written; the owner will correct facts later.
+  5. Landing demo animation: custom, built on `motion` (existing dependency); no registry code, no new dependency.
+- Consequences: milestone B builds tokens plus the principal components on the real code; Magic UI / CM-082 code is not ported.
+- Revisit if: the owner edits any of the five answers.
+
 ## D-9: Backend for milestone C is run by the owner
 
 - Date: 2026-10-14 · Phase: 1 · Status: confirmed

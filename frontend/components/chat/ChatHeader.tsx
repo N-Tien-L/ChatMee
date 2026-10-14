@@ -2,7 +2,7 @@
 
 import React from "react";
 import { Button } from "../ui/button";
-import { Info } from "lucide-react";
+import { Info, Lock } from "lucide-react";
 import { ChatRoom, RoomType } from "@/lib/types";
 
 interface ChatHeaderProps {
@@ -16,48 +16,64 @@ interface ChatHeaderProps {
   onOpenInfo: () => void;
 }
 
-/** "N members · M online" for groups, "Online" / "Offline" for direct messages. */
-export const roomSubtitle = ({
+interface HeaderField {
+  label: string;
+  value: string;
+}
+
+/** Labelled fields under the room name: capacity and presence for groups, status for direct messages. */
+export const roomFields = ({
   room,
   memberCount,
   onlineCount,
   presenceKnown,
   counterpartOnline,
-}: Omit<ChatHeaderProps, "onOpenInfo">): string => {
+}: Omit<ChatHeaderProps, "onOpenInfo">): HeaderField[] => {
   if (room.roomType === RoomType.DIRECT_MESSAGE) {
-    if (!presenceKnown) return "";
-    return counterpartOnline ? "Online" : "Offline";
+    if (!presenceKnown) return [{ label: "Direct", value: "1:1" }];
+    return [{ label: "Status", value: counterpartOnline ? "Online" : "Offline" }];
   }
-  const members = `${memberCount} ${memberCount === 1 ? "member" : "members"}`;
-  return presenceKnown ? `${members} · ${onlineCount} online` : members;
+  // maxUsers <= 0 means unlimited.
+  const capacity = room.maxUsers > 0 ? `${memberCount}/${room.maxUsers}` : `${memberCount}`;
+  const fields: HeaderField[] = [
+    { label: "Room", value: room.roomType === RoomType.PRIVATE ? "Private" : "Public" },
+    { label: "Members", value: capacity },
+  ];
+  if (presenceKnown) fields.push({ label: "Online", value: `${onlineCount}` });
+  return fields;
 };
 
 const ChatHeader: React.FC<ChatHeaderProps> = (props) => {
   const { room, onOpenInfo } = props;
-  const subtitle = roomSubtitle(props);
+  const fields = roomFields(props);
   const title = room.displayName || room.roomName;
 
   return (
-    <div className="flex items-center justify-between p-3 sm:p-4 border-b bg-white shadow-sm flex-shrink-0">
-      <div className="flex items-center space-x-2 sm:space-x-3 min-w-0 flex-1">
-        <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-full bg-gradient-to-br from-blue-400 to-purple-500 flex items-center justify-center text-white font-semibold flex-shrink-0">
-          {title.charAt(0).toUpperCase()}
-        </div>
-        <div className="min-w-0 flex-1">
-          <h2 className="text-base sm:text-lg font-semibold text-gray-900 truncate">
-            {title}
-          </h2>
-          {subtitle && (
-            <p className="text-xs sm:text-sm text-gray-500 truncate">{subtitle}</p>
+    <div className="flex flex-shrink-0 items-end gap-3 border-b bg-card px-3 py-3 sm:gap-5 sm:px-7 sm:py-4">
+      <div className="min-w-0 flex-1 sm:flex sm:items-end sm:gap-6">
+        <h2 className="flex min-w-0 items-center gap-2 text-xl font-bold leading-none tracking-[-0.02em] text-foreground sm:text-[26px]">
+          {room.roomType === RoomType.PRIVATE && (
+            <Lock className="h-4 w-4 flex-shrink-0 text-muted-foreground" aria-hidden="true" />
           )}
-        </div>
+          <span className="truncate">{title}</span>
+        </h2>
+        <dl className="mt-2 flex gap-4 sm:mt-0 sm:gap-6">
+          {fields.map((field) => (
+            <div key={field.label} className="min-w-0">
+              <dt className="text-[10px] uppercase leading-none tracking-[0.1em] text-muted-foreground">
+                {field.label}
+              </dt>
+              <dd className="mt-1 font-mono text-[13px] font-medium leading-none tabular text-foreground">
+                {field.value}
+              </dd>
+            </div>
+          ))}
+        </dl>
       </div>
 
-      <div className="flex items-center space-x-1 flex-shrink-0">
-        <Button variant="ghost" size="sm" className="p-2" aria-label="Room info" onClick={onOpenInfo}>
-          <Info size={18} aria-hidden="true" />
-        </Button>
-      </div>
+      <Button variant="ghost" size="sm" className="flex-shrink-0 p-2" aria-label="Room info" onClick={onOpenInfo}>
+        <Info size={18} aria-hidden="true" />
+      </Button>
     </div>
   );
 };

@@ -13,7 +13,7 @@ export function UnreadBadge({ count, className }: UnreadBadgeProps) {
     <span
       aria-label={`${count} unread messages`}
       className={cn(
-        "inline-flex min-w-5 items-center justify-center rounded-full bg-primary px-1.5 text-xs font-semibold leading-5 text-primary-foreground",
+        "inline-flex min-w-5 items-center justify-center rounded-full bg-spot px-1.5 font-mono text-[11px] font-semibold leading-5 tabular text-spot-foreground",
         className
       )}
     >

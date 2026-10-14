@@ -36,17 +36,17 @@ const DashboardContent = () => {
     <div className="h-full flex flex-row overflow-hidden bg-background">
       <aside
         aria-label="Chat rooms"
-        className={`${roomId ? "hidden" : "block"} md:block w-full md:w-80 lg:w-96 flex-shrink-0 border-r bg-sidebar`}
+        className={`${roomId ? "hidden" : "block"} md:block w-full md:w-80 flex-shrink-0 border-r bg-sidebar`}
       >
         <ChatRoomsList />
       </aside>
 
       <main
-        className={`${roomId ? "flex" : "hidden"} md:flex flex-1 min-w-0 flex-col overflow-hidden bg-muted/40`}
+        className={`${roomId ? "flex" : "hidden"} md:flex flex-1 min-w-0 flex-col overflow-hidden bg-background`}
       >
         {roomId ? (
           <>
-            <div className="md:hidden flex flex-shrink-0 items-center border-b bg-background px-2 py-1">
+            <div className="md:hidden flex flex-shrink-0 items-center border-b bg-card px-2 py-1">
               <button
                 type="button"
                 onClick={() => router.push("/dashboard")}

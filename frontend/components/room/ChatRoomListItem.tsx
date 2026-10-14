@@ -96,36 +96,36 @@ const ChatRoomListItem: React.FC<ChatRoomListItemProps> = ({
 
   return (
     <div
-      className={`relative group cursor-pointer transition-colors ${
+      className={`relative group cursor-pointer border-l-[3px] transition-colors ${
         isSelected
-          ? "bg-blue-50 border-l-4 border-blue-500"
-          : "hover:bg-gray-50 active:bg-gray-100"
+          ? "border-primary bg-sidebar-accent"
+          : "border-transparent hover:bg-accent/60 active:bg-accent"
       }`}
       onClick={onClick}
     >
-      <div className="flex items-center p-2 sm:p-3 md:p-4 gap-2 sm:gap-3">
+      <div className="flex min-h-14 items-center gap-2.5 px-3 py-2.5 sm:px-4">
         <div className="flex-shrink-0">
           {isDirect ? (
             <UserAvatar
               name={roomName}
               avatarUrl={room.counterpart?.avatarUrl}
-              size="lg"
+              size="md"
             />
           ) : (
-            <RoomAvatar name={roomName} />
+            <RoomAvatar name={roomName} className="h-9 w-9" />
           )}
         </div>
 
         <div className="flex-1 min-w-0">
           <div className="flex items-center justify-between mb-0.5 gap-2">
             <h3
-              className={`text-sm text-gray-900 truncate min-w-0 flex items-center gap-1 ${
+              className={`text-sm text-foreground truncate min-w-0 flex items-center gap-1 ${
                 unread > 0 ? "font-semibold" : "font-medium"
               }`}
             >
               {room.roomType === RoomType.PRIVATE && (
                 <Lock
-                  className="w-3.5 h-3.5 flex-shrink-0 text-gray-500"
+                  className="w-3.5 h-3.5 flex-shrink-0 text-muted-foreground"
                   role="img"
                   aria-label="Private room"
                 />
@@ -142,7 +142,7 @@ const ChatRoomListItem: React.FC<ChatRoomListItemProps> = ({
             {activityAt && (
               <RelativeTime
                 value={activityAt}
-                className="text-xs text-gray-400 flex-shrink-0"
+                className="font-mono text-[11px] tabular text-muted-foreground flex-shrink-0"
               />
             )}
           </div>
@@ -150,14 +150,14 @@ const ChatRoomListItem: React.FC<ChatRoomListItemProps> = ({
           <div className="flex items-center justify-between gap-2">
             <p
               className={`text-xs truncate ${
-                unread > 0 ? "text-gray-900 font-medium" : "text-gray-500"
+                unread > 0 ? "text-foreground font-medium" : "text-muted-foreground"
               }`}
             >
               {previewText(room, user?.id)}
             </p>
             <div className="flex items-center gap-1 flex-shrink-0">
               {isPending && (
-                <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-800">
+                <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-warning-surface text-warning">
                   Pending
                 </span>
               )}
@@ -176,17 +176,17 @@ const ChatRoomListItem: React.FC<ChatRoomListItemProps> = ({
                 setShowActions(!showActions);
               }}
               // Always visible on touch screens; on desktop shown on hover or keyboard focus.
-              className="p-1 sm:p-1.5 rounded-lg hover:bg-gray-200 opacity-100 md:opacity-0 md:group-hover:opacity-100 md:group-focus-within:opacity-100 md:focus-visible:opacity-100 transition-opacity touch-manipulation"
+              className="p-1 sm:p-1.5 rounded-lg hover:bg-accent opacity-100 md:opacity-0 md:group-hover:opacity-100 md:group-focus-within:opacity-100 md:focus-visible:opacity-100 transition-opacity touch-manipulation"
               disabled={isLoading}
               aria-label={`Actions for ${roomName}`}
               aria-haspopup="true"
               aria-expanded={showActions}
             >
-              <MoreVertical className="w-4 h-4 text-gray-500" aria-hidden="true" />
+              <MoreVertical className="w-4 h-4 text-muted-foreground" aria-hidden="true" />
             </button>
 
             {showActions && (
-              <div className="absolute right-0 top-8 w-48 bg-white border border-gray-200 rounded-lg shadow-lg z-10">
+              <div className="absolute right-0 top-8 w-48 bg-card border border-border rounded-lg shadow-lg z-10">
                 <div className="py-1">
                   <button
                     onClick={(e) => {
@@ -194,7 +194,7 @@ const ChatRoomListItem: React.FC<ChatRoomListItemProps> = ({
                       setShowActions(false);
                       setShowInfoDialog(true);
                     }}
-                    className="w-full flex items-center px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+                    className="w-full flex items-center px-4 py-2 text-sm text-foreground hover:bg-accent"
                   >
                     <Info size={16} className="mr-2" aria-hidden="true" />
                     Info
@@ -207,7 +207,7 @@ const ChatRoomListItem: React.FC<ChatRoomListItemProps> = ({
                         setConfirming("leave");
                       }}
                       disabled={isLoading}
-                      className="w-full flex items-center px-4 py-2 text-sm text-orange-600 hover:bg-orange-50 disabled:opacity-50"
+                      className="w-full flex items-center px-4 py-2 text-sm text-warning hover:bg-warning-surface disabled:opacity-50"
                     >
                       <UserMinus size={16} className="mr-2" aria-hidden="true" />
                       Leave
@@ -221,7 +221,7 @@ const ChatRoomListItem: React.FC<ChatRoomListItemProps> = ({
                         setConfirming("delete");
                       }}
                       disabled={isLoading}
-                      className="w-full flex items-center px-4 py-2 text-sm text-red-600 hover:bg-red-50 disabled:opacity-50"
+                      className="w-full flex items-center px-4 py-2 text-sm text-destructive hover:bg-danger-surface disabled:opacity-50"
                     >
                       <Trash2 size={16} className="mr-2" aria-hidden="true" />
                       Delete
@@ -235,8 +235,8 @@ const ChatRoomListItem: React.FC<ChatRoomListItemProps> = ({
       </div>
 
       {isLoading && (
-        <div className="absolute inset-0 bg-white bg-opacity-50 flex items-center justify-center">
-          <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-500"></div>
+        <div className="absolute inset-0 bg-card/50 flex items-center justify-center">
+          <div className="motion-safe:animate-spin rounded-full h-4 w-4 border-b-2 border-primary"></div>
         </div>
       )}
 

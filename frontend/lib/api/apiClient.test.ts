@@ -19,7 +19,7 @@ describe("API problem responses", () => {
         const location = { pathname: "/dashboard", href: "/dashboard" };
         vi.stubGlobal("window", { location });
         await expect(fail(401, { detail: "Authentication required" })).rejects.toThrow("Authentication required");
-        expect(location.href).toBe("/login");
+        expect(location.href).toBe("/login?reason=expired");
     });
 
     it("avoids redirect loops on login", async () => {
