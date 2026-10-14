@@ -18,7 +18,7 @@ interface ConstellationGridProps {
   accentColor?: string;
   /** Colour of the radar rings, "r, g, b". */
   ringColor?: string;
-  /** Grid spacing in CSS pixels. */
+  /** Fixed grid spacing in CSS pixels. Omit to size cells from the container width (about 26 columns, 36 to 64 px). */
   spacing?: number;
   className?: string;
 }
@@ -35,11 +35,16 @@ interface GridNode {
   pulse: number;
 }
 
-const POINTER_RADIUS = 220;
 const SPRING_K = 18;
 const DAMPING = 0.82;
-const LINK_DISTANCE = 75;
-const RING_DISTANCE = 90;
+/** Responsive cell size: width / COLUMNS, clamped. Every distance below scales with the cell so the mesh keeps its look. */
+const COLUMNS = 26;
+const MIN_CELL = 36;
+const MAX_CELL = 64;
+/** Ratios to the cell size, from the original 55 px tuning (pointer 220, links 75, rings 90). */
+const POINTER_RATIO = 4;
+const LINK_RATIO = 1.36;
+const RING_RATIO = 1.64;
 /** Neighbour offsets (in grid cells) checked for links: right, down and both diagonals; each pair is visited once. */
 const NEIGHBOURS: [number, number][] = [
   [1, 0],
@@ -52,7 +57,7 @@ export default function ConstellationGrid({
   nodeColor = "234, 245, 242",
   accentColor = "46, 230, 193",
   ringColor = "255, 106, 61",
-  spacing = 55,
+  spacing,
   className = "",
 }: ConstellationGridProps) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -71,17 +76,25 @@ export default function ConstellationGrid({
     let height = 0;
     let bounds = canvas.getBoundingClientRect();
     let frameId = 0;
+    let cell = 55;
+    let pointerRadius = cell * POINTER_RATIO;
+    let linkDistance = cell * LINK_RATIO;
+    let ringDistance = cell * RING_RATIO;
     let lastTime = performance.now();
     let visible = true;
 
     const initNodes = () => {
-      cols = Math.ceil(width / spacing) + 1;
-      rows = Math.ceil(height / spacing) + 1;
+      cell = spacing ?? Math.min(MAX_CELL, Math.max(MIN_CELL, Math.round(width / COLUMNS)));
+      pointerRadius = cell * POINTER_RATIO;
+      linkDistance = cell * LINK_RATIO;
+      ringDistance = cell * RING_RATIO;
+      cols = Math.ceil(width / cell) + 1;
+      rows = Math.ceil(height / cell) + 1;
       nodes = [];
       for (let i = 0; i < cols; i++) {
         for (let j = 0; j < rows; j++) {
-          const x = i * spacing;
-          const y = j * spacing;
+          const x = i * cell;
+          const y = j * cell;
           nodes.push({
             x,
             y,
@@ -122,8 +135,8 @@ export default function ConstellationGrid({
         const dy = pointer.y - n.y;
         const dist = Math.hypot(dx, dy);
         // Faster sweeps push harder (a kinetic shockwave), capped so a jump of the pointer does not explode the grid.
-        if (dist < POINTER_RADIUS && dist > 0) {
-          const force = (1 - dist / POINTER_RADIUS) * (1500 + speed * 150);
+        if (dist < pointerRadius && dist > 0) {
+          const force = (1 - dist / pointerRadius) * (1500 + speed * 150);
           n.vx -= (dx / dist) * force * dt;
           n.vy -= (dy / dist) * force * dt;
         }
@@ -149,8 +162,8 @@ export default function ConstellationGrid({
             if (ni >= cols || nj < 0 || nj >= rows) continue;
             const m = nodes[ni * rows + nj];
             const d = Math.hypot(n.x - m.x, n.y - m.y);
-            if (d >= LINK_DISTANCE) continue;
-            ctx.strokeStyle = `rgba(${nodeColor}, ${(1 - d / LINK_DISTANCE) * 0.18})`;
+            if (d >= linkDistance) continue;
+            ctx.strokeStyle = `rgba(${nodeColor}, ${(1 - d / linkDistance) * 0.18})`;
             ctx.beginPath();
             ctx.moveTo(n.x, n.y);
             ctx.lineTo(m.x, m.y);
@@ -162,7 +175,7 @@ export default function ConstellationGrid({
       ctx.font = "8px ui-monospace, SFMono-Regular, Consolas, monospace";
       for (const n of nodes) {
         const dist = Math.hypot(pointer.x - n.x, pointer.y - n.y);
-        const near = dist < POINTER_RADIUS;
+        const near = dist < pointerRadius;
         const pulse = time === 0 ? 0 : Math.sin(n.pulse);
         ctx.fillStyle = near
           ? `rgba(${accentColor}, 0.95)`
@@ -171,7 +184,7 @@ export default function ConstellationGrid({
         ctx.arc(n.x, n.y, Math.max(0.5, near ? n.radius * 2.2 : n.radius + pulse * 0.3), 0, Math.PI * 2);
         ctx.fill();
 
-        if (dist < RING_DISTANCE) {
+        if (dist < ringDistance) {
           const ring = ((n.pulse * 20) % 30) + 4;
           ctx.strokeStyle = `rgba(${ringColor}, ${(1 - ring / 34) * 0.45})`;
           ctx.lineWidth = 1;
