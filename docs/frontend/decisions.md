@@ -2,6 +2,25 @@
 
 Newest first. A decision changes only through a new entry that supersedes it.
 
+## D-16: Invites and requests inbox join this run; workspace upgrades; two-step New room
+
+- Date: 2026-10-15 · Phase: 2-3 (revisit) · Status: confirmed
+- Decided by: owner chat (answers to agent options) after reviewing the B2 workspace ("looks normal, nothing special")
+- Decision:
+  1. Supersedes D-4 for invitations (CM-066 invite part) and the requests inbox (CM-079): real screens on the existing APIs
+     (SPEC-009 AC-009-1..3, DM requests): an Inbox for invitations and DM requests (accept, decline), "Invite people" from room
+     info, and invites as step 2 of New room. Invitations exist only for PRIVATE rooms (AC-009-1); public rooms are joined through
+     Discover. Roles, member removal and the safety UI (CM-066 rest, CM-080) stay separate.
+  2. The room settings dialog still calls the removed direct-add endpoint (AC-009-5, 405); it switches to invitations.
+  3. Workspace upgrades: send moment (bubble lifts, check draws itself, ember ring), live sidebar (rooms glide to the top, badges
+     pop), livelier typing notice, room identity covers, online presence stack in the room header, constellation mesh on the
+     "no room open" screen, quick switcher (Ctrl/Cmd+K).
+  4. New room becomes two steps: details (name, description, public/private, live preview; size under More options, default 50),
+     then invite people (private rooms only, skippable).
+  5. Room covers are derived from the room name (stable gradient), not picked: storing a chosen cover needs a backend field,
+     which is outside this frontend run (follow-up).
+- Revisit if: the owner wants chosen covers (backend change) or the rest of CM-066 / CM-080 in this run.
+
 ## D-15: Workspace gets dark and light themes; landing polish set
 
 - Date: 2026-10-15 · Phase: 3 (revisit) · Status: confirmed
