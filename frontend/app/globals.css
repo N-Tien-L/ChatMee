@@ -317,3 +317,41 @@
     }
   }
 }
+
+/* Landing polish (D-15). Every effect ends in the plain, visible state; none runs under reduced motion. */
+@media (prefers-reduced-motion: no-preference) {
+  /* Opening sequence: hero pieces rise in once, staggered by --d (ms). Pure CSS, so no-JS pages still finish visible. */
+  .intro {
+    animation: message-in 700ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+    animation-delay: calc(var(--d, 0) * 1ms);
+  }
+}
+@supports (animation-timeline: view()) {
+  @media (prefers-reduced-motion: no-preference) {
+    /* Section headings: words rise in one after another as the heading enters the viewport. */
+    .reveal-words > span > span {
+      display: inline-block;
+      white-space: pre;
+      animation: message-in linear both;
+      animation-timeline: view();
+      animation-range: entry calc(var(--i, 0) * 4%) entry calc(55% + var(--i, 0) * 4%);
+    }
+  }
+}
+/* Navigation: clear over the hero, frosted glass once the page scrolls (scroll-driven; static glass where unsupported). */
+.nav-glass {
+  background: rgb(5 13 12 / 0.6);
+  backdrop-filter: blur(14px);
+  border-bottom: 1px solid rgb(255 255 255 / 0.06);
+}
+@supports (animation-timeline: scroll()) {
+  .nav-glass {
+    animation: nav-glass linear both;
+    animation-timeline: scroll(root);
+    animation-range: 0 160px;
+  }
+  @keyframes nav-glass {
+    from { background: transparent; backdrop-filter: blur(0); border-bottom-color: transparent; }
+    to { background: rgb(5 13 12 / 0.6); backdrop-filter: blur(14px); border-bottom-color: rgb(255 255 255 / 0.06); }
+  }
+}

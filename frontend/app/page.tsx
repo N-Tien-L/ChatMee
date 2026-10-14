@@ -3,6 +3,8 @@ import Link from "next/link";
 import { Check, Hash, Lock, MessageCircle, RefreshCw, ShieldCheck, Users } from "lucide-react";
 import { Github } from "@/components/ui/icon/OAuthIcons";
 import { PageBackdrop } from "@/components/landing/PageBackdrop";
+import { SmoothScroll } from "@/components/landing/SmoothScroll";
+import { RevealHeading } from "@/components/landing/RevealHeading";
 import { HeroHeadline } from "@/components/landing/HeroHeadline";
 import { LiveChatDemo } from "@/components/landing/LiveChatDemo";
 import { EveryoneSees } from "@/components/landing/EveryoneSees";
@@ -72,6 +74,7 @@ const STACK = ["Spring Boot 4", "Spring Security", "STOMP over WebSocket", "Mong
 export default function Home() {
   return (
     <div className="theme-public relative isolate min-h-dvh overflow-x-clip bg-background text-foreground">
+      <SmoothScroll />
       <PageBackdrop />
       {/* Glows scroll with the content over the fixed mesh: teal at the top, ember toward the close. */}
       <div aria-hidden="true" className="pointer-events-none absolute inset-0 -z-10 overflow-hidden">
@@ -80,8 +83,8 @@ export default function Home() {
         <div className="absolute top-[62%] -right-60 h-[640px] w-[760px] rounded-full bg-[radial-gradient(closest-side,rgb(255_106_61/0.09),transparent)]" />
         <div className="absolute -bottom-40 left-1/2 h-[700px] w-[1100px] -translate-x-1/2 rounded-full bg-[radial-gradient(closest-side,rgb(255_106_61/0.18),transparent)]" />
       </div>
-      <section className="relative">
-        <header className="relative z-10 mx-auto flex max-w-[1240px] items-center gap-6 px-4 py-5 sm:px-8">
+      <header className="nav-glass sticky top-0 z-50">
+        <div className="mx-auto flex max-w-[1240px] items-center gap-6 px-4 py-4 sm:px-8">
           <span className="pt-2 font-brand text-[26px] leading-none">ChatMee</span>
           <nav aria-label="Main" className="ml-auto flex items-center gap-5 text-sm text-muted-foreground sm:gap-7">
             <a href="#features" className="hidden rounded-sm hover:text-foreground sm:inline">
@@ -97,27 +100,29 @@ export default function Home() {
               Sign in
             </Link>
           </nav>
-        </header>
+        </div>
+      </header>
 
+      <section className="relative">
         <div className="relative z-10 mx-auto grid max-w-[1240px] items-center gap-14 px-4 pt-10 pb-24 sm:px-8 lg:grid-cols-[minmax(0,1.1fr)_minmax(0,0.9fr)] lg:pt-20 lg:pb-32">
           <div>
-            <p className="mb-6 inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs text-muted-foreground backdrop-blur">
+            <p style={{ "--d": 0 } as React.CSSProperties} className="intro mb-6 inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs text-muted-foreground backdrop-blur">
               <span className="h-1.5 w-1.5 rounded-full bg-primary text-primary animate-live" aria-hidden="true" />
               Free · open source · sign in with GitHub or Google
             </p>
             <HeroHeadline />
-            <p className="mt-7 max-w-[520px] text-lg leading-relaxed text-muted-foreground">
+            <p style={{ "--d": 420 } as React.CSSProperties} className="intro mt-7 max-w-[520px] text-lg leading-relaxed text-muted-foreground">
               Rooms for the group, direct messages for the one-on-one, live presence and typing. And every message you
               send shows a check and the time the moment it&apos;s delivered.
             </p>
-            <div className="mt-9 flex flex-wrap items-center gap-x-6 gap-y-4">
+            <div style={{ "--d": 540 } as React.CSSProperties} className="intro mt-9 flex flex-wrap items-center gap-x-6 gap-y-4">
               <StartCta />
               <a href="#features" className="rounded-sm text-sm font-medium text-foreground underline-offset-4 hover:underline">
                 See what it does
               </a>
             </div>
           </div>
-          <div className="relative">
+          <div style={{ "--d": 650 } as React.CSSProperties} className="intro relative">
             <div
               aria-hidden="true"
               className="absolute -inset-8 -z-10 rounded-[40px] bg-[radial-gradient(circle_at_70%_30%,rgb(255_106_61/0.18),transparent_60%)] blur-2xl"
@@ -139,13 +144,12 @@ export default function Home() {
       </section>
 
       <section className="mx-auto grid max-w-[1240px] items-center gap-12 px-4 py-24 sm:px-8 lg:grid-cols-2 lg:py-32">
-        <div className="reveal">
+        <div>
           <p className="font-mono text-xs tracking-[0.14em] text-primary">REAL TIME</p>
-          <h2 className="mt-4 font-display text-4xl font-bold tracking-[-0.03em] sm:text-5xl">
-            Send once.
-            <br />
-            Everyone sees it.
-          </h2>
+          <RevealHeading
+            lines={["Send once.", "Everyone sees it."]}
+            className="mt-4 font-display text-4xl font-bold tracking-[-0.03em] sm:text-5xl"
+          />
           <p className="mt-5 max-w-[460px] text-lg leading-relaxed text-muted-foreground">
             Your message reaches every member&apos;s phone, laptop and tablet at the same moment, and you see the check as
             soon as it&apos;s there. No refresh, no waiting.
@@ -154,12 +158,14 @@ export default function Home() {
         <EveryoneSees />
       </section>
 
-      <section id="features" aria-labelledby="features-title" className="mx-auto max-w-[1240px] px-4 pb-24 sm:px-8 lg:pb-32">
-        <div className="reveal">
+      <section id="features" aria-labelledby="features-title" className="scroll-mt-24 mx-auto max-w-[1240px] px-4 pb-24 sm:px-8 lg:pb-32">
+        <div>
           <p className="font-mono text-xs tracking-[0.14em] text-primary">FEATURES</p>
-          <h2 id="features-title" className="mt-4 max-w-[640px] font-display text-4xl font-bold tracking-[-0.03em] sm:text-5xl">
-            Everything a group chat needs. Nothing it doesn&apos;t.
-          </h2>
+          <RevealHeading
+            id="features-title"
+            lines={["Everything a group chat needs.", "Nothing it doesn't."]}
+            className="mt-4 max-w-[640px] font-display text-4xl font-bold tracking-[-0.03em] sm:text-5xl"
+          />
         </div>
         <ul className="mt-12 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {FEATURES.map((feature) => (
@@ -185,14 +191,16 @@ export default function Home() {
       <section
         id="under-the-hood"
         aria-labelledby="hood-title"
-        className="mx-auto max-w-[1240px] px-4 pb-24 sm:px-8 lg:pb-32"
+        className="scroll-mt-24 mx-auto max-w-[1240px] px-4 pb-24 sm:px-8 lg:pb-32"
       >
         <div className="grid gap-10 rounded-3xl border border-white/10 bg-white/[0.02] p-8 sm:p-12 lg:grid-cols-[1fr_auto] lg:items-end">
           <div>
             <p className="font-mono text-xs tracking-[0.14em] text-primary">UNDER THE HOOD</p>
-            <h2 id="hood-title" className="mt-4 font-display text-3xl font-bold tracking-[-0.03em] sm:text-4xl">
-              Built by hand, open to read.
-            </h2>
+            <RevealHeading
+              id="hood-title"
+              lines={["Built by hand, open to read."]}
+              className="mt-4 font-display text-3xl font-bold tracking-[-0.03em] sm:text-4xl"
+            />
             <p className="mt-4 max-w-[560px] leading-relaxed text-muted-foreground">
               A Spring Boot server validates and stores every message in MongoDB before it goes out over STOMP. Redis keeps
               presence in step across instances. The check you see is the server&apos;s confirmation, not a guess.
@@ -217,9 +225,11 @@ export default function Home() {
 
       <section aria-labelledby="cta-title" className="relative">
         <div className="relative z-10 mx-auto flex max-w-[1240px] flex-col items-center px-4 py-28 text-center sm:px-8">
-          <h2 id="cta-title" className="font-display text-4xl font-bold tracking-[-0.03em] sm:text-6xl">
-            Your people are waiting.
-          </h2>
+          <RevealHeading
+            id="cta-title"
+            lines={["Your people are waiting."]}
+            className="font-display text-4xl font-bold tracking-[-0.03em] sm:text-6xl"
+          />
           <p className="mt-4 text-lg text-muted-foreground">Open a room, say hi, watch it land.</p>
           <div className="mt-9">
             <StartCta />

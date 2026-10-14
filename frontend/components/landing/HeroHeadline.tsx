@@ -19,11 +19,11 @@ export function HeroHeadline() {
   return (
     <h1 className="font-display text-[44px] font-bold leading-[0.98] tracking-[-0.04em] sm:text-[68px] lg:text-[80px]">
       <span className="sr-only">Chat with your people and know every message landed.</span>
-      <span aria-hidden="true" className="block">
+      <span aria-hidden="true" style={{ "--d": 100 } as React.CSSProperties} className="intro block">
         Chat with your
       </span>
       <LayoutGroup>
-        <span aria-hidden="true" className="mt-3 mb-2 block leading-[1.12] sm:mt-4 sm:mb-3">
+        <span aria-hidden="true" style={{ "--d": 200 } as React.CSSProperties} className="intro mt-3 mb-2 block leading-[1.12] sm:mt-4 sm:mb-3">
           <motion.span
             layout
             transition={PILL_SPRING}
@@ -43,7 +43,7 @@ export function HeroHeadline() {
           </motion.span>
         </span>
       </LayoutGroup>
-      <span aria-hidden="true" className="block">
+      <span aria-hidden="true" style={{ "--d": 300 } as React.CSSProperties} className="intro block">
         and know it{" "}
         <span className="relative inline-block bg-gradient-to-r from-[#ff6a3d] to-[#ffb38a] bg-clip-text text-transparent">
           landed.
