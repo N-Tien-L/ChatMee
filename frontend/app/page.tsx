@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { Check, Hash, Lock, MessageCircle, RefreshCw, ShieldCheck, Users } from "lucide-react";
 import { Github } from "@/components/ui/icon/OAuthIcons";
-import { HeroLight } from "@/components/landing/HeroLight";
+import { PageBackdrop } from "@/components/landing/PageBackdrop";
 import { HeroHeadline } from "@/components/landing/HeroHeadline";
 import { LiveChatDemo } from "@/components/landing/LiveChatDemo";
 import { EveryoneSees } from "@/components/landing/EveryoneSees";
@@ -71,9 +71,16 @@ const STACK = ["Spring Boot 4", "Spring Security", "STOMP over WebSocket", "Mong
 /** Public landing page (CM-084, owner-approved exception to SPEC-008 §2, decisions D-6 and D-14). */
 export default function Home() {
   return (
-    <div className="theme-public min-h-dvh overflow-x-clip bg-background text-foreground">
-      <section className="relative isolate">
-        <HeroLight variant="constellation" />
+    <div className="theme-public relative isolate min-h-dvh overflow-x-clip bg-background text-foreground">
+      <PageBackdrop />
+      {/* Glows scroll with the content over the fixed mesh: teal at the top, ember toward the close. */}
+      <div aria-hidden="true" className="pointer-events-none absolute inset-0 -z-10 overflow-hidden">
+        <div className="absolute -top-40 left-1/2 h-[720px] w-[1100px] -translate-x-1/2 rounded-full bg-[radial-gradient(closest-side,rgb(46_230_193/0.20),transparent)]" />
+        <div className="absolute top-[38%] -left-60 h-[640px] w-[760px] rounded-full bg-[radial-gradient(closest-side,rgb(46_230_193/0.10),transparent)]" />
+        <div className="absolute top-[62%] -right-60 h-[640px] w-[760px] rounded-full bg-[radial-gradient(closest-side,rgb(255_106_61/0.09),transparent)]" />
+        <div className="absolute -bottom-40 left-1/2 h-[700px] w-[1100px] -translate-x-1/2 rounded-full bg-[radial-gradient(closest-side,rgb(255_106_61/0.18),transparent)]" />
+      </div>
+      <section className="relative">
         <header className="relative z-10 mx-auto flex max-w-[1240px] items-center gap-6 px-4 py-5 sm:px-8">
           <span className="pt-2 font-brand text-[26px] leading-none">ChatMee</span>
           <nav aria-label="Main" className="ml-auto flex items-center gap-5 text-sm text-muted-foreground sm:gap-7">
@@ -120,7 +127,7 @@ export default function Home() {
         </div>
       </section>
 
-      <section aria-label="Made for" className="border-y border-white/5 py-6">
+      <section aria-label="Made for" className="py-6 [mask-image:linear-gradient(to_right,transparent,black_12%,black_88%,transparent)]">
         <Marquee pauseOnHover className="[--duration:36s] [--gap:2.5rem]">
           {CROWDS.map((crowd) => (
             <span key={crowd} className="flex items-center gap-2.5 font-display text-xl font-medium text-muted-foreground">
@@ -208,8 +215,7 @@ export default function Home() {
         </div>
       </section>
 
-      <section aria-labelledby="cta-title" className="relative isolate overflow-hidden border-t border-white/5">
-        <HeroLight color="#ff6a3d" className="opacity-70" />
+      <section aria-labelledby="cta-title" className="relative">
         <div className="relative z-10 mx-auto flex max-w-[1240px] flex-col items-center px-4 py-28 text-center sm:px-8">
           <h2 id="cta-title" className="font-display text-4xl font-bold tracking-[-0.03em] sm:text-6xl">
             Your people are waiting.
@@ -224,7 +230,7 @@ export default function Home() {
         </div>
       </section>
 
-      <footer className="border-t border-white/5">
+      <footer>
         <div className="mx-auto flex max-w-[1240px] flex-wrap items-center justify-between gap-4 px-4 py-8 text-sm text-muted-foreground sm:px-8">
           <span className="pt-1 font-brand text-xl text-foreground">ChatMee</span>
           <span>An open-source portfolio project.</span>
