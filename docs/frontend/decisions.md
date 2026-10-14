@@ -2,6 +2,17 @@
 
 Newest first. A decision changes only through a new entry that supersedes it.
 
+## D-13: Owner chooses "Contact confirmed"; "Registered airmail" rejected
+
+- Date: 2026-10-14 · Phase: 3 · Status: confirmed
+- Decided by: owner chat, after a side-by-side live review of both builds
+- Context: an alternative "Registered airmail" treatment was tried on branch `feat/CM-084-airmail-try` (worktree
+  `../ChatMee-cm084-airmail`) against the milestone B "Contact confirmed" build (teal ink plus vermilion spot).
+- Decision: the direction is "Contact confirmed". Airmail is rejected as too loud for a daily-use chat. Nothing is ported from the
+  airmail branch; that branch and worktree are left untouched.
+- Consequences: milestone C proceeds on the D-12 baseline. Owner-listed defects are fixed only as reported (no invented fixes).
+- Revisit if: the owner reopens the direction.
+
 ## D-12: Owner freezes the milestone B version provisionally
 
 - Date: 2026-10-14 · Phase: 3 · Status: provisional by owner
