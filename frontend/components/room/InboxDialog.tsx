@@ -40,7 +40,7 @@ export function InboxDialog() {
 
   return (
     <Dialog open={isOpen} onOpenChange={(next) => !next && close()}>
-      <DialogContent className="max-h-[88dvh] gap-0 overflow-y-auto rounded-2xl p-0 sm:max-w-[520px]">
+      <DialogContent className="max-h-[88dvh] gap-0 overflow-y-auto rounded-2xl p-0 sm:max-w-[520px] [&>*]:min-w-0">
         <div className="border-b border-border bg-gradient-to-br from-accent to-card px-6 pt-6 pb-5">
           <DialogTitle className="font-display text-2xl font-semibold tracking-[-0.02em]">Inbox</DialogTitle>
           <DialogDescription>Invitations to private rooms and people who want to message you.</DialogDescription>

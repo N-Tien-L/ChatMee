@@ -157,7 +157,7 @@ export const CreateRoomModal = ({ isOpen, onClose }: CreateRoomModalProps) => {
         else onClose();
       }}
     >
-      <DialogContent className="max-h-[92dvh] gap-0 overflow-y-auto rounded-2xl p-0 sm:max-w-[860px]">
+      <DialogContent className="max-h-[92dvh] gap-0 overflow-y-auto rounded-2xl p-0 sm:max-w-[860px] [&>*]:min-w-0 focus-visible:outline-none">
         <div className="grid md:grid-cols-[minmax(0,1fr)_320px]">
           <div className="p-6 sm:p-7">
             <ol aria-label="Steps" className="mb-5 flex items-center gap-2 text-xs font-medium">

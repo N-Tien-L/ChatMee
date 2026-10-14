@@ -55,7 +55,7 @@ export function InvitePeopleDialog({ roomId, roomName, memberIds, isOpen, onClos
 
   return (
     <Dialog open={isOpen} onOpenChange={(next) => !next && onClose()}>
-      <DialogContent className="gap-0 overflow-hidden rounded-2xl p-0 sm:max-w-[500px]">
+      <DialogContent className="gap-0 overflow-hidden rounded-2xl p-0 sm:max-w-[500px] [&>*]:min-w-0">
         <div className="border-b border-border bg-gradient-to-br from-accent to-card px-6 pt-6 pb-5">
           <div className="mb-3 grid h-11 w-11 place-items-center rounded-xl bg-gradient-to-br from-bubble-own-from to-bubble-own-to text-primary-foreground">
             <UserPlus className="h-5 w-5" aria-hidden="true" />

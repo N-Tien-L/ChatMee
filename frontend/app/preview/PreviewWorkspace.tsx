@@ -13,6 +13,8 @@ import MessageInput from "@/components/chat/MessageInput";
 import { useAuthStore } from "@/lib/stores/authStore";
 import { useChatRoomsStore } from "@/lib/stores/chatRoomsStore";
 import { useUsersStore } from "@/lib/stores/usersStore";
+import { useInboxStore } from "@/lib/stores/inboxStore";
+import { installPreviewApiMocks } from "./previewApiMocks";
 import type { ConnectionStatus } from "@/lib/realtime/stompSession";
 import { ChatRoom, Message, MessageType, ParticipantRole, RoomType } from "@/lib/types";
 
@@ -164,9 +166,14 @@ export function PreviewWorkspace() {
         useUsersStore.setState({ filteredUsers: PEOPLE.filter((p) => p.name.toLowerCase().includes(q)) });
       },
     });
+    const restoreApis = installPreviewApiMocks(ME, PEOPLE);
+    void useInboxStore.getState().fetchInbox();
     setReady(true);
     const pending = timers.current;
-    return () => pending.forEach(clearTimeout);
+    return () => {
+      pending.forEach(clearTimeout);
+      restoreApis();
+    };
   }, []);
 
   const connected = status === "connected";
