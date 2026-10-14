@@ -2,16 +2,18 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { ChevronDown, Globe, Hash, Lock, Minus, Plus } from "lucide-react";
+import { AnimatePresence, motion } from "motion/react";
+import { ArrowRight, Check, ChevronDown, Globe, Hash, Lock, Minus, Plus, Users } from "lucide-react";
 import { useAuthStore, useChatRoomsStore } from "@/lib/stores";
 import { CreateChatRoomRequest, RoomType } from "@/lib/types";
-import { Dialog, DialogClose, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
-import { Input } from "@/components/ui/input";
-import { Button } from "@/components/ui/button";
 import { Checkbox } from "../ui/checkbox";
+import { RoomCover } from "@/components/common/RoomCover";
 import { RoomAvatar } from "@/components/common/RoomAvatar";
+import { UserAvatar } from "@/components/common/UserAvatar";
 import { cn } from "@/lib/utils";
+import { InvitePeople } from "./InvitePeople";
 
 interface CreateRoomModalProps {
   isOpen: boolean;
@@ -19,53 +21,66 @@ interface CreateRoomModalProps {
 }
 
 type GroupRoomType = RoomType.PUBLIC | RoomType.PRIVATE;
+type Step = "details" | "invite";
 
 const TYPES: { value: GroupRoomType; icon: typeof Globe; title: string; body: string }[] = [
   { value: RoomType.PUBLIC, icon: Globe, title: "Public", body: "Anyone can find it in Discover and join." },
-  { value: RoomType.PRIVATE, icon: Lock, title: "Private", body: "Hidden from Discover. Members only." },
+  { value: RoomType.PRIVATE, icon: Lock, title: "Private", body: "Hidden from Discover. You invite people." },
 ];
 
-const SIZES = [
-  { label: "Small", value: 10 },
-  { label: "Group", value: 50 },
-  { label: "Community", value: 200 },
-];
-
+const DEFAULT_SIZE = 50;
 const MIN_USERS = 2;
 const MAX_USERS = 1000;
 const MIN_NAME = 3;
 
-/** "New room": a group room (public or private). Direct messages have their own flow (NewMessageDialog). */
+const field =
+  "h-12 w-full rounded-xl border border-border bg-muted/50 px-4 text-[15px] transition-colors placeholder:text-muted-foreground focus:border-ring focus:bg-card focus:ring-[3px] focus:ring-ring/20 focus:outline-none";
+
+/**
+ * "New room" in two steps (D-16): details with a live preview, then invite people (private rooms only, skippable).
+ * Direct messages have their own flow (NewMessageDialog); a room's size sits under More options.
+ */
 export const CreateRoomModal = ({ isOpen, onClose }: CreateRoomModalProps) => {
   const router = useRouter();
   const createRoom = useChatRoomsStore((state) => state.createRoom);
   const currentUser = useAuthStore((state) => state.user);
 
+  const [step, setStep] = useState<Step>("details");
   const [roomName, setRoomName] = useState("");
   const [description, setDescription] = useState("");
-  const [roomType, setRoomType] = useState<GroupRoomType>(RoomType.PUBLIC);
-  const [maxUser, setMaxUser] = useState(50);
+  const [roomType, setRoomType] = useState<GroupRoomType>(RoomType.PRIVATE);
+  const [maxUser, setMaxUser] = useState(DEFAULT_SIZE);
   const [moreOpen, setMoreOpen] = useState(false);
   const [welcomeMessage, setWelcomeMessage] = useState("");
   const [allowFileSharing, setAllowFileSharing] = useState(false);
-  const [allowGuestUsers, setAllowGuestUsers] = useState(false);
   const [moderationRequired, setModerationRequired] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [createdId, setCreatedId] = useState<string | null>(null);
+  const [invited, setInvited] = useState<{ id: string; name: string; avatarUrl: string }[]>([]);
 
   const name = roomName.trim();
   const valid = name.length >= MIN_NAME;
   const clamp = (value: number) => Math.min(MAX_USERS, Math.max(MIN_USERS, value));
+  const isPrivate = roomType === RoomType.PRIVATE;
 
   const reset = () => {
+    setStep("details");
     setRoomName("");
     setDescription("");
-    setRoomType(RoomType.PUBLIC);
-    setMaxUser(50);
+    setRoomType(RoomType.PRIVATE);
+    setMaxUser(DEFAULT_SIZE);
     setMoreOpen(false);
     setWelcomeMessage("");
     setAllowFileSharing(false);
-    setAllowGuestUsers(false);
     setModerationRequired(false);
+    setCreatedId(null);
+    setInvited([]);
+  };
+
+  const finish = (roomId: string | null) => {
+    reset();
+    onClose();
+    if (roomId) router.push(`/dashboard?roomId=${roomId}`, { scroll: false });
   };
 
   const handleCreate = async (event: React.FormEvent) => {
@@ -76,7 +91,7 @@ export const CreateRoomModal = ({ isOpen, onClose }: CreateRoomModalProps) => {
       description: description.trim(),
       roomType,
       maxUsers: maxUser,
-      settings: { welcomeMessage, allowFileSharing, allowGuestUsers, moderationRequired },
+      settings: { welcomeMessage, allowFileSharing, allowGuestUsers: false, moderationRequired },
     };
     setSubmitting(true);
     const success = await createRoom(request);
@@ -85,245 +100,317 @@ export const CreateRoomModal = ({ isOpen, onClose }: CreateRoomModalProps) => {
     const created = useChatRoomsStore
       .getState()
       .rooms.find((room) => room.roomName === name && room.roomType === roomType && room.createdBy === currentUser?.id);
-    reset();
-    onClose();
-    if (created) router.push(`/dashboard?roomId=${created.id}`, { scroll: false });
+    if (isPrivate && created) {
+      setCreatedId(created.id);
+      setStep("invite");
+    } else {
+      finish(created?.id ?? null);
+    }
   };
 
+  const preview = (
+    <aside aria-label="Preview" className="relative flex flex-col gap-4 border-t border-border bg-muted/40 p-6 md:border-t-0 md:border-l">
+      <p className="text-[11px] font-medium uppercase tracking-[0.1em] text-muted-foreground">How it will look</p>
+      <div className="overflow-hidden rounded-2xl bg-card shadow-[0_24px_50px_-28px_rgb(0_0_0/0.6)] ring-1 ring-border">
+        <RoomCover name={name || "your-room"} className="h-24" />
+        <div className="-mt-8 px-5 pb-5">
+          <RoomAvatar name={name || "#"} className="h-14 w-14 rounded-2xl ring-4 ring-card" />
+          <p className="mt-3 flex items-center gap-1.5 font-display text-xl font-semibold">
+            {isPrivate ? (
+              <Lock className="h-4 w-4 flex-shrink-0 text-muted-foreground" aria-hidden="true" />
+            ) : (
+              <Hash className="h-4 w-4 flex-shrink-0 text-muted-foreground" aria-hidden="true" />
+            )}
+            <span className="truncate">{name || "your-room"}</span>
+          </p>
+          <p className="mt-1 line-clamp-2 min-h-10 text-sm text-muted-foreground">
+            {description.trim() || (isPrivate ? "A private room for people you invite." : "An open room anyone can join.")}
+          </p>
+          <div className="mt-4 flex items-center justify-between">
+            <div className="flex -space-x-2">
+              {currentUser && <UserAvatar name={currentUser.name} avatarUrl={currentUser.avatarUrl} size="md" className="ring-2 ring-card" />}
+              {invited.slice(0, 4).map((person) => (
+                <UserAvatar key={person.id} name={person.name} avatarUrl={person.avatarUrl} size="md" className="ring-2 ring-card" />
+              ))}
+            </div>
+            <span className="flex items-center gap-1 rounded-full bg-muted px-2.5 py-1 text-xs text-muted-foreground">
+              <Users className="h-3 w-3" aria-hidden="true" />
+              {isPrivate ? "Members only" : "Discoverable"}
+            </span>
+          </div>
+        </div>
+      </div>
+      {step === "invite" && invited.length > 0 && (
+        <p className="text-xs text-muted-foreground">
+          {invited.length} invitation{invited.length === 1 ? "" : "s"} sent. They join when they accept.
+        </p>
+      )}
+    </aside>
+  );
+
   return (
-    <Dialog open={isOpen} onOpenChange={(next) => !next && onClose()}>
-      <DialogContent className="max-h-[92dvh] gap-0 overflow-y-auto rounded-2xl p-0 sm:max-w-[820px]">
-        <form onSubmit={handleCreate} className="grid md:grid-cols-[minmax(0,1fr)_300px]">
-          <div className="space-y-6 p-6 sm:p-7">
-            <div>
-              <DialogTitle className="font-display text-2xl font-semibold tracking-[-0.02em]">New room</DialogTitle>
-              <DialogDescription className="mt-1">A place for a group. You can change all of this later.</DialogDescription>
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="room-name">Room name</Label>
-              <Input
-                id="room-name"
-                autoFocus
-                value={roomName}
-                onChange={(e) => setRoomName(e.target.value)}
-                placeholder="e.g. weekend-hike, cs101-study"
-                maxLength={60}
-                aria-describedby="room-name-hint"
-                className="h-11 rounded-xl"
-              />
-              <p id="room-name-hint" className="text-xs text-muted-foreground">
-                At least {MIN_NAME} characters.
-              </p>
-            </div>
-
-            <fieldset className="space-y-2">
-              <legend className="mb-2 text-sm font-medium">Who can join</legend>
-              <div className="grid gap-3 sm:grid-cols-2">
-                {TYPES.map(({ value, icon: Icon, title, body }) => {
-                  const selected = roomType === value;
-                  return (
-                    <label
-                      key={value}
+    <Dialog
+      open={isOpen}
+      onOpenChange={(next) => {
+        if (next) return;
+        if (step === "invite") finish(createdId);
+        else onClose();
+      }}
+    >
+      <DialogContent className="max-h-[92dvh] gap-0 overflow-y-auto rounded-2xl p-0 sm:max-w-[860px]">
+        <div className="grid md:grid-cols-[minmax(0,1fr)_320px]">
+          <div className="p-6 sm:p-7">
+            <ol aria-label="Steps" className="mb-5 flex items-center gap-2 text-xs font-medium">
+              {[
+                { key: "details", label: "Details" },
+                { key: "invite", label: "Invite people" },
+              ].map((item, index) => {
+                const active = step === item.key;
+                const done = step === "invite" && item.key === "details";
+                return (
+                  <li key={item.key} className="flex items-center gap-2" aria-current={active ? "step" : undefined}>
+                    {index > 0 && <span className="h-px w-8 bg-border" aria-hidden="true" />}
+                    <span
                       className={cn(
-                        "relative flex cursor-pointer gap-3 rounded-xl border p-4 transition-all has-[:focus-visible]:ring-[3px] has-[:focus-visible]:ring-ring/30",
-                        selected
-                          ? "border-primary bg-accent shadow-[0_8px_24px_-14px_rgb(11_107_93/0.7)]"
-                          : "border-border hover:border-primary/40 hover:bg-accent/40"
+                        "grid h-6 w-6 place-items-center rounded-full border text-[11px] transition-colors",
+                        active && "border-primary bg-primary text-primary-foreground",
+                        done && "border-primary text-primary",
+                        !active && !done && "border-border text-muted-foreground"
                       )}
                     >
-                      <input
-                        type="radio"
-                        name="room-type"
-                        value={value}
-                        checked={selected}
-                        onChange={() => setRoomType(value)}
-                        className="sr-only"
-                      />
-                      <span
-                        className={cn(
-                          "grid h-9 w-9 flex-shrink-0 place-items-center rounded-lg",
-                          selected ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground"
-                        )}
-                      >
-                        <Icon className="h-4 w-4" aria-hidden="true" />
-                      </span>
-                      <span>
-                        <span className="block text-sm font-semibold">{title}</span>
-                        <span className="block text-xs text-muted-foreground">{body}</span>
-                      </span>
-                    </label>
-                  );
-                })}
-              </div>
-            </fieldset>
+                      {done ? <Check className="h-3.5 w-3.5" strokeWidth={3} aria-hidden="true" /> : index + 1}
+                    </span>
+                    <span className={active ? "text-foreground" : "text-muted-foreground"}>{item.label}</span>
+                  </li>
+                );
+              })}
+            </ol>
 
-            <fieldset className="space-y-2">
-              <legend className="mb-2 text-sm font-medium">Size</legend>
-              <div className="flex flex-wrap items-center gap-2">
-                {SIZES.map((size) => (
-                  <button
-                    key={size.value}
-                    type="button"
-                    aria-pressed={maxUser === size.value}
-                    onClick={() => setMaxUser(size.value)}
-                    className={cn(
-                      "rounded-full border px-3.5 py-1.5 text-sm transition-colors",
-                      maxUser === size.value
-                        ? "border-primary bg-primary text-primary-foreground"
-                        : "border-border hover:bg-accent"
+            <AnimatePresence mode="wait" initial={false}>
+              {step === "details" ? (
+                <motion.form
+                  key="details"
+                  onSubmit={handleCreate}
+                  initial={{ opacity: 0, x: -16 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  exit={{ opacity: 0, x: -16 }}
+                  transition={{ duration: 0.2 }}
+                  className="space-y-6"
+                >
+                  <div>
+                    <DialogTitle className="font-display text-3xl font-semibold tracking-[-0.02em]">New room</DialogTitle>
+                    <DialogDescription className="mt-1">
+                      A place for a group. For one person, use <span className="font-medium text-foreground">Message</span>{" "}
+                      instead.
+                    </DialogDescription>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="room-name">Room name</Label>
+                    <input
+                      id="room-name"
+                      autoFocus
+                      value={roomName}
+                      onChange={(e) => setRoomName(e.target.value)}
+                      placeholder="e.g. weekend-hike, cs101-study"
+                      maxLength={60}
+                      aria-describedby="room-name-hint"
+                      className={field}
+                    />
+                    <p id="room-name-hint" className="text-xs text-muted-foreground">
+                      At least {MIN_NAME} characters. The room&apos;s colour comes from its name.
+                    </p>
+                  </div>
+
+                  <fieldset>
+                    <legend className="mb-2 text-sm font-medium">Who can join</legend>
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      {TYPES.map(({ value, icon: Icon, title, body }) => {
+                        const selected = roomType === value;
+                        return (
+                          <label
+                            key={value}
+                            className={cn(
+                              "relative flex cursor-pointer gap-3 rounded-2xl border p-4 transition-all has-[:focus-visible]:ring-[3px] has-[:focus-visible]:ring-ring/30",
+                              selected
+                                ? "border-primary bg-accent shadow-[0_10px_30px_-16px_var(--primary)]"
+                                : "border-border hover:border-primary/40 hover:bg-accent/40"
+                            )}
+                          >
+                            <input
+                              type="radio"
+                              name="room-type"
+                              value={value}
+                              checked={selected}
+                              onChange={() => setRoomType(value)}
+                              className="sr-only"
+                            />
+                            <span
+                              className={cn(
+                                "grid h-10 w-10 flex-shrink-0 place-items-center rounded-xl transition-colors",
+                                selected ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground"
+                              )}
+                            >
+                              <Icon className="h-4 w-4" aria-hidden="true" />
+                            </span>
+                            <span>
+                              <span className="block text-sm font-semibold">{title}</span>
+                              <span className="block text-xs text-muted-foreground">{body}</span>
+                            </span>
+                          </label>
+                        );
+                      })}
+                    </div>
+                  </fieldset>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="description">
+                      Description <span className="font-normal text-muted-foreground">(optional)</span>
+                    </Label>
+                    <textarea
+                      id="description"
+                      value={description}
+                      onChange={(e) => setDescription(e.target.value)}
+                      placeholder="What is this room for?"
+                      maxLength={200}
+                      rows={2}
+                      className={cn(field, "h-auto resize-none py-3")}
+                    />
+                  </div>
+
+                  <div className="rounded-2xl border border-border">
+                    <button
+                      type="button"
+                      aria-expanded={moreOpen}
+                      aria-controls="room-more-options"
+                      onClick={() => setMoreOpen((v) => !v)}
+                      className="flex w-full items-center justify-between rounded-2xl px-4 py-3 text-sm font-medium hover:bg-accent/50"
+                    >
+                      <span>
+                        More options <span className="font-normal text-muted-foreground">· up to {maxUser} members</span>
+                      </span>
+                      <ChevronDown className={cn("h-4 w-4 transition-transform", moreOpen && "rotate-180")} aria-hidden="true" />
+                    </button>
+                    {moreOpen && (
+                      <div id="room-more-options" className="space-y-4 border-t border-border px-4 py-4">
+                        <div className="flex items-center justify-between gap-4">
+                          <Label htmlFor="maxUser">Maximum members</Label>
+                          <div className="flex items-center rounded-full border border-border">
+                            <button
+                              type="button"
+                              aria-label="Decrease maximum members"
+                              onClick={() => setMaxUser((v) => clamp(v - 5))}
+                              disabled={maxUser <= MIN_USERS}
+                              className="grid h-8 w-8 place-items-center rounded-full hover:bg-accent disabled:opacity-40"
+                            >
+                              <Minus className="h-3.5 w-3.5" aria-hidden="true" />
+                            </button>
+                            <input
+                              id="maxUser"
+                              type="number"
+                              min={MIN_USERS}
+                              max={MAX_USERS}
+                              value={maxUser}
+                              onChange={(e) => setMaxUser(clamp(Number(e.target.value) || MIN_USERS))}
+                              className="w-14 bg-transparent text-center font-mono text-sm tabular outline-none [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none"
+                            />
+                            <button
+                              type="button"
+                              aria-label="Increase maximum members"
+                              onClick={() => setMaxUser((v) => clamp(v + 5))}
+                              disabled={maxUser >= MAX_USERS}
+                              className="grid h-8 w-8 place-items-center rounded-full hover:bg-accent disabled:opacity-40"
+                            >
+                              <Plus className="h-3.5 w-3.5" aria-hidden="true" />
+                            </button>
+                          </div>
+                        </div>
+                        <div className="space-y-2">
+                          <Label htmlFor="welcomeMessage">Welcome message</Label>
+                          <input
+                            id="welcomeMessage"
+                            value={welcomeMessage}
+                            onChange={(e) => setWelcomeMessage(e.target.value)}
+                            placeholder="Say hello to new members"
+                            className={cn(field, "h-11")}
+                          />
+                        </div>
+                        {[
+                          { id: "allowFileSharing", label: "Allow file sharing", checked: allowFileSharing, set: setAllowFileSharing },
+                          { id: "moderationRequired", label: "Require moderation", checked: moderationRequired, set: setModerationRequired },
+                        ].map((option) => (
+                          <div key={option.id} className="flex items-center gap-2.5">
+                            <Checkbox id={option.id} checked={option.checked} onCheckedChange={(checked) => option.set(checked === true)} />
+                            <Label htmlFor={option.id} className="font-normal">
+                              {option.label}
+                            </Label>
+                          </div>
+                        ))}
+                      </div>
                     )}
-                  >
-                    {size.label} <span className="font-mono text-xs tabular opacity-75">{size.value}</span>
-                  </button>
-                ))}
-                <div className="ml-auto flex items-center rounded-full border border-border">
-                  <button
-                    type="button"
-                    aria-label="Decrease maximum members"
-                    onClick={() => setMaxUser((v) => clamp(v - 1))}
-                    disabled={maxUser <= MIN_USERS}
-                    className="grid h-8 w-8 place-items-center rounded-full hover:bg-accent disabled:opacity-40"
-                  >
-                    <Minus className="h-3.5 w-3.5" aria-hidden="true" />
-                  </button>
-                  <label htmlFor="maxUser" className="sr-only">
-                    Maximum members
-                  </label>
-                  <input
-                    id="maxUser"
-                    type="number"
-                    min={MIN_USERS}
-                    max={MAX_USERS}
-                    value={maxUser}
-                    onChange={(e) => setMaxUser(clamp(Number(e.target.value) || MIN_USERS))}
-                    className="w-14 bg-transparent text-center font-mono text-sm tabular outline-none [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none"
+                  </div>
+
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      onClick={onClose}
+                      className="h-12 rounded-xl border border-border px-5 text-sm font-medium hover:bg-accent"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="submit"
+                      disabled={!valid || submitting}
+                      className="h-12 flex-1 rounded-xl bg-gradient-to-br from-bubble-own-from to-bubble-own-to text-sm font-semibold text-primary-foreground shadow-[0_8px_20px_-8px_rgb(11_107_93/0.7)] transition-transform hover:brightness-110 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50 disabled:shadow-none"
+                    >
+                      {submitting ? "Creating…" : isPrivate ? "Create and invite people" : "Create room"}
+                    </button>
+                  </div>
+                </motion.form>
+              ) : (
+                <motion.div
+                  key="invite"
+                  initial={{ opacity: 0, x: 16 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  exit={{ opacity: 0, x: 16 }}
+                  transition={{ duration: 0.2 }}
+                  className="space-y-6"
+                >
+                  <div>
+                    <DialogTitle className="font-display text-3xl font-semibold tracking-[-0.02em]">Invite people</DialogTitle>
+                    <DialogDescription className="mt-1">
+                      <span className="font-medium text-foreground">{name}</span> is ready. Invite people now or later from the
+                      room&apos;s info.
+                    </DialogDescription>
+                  </div>
+                  <InvitePeople
+                    roomId={createdId}
+                    excludeIds={[...(currentUser ? [currentUser.id] : []), ...invited.map((p) => p.id)]}
+                    onSent={(people) => setInvited((list) => [...list, ...people])}
+                    secondary={
+                      <button
+                        type="button"
+                        onClick={() => finish(createdId)}
+                        className="flex h-11 items-center gap-1.5 rounded-xl border border-border px-4 text-sm font-medium hover:bg-accent"
+                      >
+                        {invited.length > 0 ? "Done" : "Skip for now"}
+                      </button>
+                    }
                   />
                   <button
                     type="button"
-                    aria-label="Increase maximum members"
-                    onClick={() => setMaxUser((v) => clamp(v + 1))}
-                    disabled={maxUser >= MAX_USERS}
-                    className="grid h-8 w-8 place-items-center rounded-full hover:bg-accent disabled:opacity-40"
+                    onClick={() => finish(createdId)}
+                    className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground"
                   >
-                    <Plus className="h-3.5 w-3.5" aria-hidden="true" />
+                    <ArrowRight className="h-3.5 w-3.5" aria-hidden="true" />
+                    Open {name}
                   </button>
-                </div>
-              </div>
-            </fieldset>
-
-            <div className="space-y-2">
-              <Label htmlFor="description">
-                Description <span className="font-normal text-muted-foreground">(optional)</span>
-              </Label>
-              <Input
-                id="description"
-                value={description}
-                onChange={(e) => setDescription(e.target.value)}
-                placeholder="What is this room for?"
-                maxLength={200}
-                className="h-11 rounded-xl"
-              />
-            </div>
-
-            <div className="rounded-xl border border-border">
-              <button
-                type="button"
-                aria-expanded={moreOpen}
-                aria-controls="room-more-options"
-                onClick={() => setMoreOpen((v) => !v)}
-                className="flex w-full items-center justify-between rounded-xl px-4 py-3 text-sm font-medium hover:bg-accent/50"
-              >
-                More options
-                <ChevronDown
-                  className={cn("h-4 w-4 transition-transform", moreOpen && "rotate-180")}
-                  aria-hidden="true"
-                />
-              </button>
-              {moreOpen && (
-                <div id="room-more-options" className="space-y-4 border-t border-border px-4 py-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="welcomeMessage">Welcome message</Label>
-                    <Input
-                      id="welcomeMessage"
-                      value={welcomeMessage}
-                      onChange={(e) => setWelcomeMessage(e.target.value)}
-                      placeholder="Say hello to new members"
-                      className="rounded-xl"
-                    />
-                  </div>
-                  {[
-                    { id: "allowFileSharing", label: "Allow file sharing", checked: allowFileSharing, set: setAllowFileSharing },
-                    { id: "allowGuestUsers", label: "Allow guest users", checked: allowGuestUsers, set: setAllowGuestUsers },
-                    { id: "moderationRequired", label: "Require moderation", checked: moderationRequired, set: setModerationRequired },
-                  ].map((option) => (
-                    <div key={option.id} className="flex items-center gap-2.5">
-                      <Checkbox
-                        id={option.id}
-                        checked={option.checked}
-                        onCheckedChange={(checked) => option.set(checked === true)}
-                      />
-                      <Label htmlFor={option.id} className="font-normal">
-                        {option.label}
-                      </Label>
-                    </div>
-                  ))}
-                </div>
+                </motion.div>
               )}
-            </div>
+            </AnimatePresence>
           </div>
-
-          <aside
-            aria-label="Preview"
-            className="flex flex-col justify-between gap-6 border-t border-border bg-gradient-to-b from-accent/70 to-secondary p-6 md:border-t-0 md:border-l"
-          >
-            <div>
-              <p className="text-[11px] font-medium uppercase tracking-[0.1em] text-muted-foreground">Preview</p>
-              <div className="mt-3 rounded-2xl bg-card p-4 shadow-[0_18px_40px_-24px_rgb(15_31_28/0.45)] ring-1 ring-border">
-                <div className="flex items-center gap-3">
-                  <RoomAvatar name={name || "#"} className="h-11 w-11 rounded-xl" />
-                  <div className="min-w-0">
-                    <p className="flex items-center gap-1.5 truncate font-display text-lg font-semibold">
-                      {roomType === RoomType.PRIVATE ? (
-                        <Lock className="h-3.5 w-3.5 flex-shrink-0 text-muted-foreground" aria-hidden="true" />
-                      ) : (
-                        <Hash className="h-3.5 w-3.5 flex-shrink-0 text-muted-foreground" aria-hidden="true" />
-                      )}
-                      <span className="truncate">{name || "your-room"}</span>
-                    </p>
-                    <p className="truncate text-xs text-muted-foreground">
-                      {description.trim() || (roomType === RoomType.PRIVATE ? "Private room" : "Public room")}
-                    </p>
-                  </div>
-                </div>
-                <dl className="mt-4 grid grid-cols-2 gap-2 text-xs">
-                  <div className="rounded-lg bg-muted px-2.5 py-2">
-                    <dt className="text-muted-foreground">Members</dt>
-                    <dd className="font-mono font-medium tabular">1/{maxUser}</dd>
-                  </div>
-                  <div className="rounded-lg bg-muted px-2.5 py-2">
-                    <dt className="text-muted-foreground">Visibility</dt>
-                    <dd className="font-medium">{roomType === RoomType.PRIVATE ? "Members only" : "Discoverable"}</dd>
-                  </div>
-                </dl>
-              </div>
-            </div>
-            <div className="flex gap-2">
-              <DialogClose asChild>
-                <Button type="button" variant="outline" className="h-11 flex-1 rounded-xl">
-                  Cancel
-                </Button>
-              </DialogClose>
-              <Button
-                type="submit"
-                disabled={!valid || submitting}
-                className="h-11 flex-1 rounded-xl bg-gradient-to-br from-bubble-own-from to-bubble-own-to font-semibold shadow-[0_8px_20px_-8px_rgb(11_107_93/0.7)]"
-              >
-                {submitting ? "Creating…" : "Create room"}
-              </Button>
-            </div>
-          </aside>
-        </form>
+          {preview}
+        </div>
       </DialogContent>
     </Dialog>
   );

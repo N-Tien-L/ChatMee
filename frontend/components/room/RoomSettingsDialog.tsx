@@ -1,10 +1,8 @@
 import React, { useEffect, useState } from "react";
 import { ChatRoom, UserSummaryResponse } from "@/lib/types";
 import { RoomType } from "@/lib/types";
-import {
-  UpdateChatRoomRequest,
-  JoinChatRoomRequest,
-} from "@/lib/types";
+import { UpdateChatRoomRequest } from "@/lib/types";
+import { InvitePeopleDialog } from "./InvitePeopleDialog";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { chatRoomApi } from "@/lib/api/chatRoomApi";
 import { userApi } from "@/lib/api/userApi";
@@ -24,13 +22,6 @@ import {
   SheetTitle,
 } from "@/components/ui/sheet";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { UserAvatar } from "@/components/common/UserAvatar";
 import { DELETED_USER, isDeletedUser } from "@/components/common/deletedUser";
@@ -74,7 +65,6 @@ export const RoomSettingsDialog: React.FC<RoomSettingsDialogProps> = ({
   const [isSaving, setIsSaving] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [participants, setParticipants] = useState<UserSummaryResponse[]>([]);
-  const [allUsers, setAllUsers] = useState<UserSummaryResponse[]>([]);
 
   // Form state
   const [formData, setFormData] = useState({
@@ -85,13 +75,11 @@ export const RoomSettingsDialog: React.FC<RoomSettingsDialogProps> = ({
   const [isDirty, setIsDirty] = useState(false);
 
   // Add participant state
-  const [selectedUserId, setSelectedUserId] = useState("");
-  const [selectedRole, setSelectedRole] = useState("MEMBER");
+  const [inviteOpen, setInviteOpen] = useState(false);
 
   useEffect(() => {
     if (isOpen && roomId) {
       loadRoomData();
-      loadAllUsers();
     }
   }, [isOpen, roomId]);
 
@@ -141,17 +129,6 @@ export const RoomSettingsDialog: React.FC<RoomSettingsDialogProps> = ({
     }
   };
 
-  const loadAllUsers = async () => {
-    try {
-      const response = await userApi.searchUsers("", 0, 50);
-      if (response.success && response.data) {
-        setAllUsers(response.data.content);
-      }
-    } catch (error) {
-      console.error("Error loading users:", error);
-    }
-  };
-
   const handleInputChange = (field: string, value: string | number) => {
     setFormData((prev) => ({ ...prev, [field]: value }));
     setIsDirty(true);
@@ -185,31 +162,6 @@ export const RoomSettingsDialog: React.FC<RoomSettingsDialogProps> = ({
     }
   };
 
-  const handleAddParticipant = async () => {
-    if (!selectedUserId || !room) return;
-
-    setIsSaving(true);
-    try {
-      const request: JoinChatRoomRequest = {
-        userId: selectedUserId,
-        role: selectedRole,
-      };
-
-      const response = await chatRoomApi.addParticipant(room.id, request);
-      if (response.success) {
-        showToast("Participant added successfully");
-        setSelectedUserId("");
-        setSelectedRole("MEMBER");
-        await loadRoomData(); // Reload to update participant list
-      }
-    } catch (error) {
-      console.error("Error adding participant:", error);
-      showToast("Failed to add participant", "error");
-    } finally {
-      setIsSaving(false);
-    }
-  };
-
   const handleDelete = async () => {
     if (!room) return;
 
@@ -237,10 +189,6 @@ export const RoomSettingsDialog: React.FC<RoomSettingsDialogProps> = ({
       setIsSaving(false);
     }
   };
-
-  const availableUsers = allUsers.filter(
-    (user) => !room?.participants?.includes(user.id)
-  );
 
   // Return focus to the opener when it is not the element focused before opening (Radix default).
   const handleCloseAutoFocus = (event: Event) => {
@@ -400,57 +348,35 @@ export const RoomSettingsDialog: React.FC<RoomSettingsDialogProps> = ({
             </div>
 
             <div className="space-y-3 pt-4 border-t">
-              <h4 className="text-sm font-semibold">Add Participant</h4>
-              <div className="space-y-2">
-                <Label htmlFor="userSelect">Select User</Label>
-                <Select
-                  value={selectedUserId}
-                  onValueChange={setSelectedUserId}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Choose a user" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {availableUsers.length > 0 ? (
-                      availableUsers.map((user) => (
-                        <SelectItem key={user.id} value={user.id}>
-                          {user.name}
-                        </SelectItem>
-                      ))
-                    ) : (
-                      <SelectItem value="none" disabled>
-                        No users available
-                      </SelectItem>
-                    )}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="roleSelect">Role</Label>
-                <Select value={selectedRole} onValueChange={setSelectedRole}>
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="MEMBER">Member</SelectItem>
-                    <SelectItem value="ADMIN">Admin</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <Button
-                onClick={handleAddParticipant}
-                disabled={!selectedUserId || isSaving}
-                className="w-full"
-              >
-                <UserPlus className="w-4 h-4 mr-2" />
-                Add Participant
-              </Button>
+              <h4 className="text-sm font-semibold">Add people</h4>
+              {room.roomType === RoomType.PRIVATE ? (
+                <>
+                  <p className="text-sm text-muted-foreground">
+                    Private rooms are joined by invitation. People join when they accept from their inbox.
+                  </p>
+                  <Button onClick={() => setInviteOpen(true)} className="w-full">
+                    <UserPlus className="w-4 h-4 mr-2" aria-hidden="true" />
+                    Invite people
+                  </Button>
+                  <InvitePeopleDialog
+                    roomId={room.id}
+                    roomName={room.roomName}
+                    memberIds={room.participants ?? []}
+                    isOpen={inviteOpen}
+                    onClose={() => setInviteOpen(false)}
+                  />
+                </>
+              ) : (
+                <p className="text-sm text-muted-foreground">
+                  {room.roomType === RoomType.PUBLIC
+                    ? "Public rooms are open: people find and join them from Discover."
+                    : "Direct messages are for two people."}
+                </p>
+              )}
             </div>
 
             <p className="text-xs text-muted-foreground">
-              Note: Removing and role management features coming soon
+              Removing members and changing roles come in a later update.
             </p>
           </TabsContent>
 

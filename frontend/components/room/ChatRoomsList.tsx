@@ -11,8 +11,11 @@ import {
   RotateCw,
   Compass,
   Hash,
+  Inbox,
 } from "lucide-react";
-import { motion } from "motion/react";
+import { AnimatePresence, motion } from "motion/react";
+import { useInboxStore } from "@/lib/stores/inboxStore";
+import { InboxDialog } from "./InboxDialog";
 import { Skeleton } from "../ui/skeleton";
 import ChatRoomListItem from "./ChatRoomListItem";
 import { useChatRoomsStore } from "@/lib/stores/chatRoomsStore";
@@ -63,6 +66,8 @@ const ChatRoomsListContent: React.FC = () => {
   );
 
   const openDiscoverRooms = useDiscoverRoomsStore((state) => state.open);
+  const openInbox = useInboxStore((state) => state.open);
+  const inboxCount = useInboxStore((state) => state.invitations.length + state.requests.length);
 
   const handleRoomClick = (roomId: string) => {
     router.push(`/dashboard?roomId=${roomId}`, { scroll: false });
@@ -107,6 +112,31 @@ const ChatRoomsListContent: React.FC = () => {
           <h2 className="font-display text-xl font-semibold tracking-[-0.02em] text-foreground">
             Chats
           </h2>
+          <div className="flex items-center gap-1.5">
+          <button
+            type="button"
+            onClick={() => openInbox()}
+            className="relative grid h-8 w-8 place-items-center rounded-full border border-border text-foreground transition-colors hover:border-primary/40 hover:bg-accent"
+            title="Inbox"
+            aria-label={inboxCount > 0 ? `Inbox, ${inboxCount} waiting` : "Inbox"}
+          >
+            <Inbox className="h-4 w-4 text-primary" aria-hidden="true" />
+            <AnimatePresence>
+              {inboxCount > 0 && (
+                <motion.span
+                  key={inboxCount}
+                  initial={{ scale: 0.4, opacity: 0 }}
+                  animate={{ scale: 1, opacity: 1 }}
+                  exit={{ scale: 0.4, opacity: 0 }}
+                  transition={{ type: "spring", stiffness: 600, damping: 18 }}
+                  aria-hidden="true"
+                  className="absolute -top-1 -right-1 grid h-4 min-w-4 place-items-center rounded-full bg-spot px-1 font-mono text-[10px] font-semibold text-spot-foreground"
+                >
+                  {inboxCount}
+                </motion.span>
+              )}
+            </AnimatePresence>
+          </button>
           <button
             type="button"
             onClick={() => openDiscoverRooms()}
@@ -117,6 +147,7 @@ const ChatRoomsListContent: React.FC = () => {
             <Compass className="h-3.5 w-3.5 text-primary" aria-hidden="true" />
             <span aria-hidden="true">Discover</span>
           </button>
+          </div>
         </div>
 
         <div className="mb-3 grid grid-cols-2 gap-2">
@@ -279,6 +310,7 @@ const ChatRoomsListContent: React.FC = () => {
         </p>
       </div>
       <DiscoverRoomsDialog />
+      <InboxDialog />
     </div>
   );
 };

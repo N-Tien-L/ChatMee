@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { ChatRoom, UserSummaryResponse } from "@/lib/types";
-import { RoomType } from "@/lib/types";
+import { ParticipantRole, RoomType } from "@/lib/types";
+import { InvitePeopleDialog } from "./InvitePeopleDialog";
 import {
   Globe,
   Lock,
@@ -10,6 +11,7 @@ import {
   Shield,
   AlertCircle,
   RotateCw,
+  UserPlus,
 } from "lucide-react";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { chatRoomApi } from "@/lib/api/chatRoomApi";
@@ -83,6 +85,7 @@ export const RoomInfoDialog: React.FC<RoomInfoDialogProps> = ({
   const { user } = useAuthStore();
   const [room, setRoom] = useState<ChatRoom | null>(null);
   const [participants, setParticipants] = useState<UserSummaryResponse[]>([]);
+  const [inviteOpen, setInviteOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [isActionLoading, setIsActionLoading] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -273,6 +276,27 @@ export const RoomInfoDialog: React.FC<RoomInfoDialogProps> = ({
               </p>
             </div>
           </div>
+
+          {room.roomType === RoomType.PRIVATE &&
+            (room.myRole === ParticipantRole.OWNER || room.myRole === ParticipantRole.ADMIN) && (
+              <>
+                <button
+                  type="button"
+                  onClick={() => setInviteOpen(true)}
+                  className="flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-br from-bubble-own-from to-bubble-own-to px-4 py-2.5 text-sm font-semibold text-primary-foreground transition-transform hover:brightness-110 active:scale-[0.98]"
+                >
+                  <UserPlus className="h-4 w-4" aria-hidden="true" />
+                  Invite people
+                </button>
+                <InvitePeopleDialog
+                  roomId={room.id}
+                  roomName={room.roomName}
+                  memberIds={room.participants ?? []}
+                  isOpen={inviteOpen}
+                  onClose={() => setInviteOpen(false)}
+                />
+              </>
+            )}
 
           {/* Participants List */}
           {participants.length > 0 && (
