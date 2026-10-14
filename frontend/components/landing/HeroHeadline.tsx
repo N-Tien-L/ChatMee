@@ -6,8 +6,9 @@ import { usePrefersReducedMotion } from "@/components/fx/use-prefers-reduced-mot
 
 const AUDIENCES = ["team", "study group", "squad", "friends", "club"];
 
-/** Same spring for the pill's width and the letters' own layout, so the background and the text move together. */
+/** The pill's width eases with a spring; the letters use a short tween so the gap between two words stays brief. */
 const PILL_SPRING = { type: "spring", damping: 30, stiffness: 400 } as const;
+const LETTER_TWEEN = { type: "tween", duration: 0.22, ease: "easeOut" } as const;
 
 /**
  * Hero headline: the audience word rotates (React Bits RotatingText) inside a pill that resizes smoothly.
@@ -32,10 +33,10 @@ export function HeroHeadline() {
               texts={AUDIENCES}
               auto={!reduced}
               rotationInterval={2400}
-              staggerDuration={0.02}
+              staggerDuration={0.012}
               staggerFrom="last"
               splitBy="characters"
-              transition={PILL_SPRING}
+              transition={LETTER_TWEEN}
               mainClassName="overflow-hidden"
               splitLevelClassName="overflow-hidden pb-[0.08em]"
             />

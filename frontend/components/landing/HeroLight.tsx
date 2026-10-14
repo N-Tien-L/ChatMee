@@ -4,23 +4,29 @@ import dynamic from "next/dynamic";
 import { usePrefersReducedMotion } from "@/components/fx/use-prefers-reduced-motion";
 
 const LightRays = dynamic(() => import("@/components/fx/light-rays"), { ssr: false });
+const ConstellationGrid = dynamic(() => import("@/components/fx/constellation-grid"), { ssr: false });
 
 interface HeroLightProps {
   /** Ray colour (hex). */
   color?: string;
+  /** "rays": WebGL light from above; "constellation": a pointer-reactive node mesh (draws its own still frame under reduced motion). */
+  variant?: "rays" | "constellation";
   className?: string;
 }
 
 /**
  * Light falling on a public page from above. A static glow is always painted (server render, no JS, reduced motion);
- * the WebGL rays from React Bits are layered on top only when motion is allowed.
+ * the WebGL rays from React Bits are layered on top only when motion is allowed, or the constellation mesh (owner-supplied).
  */
-export function HeroLight({ color = "#2ee6c1", className = "" }: HeroLightProps) {
+export function HeroLight({ color = "#2ee6c1", variant = "rays", className = "" }: HeroLightProps) {
   const reduced = usePrefersReducedMotion();
   return (
     <div aria-hidden="true" className={`pointer-events-none absolute inset-0 overflow-hidden ${className}`}>
       <div className="absolute inset-0 bg-[radial-gradient(ellipse_70%_55%_at_50%_-10%,rgb(46_230_193/0.22),transparent_70%)]" />
-      {!reduced && (
+      {variant === "constellation" && (
+        <ConstellationGrid className="absolute inset-0 [mask-image:radial-gradient(ellipse_90%_80%_at_50%_35%,black_40%,transparent_100%)]" />
+      )}
+      {variant === "rays" && !reduced && (
         <LightRays
           raysOrigin="top-center"
           raysColor={color}

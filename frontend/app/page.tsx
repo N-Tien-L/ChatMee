@@ -73,7 +73,7 @@ export default function Home() {
   return (
     <div className="theme-public min-h-dvh overflow-x-clip bg-background text-foreground">
       <section className="relative isolate">
-        <HeroLight />
+        <HeroLight variant="constellation" />
         <header className="relative z-10 mx-auto flex max-w-[1240px] items-center gap-6 px-4 py-5 sm:px-8">
           <span className="pt-2 font-brand text-[26px] leading-none">ChatMee</span>
           <nav aria-label="Main" className="ml-auto flex items-center gap-5 text-sm text-muted-foreground sm:gap-7">
@@ -155,7 +155,7 @@ export default function Home() {
           </h2>
         </div>
         <ul className="mt-12 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {FEATURES.map((feature, index) => (
+          {FEATURES.map((feature) => (
             <li key={feature.title} className={feature.full ? "sm:col-span-2 lg:col-span-3" : feature.wide ? "lg:col-span-2" : ""}>
               <div className="reveal h-full">
                 <SpotlightCard

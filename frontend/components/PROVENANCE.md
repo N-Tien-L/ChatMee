@@ -13,6 +13,7 @@ Retrieved 2026-10-14 for CM-084 milestone B2 (decision D-14) from the public sha
 | BorderBeam | `components/fx/border-beam.tsx` | https://magicui.design/r/border-beam.json | Magic UI `border-beam` | MIT (Magic UI) | motion | none |
 | Marquee | `components/fx/marquee.tsx` | https://magicui.design/r/marquee.json | Magic UI `marquee` | MIT (Magic UI) | none | keyframes moved into `app/globals.css`; static under reduced motion |
 | Ripple | `components/fx/ripple.tsx` | https://magicui.design/r/ripple.json | Magic UI `ripple` | MIT (Magic UI) | none | circle fill and border use `--primary` instead of `--foreground`; keyframes in `app/globals.css`; static under reduced motion |
+| ConstellationGrid | `components/fx/constellation-grid.tsx` | owner-supplied snippet pasted in chat (2026-10-14); original source not stated | unknown | **unknown: owner to confirm source and licence** | none | rewritten around the snippet's spring-mass mesh: sized to its container instead of the window, transparent canvas, links only between grid neighbours (was an all-pairs scan), ChatMee colours, pauses off screen and in hidden tabs, one still frame and no pointer response under reduced motion, title overlay and theme sync removed; placed in `components/fx/` (not `components/ui/`, reserved for shadcn) |
 
 Project-written helpers in `components/fx/`: `motion-provider.tsx` (all `motion` animations follow the reduced-motion setting) and
 `use-prefers-reduced-motion.ts`.
