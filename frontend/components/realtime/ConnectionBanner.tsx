@@ -24,7 +24,7 @@ const STATES: Partial<Record<ConnectionStatus, AirState>> = {
 };
 
 const DOT_CLASS: Record<AirState["tone"], string> = {
-  live: "bg-spot-on-shell shadow-[0_0_0_3px] shadow-spot-on-shell/25",
+  live: "bg-glow text-glow animate-live",
   pending: "bg-warning-on-shell motion-safe:animate-pulse",
   off: "border border-shell-muted bg-transparent",
 };
@@ -38,7 +38,7 @@ export function ConnectionBanner({ status }: { status: ConnectionStatus }) {
   return (
     <div role="status" aria-live="polite" className="flex min-w-0 items-center">
       {state && (
-        <span className="flex items-center gap-2 text-[11px] font-medium uppercase tracking-[0.1em] text-shell-foreground">
+        <span className="flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-[11px] font-medium uppercase tracking-[0.1em] text-shell-foreground">
           <span className={`h-2 w-2 flex-shrink-0 rounded-full ${DOT_CLASS[state.tone]}`} aria-hidden="true" />
           <span aria-hidden="true" className="truncate">{state.label}</span>
           <span className="sr-only">{state.announcement}</span>

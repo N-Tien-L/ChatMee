@@ -25,7 +25,7 @@ export function DeliveryTab({ message, formatTime }: DeliveryTabProps) {
   }, [message.status]);
 
   const base =
-    "inline-flex items-center gap-1 rounded-[3px] px-1.5 font-mono text-[11px] leading-[18px] tabular";
+    "inline-flex items-center gap-1 rounded-full px-2 font-mono text-[11px] leading-[18px] tabular";
 
   if (message.status === "sending") {
     return (
@@ -50,12 +50,12 @@ export function DeliveryTab({ message, formatTime }: DeliveryTabProps) {
 
   return (
     <span
-      className={`${base} -rotate-[1.5deg] border-[1.5px] border-primary text-primary ${
-        pressed ? "animate-stamp" : ""
+      className={`${base} bg-card text-foreground shadow-sm ring-1 ring-border ${
+        pressed ? "animate-stamp animate-confirm" : ""
       }`}
     >
-      <span role="img" aria-label="Sent">
-        <Check className="h-3 w-3" strokeWidth={2.5} aria-hidden="true" />
+      <span role="img" aria-label="Sent" className="grid h-3.5 w-3.5 place-items-center rounded-full bg-spot text-spot-foreground">
+        <Check className="h-2.5 w-2.5" strokeWidth={3.5} aria-hidden="true" />
       </span>
       <time dateTime={message.createdAt}>{formatTime(new Date(message.createdAt))}</time>
     </span>

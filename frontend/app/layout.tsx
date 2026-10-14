@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
-import { Borel, Geist, Geist_Mono } from "next/font/google";
+import { Borel, Bricolage_Grotesque, Geist, Geist_Mono } from "next/font/google";
 import { Toaster } from "react-hot-toast";
+import { MotionProvider } from "@/components/fx/motion-provider";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -18,6 +19,12 @@ const borel = Borel({
   variable: "--font-borel",
   subsets: ["latin"],
   weight: "400",
+});
+
+// Display font: headlines on public pages and room titles (D-14).
+const bricolage = Bricolage_Grotesque({
+  variable: "--font-bricolage",
+  subsets: ["latin"],
 });
 
 export const metadata: Metadata = {
@@ -40,10 +47,10 @@ export default function RootLayout({
   return (
     <html lang="en" className="h-full">
       <body
-        className={`${geistSans.variable} ${geistMono.variable} ${borel.variable} antialiased h-full`}
+        className={`${geistSans.variable} ${geistMono.variable} ${borel.variable} ${bricolage.variable} antialiased h-full`}
         suppressHydrationWarning={true}
       >
-        {children}
+        <MotionProvider>{children}</MotionProvider>
         <Toaster
           position="top-right"
           toastOptions={{

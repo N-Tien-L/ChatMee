@@ -36,6 +36,8 @@ interface MessageListProps {
   olderError?: string | null;
   /** Requests the next older page; called when scrolled to the top and by Retry. */
   onLoadOlder?: () => void;
+  /** Direct message with this person: no sender names or avatars on their messages, and a person intro on top. */
+  directWith?: { name: string; avatarUrl?: string | null } | null;
 }
 
 const isNearBottom = (el: HTMLElement) =>
@@ -109,12 +111,17 @@ const MessageList: React.FC<MessageListProps> = (props) => {
 
   return (
     <div className="relative h-full">
+      {/* Quiet dotted ground behind the conversation; plain CSS so it costs nothing at any size. */}
+      <div
+        aria-hidden="true"
+        className="pointer-events-none absolute inset-0 bg-[radial-gradient(color-mix(in_oklab,var(--primary)_14%,transparent)_1px,transparent_1px)] [background-size:18px_18px] [mask-image:linear-gradient(to_bottom,black,transparent_85%)]"
+      />
       {/* Scroll anchoring is off because the prepend adjustment above already keeps the position. */}
       <div
         ref={scrollRef}
         data-testid="message-scroll"
         onScroll={handleScroll}
-        className="h-full overflow-y-auto [overflow-anchor:none]"
+        className="relative h-full overflow-y-auto [overflow-anchor:none]"
       >
         <MessageListContent
           {...props}
@@ -158,6 +165,7 @@ const MessageListContent: React.FC<MessageListContentProps> = ({
   loadingOlder = false,
   olderError = null,
   onLoadOlder,
+  directWith = null,
   showLoadOlder,
 }) => {
   if (loading && messages.length === 0) {
@@ -173,7 +181,7 @@ const MessageListContent: React.FC<MessageListContentProps> = ({
             key={i}
             className={`flex ${i % 2 ? "justify-end" : "justify-start"}`}
           >
-            <Skeleton className="h-12 w-2/3 sm:w-64 rounded-[10px]" />
+            <Skeleton className="h-12 w-2/3 sm:w-64 rounded-2xl" />
           </div>
         ))}
       </div>
@@ -256,9 +264,19 @@ const MessageListContent: React.FC<MessageListContentProps> = ({
         </div>
       )}
       {onLoadOlder && !hasMore && !loading && !error && messages.length > 0 && (
-        <p className="pt-4 text-center font-mono text-[11px] uppercase tracking-[0.12em] text-muted-foreground">
-          Beginning of conversation
-        </p>
+        directWith ? (
+          <div className="flex flex-col items-center gap-2 px-4 pt-8 pb-2 text-center">
+            <UserAvatar name={directWith.name} avatarUrl={directWith.avatarUrl} size="xl" className="h-20 w-20 text-2xl shadow-[0_14px_30px_-14px_rgb(15_31_28/0.5)]" />
+            <p className="mt-1 font-display text-lg font-semibold text-foreground">{directWith.name}</p>
+            <p className="text-xs text-muted-foreground">
+              Beginning of conversation · just the two of you
+            </p>
+          </div>
+        ) : (
+          <p className="pt-4 text-center font-mono text-[11px] uppercase tracking-[0.12em] text-muted-foreground">
+            Beginning of conversation
+          </p>
+        )
       )}
       <div
         className="px-3 py-4 sm:px-7"
@@ -288,7 +306,7 @@ const MessageListContent: React.FC<MessageListContentProps> = ({
             <div key={message.id}>
               {showDate && (
                 <div className="flex justify-center my-4">
-                  <span className="rounded-[3px] border border-primary px-2.5 py-0.5 font-mono text-[11px] uppercase tracking-[0.12em] text-primary">
+                  <span className="rounded-full bg-card px-3 py-1 font-mono text-[11px] uppercase tracking-[0.12em] text-muted-foreground shadow-sm ring-1 ring-border">
                     {formatDate(messageDate)}
                   </span>
                 </div>
@@ -303,15 +321,15 @@ const MessageListContent: React.FC<MessageListContentProps> = ({
               ) : message.isOwn ? (
                 <div
                   data-message-type={message.type}
-                  className={`flex flex-col items-end gap-1 ${groupStart ? "mt-4" : "mt-1"}`}
+                  className={`animate-message-in flex flex-col items-end gap-1 ${groupStart ? "mt-4" : "mt-1"}`}
                 >
                   <div
-                    className={`max-w-[85%] sm:max-w-md lg:max-w-xl rounded-[10px] px-3 py-2 break-words ${
+                    className={`max-w-[85%] sm:max-w-md lg:max-w-xl rounded-2xl rounded-br-md px-3.5 py-2 break-words transition-colors duration-300 ${
                       failed
                         ? "border-[1.5px] border-destructive bg-card text-foreground"
                         : pending
-                          ? "border-[1.5px] border-dashed border-primary bg-card text-foreground"
-                          : "border border-primary bg-primary text-primary-foreground"
+                          ? "border-[1.5px] border-dashed border-primary/70 bg-card/80 text-foreground"
+                          : "bg-gradient-to-br from-bubble-own-from to-bubble-own-to text-primary-foreground shadow-[0_6px_18px_-10px_rgb(11_107_93/0.8)]"
                     }`}
                   >
                     <p className="text-sm whitespace-pre-wrap break-words">{message.content}</p>
@@ -349,9 +367,9 @@ const MessageListContent: React.FC<MessageListContentProps> = ({
               ) : (
                 <div
                   data-message-type={message.type}
-                  className={`group flex items-start gap-2.5 ${groupStart ? "mt-4" : "mt-1"}`}
+                  className={`animate-message-in group flex items-start gap-2.5 ${groupStart ? "mt-4" : "mt-1"}`}
                 >
-                  <div className="w-8 flex-shrink-0">
+                  <div className={`w-8 flex-shrink-0 ${directWith ? "hidden" : ""}`}>
                     {groupStart && (
                       <UserAvatar
                         name={message.senderName}
@@ -361,7 +379,7 @@ const MessageListContent: React.FC<MessageListContentProps> = ({
                     )}
                   </div>
                   <div className="min-w-0 max-w-[85%] sm:max-w-md lg:max-w-xl">
-                    {groupStart && (
+                    {groupStart && !directWith && (
                       <div className="flex items-baseline gap-2 mb-1">
                         <p className="text-[13px] font-semibold text-foreground truncate">
                           {message.senderName}
@@ -383,10 +401,10 @@ const MessageListContent: React.FC<MessageListContentProps> = ({
                       </div>
                     )}
                     <div className="flex items-end gap-2">
-                      <div className="rounded-[10px] border border-border bg-card px-3 py-2 break-words text-card-foreground">
+                      <div className={`rounded-2xl bg-card px-3.5 py-2 break-words text-card-foreground shadow-[0_2px_10px_-6px_rgb(15_31_28/0.25)] ring-1 ring-border ${groupStart ? "rounded-tl-md" : ""}`}>
                         <p className="text-sm whitespace-pre-wrap break-words">{message.content}</p>
                       </div>
-                      {!groupStart && (
+                      {(!groupStart || directWith) && (
                         <time
                           dateTime={message.createdAt}
                           className="pb-1 font-mono text-[11px] tabular text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100"

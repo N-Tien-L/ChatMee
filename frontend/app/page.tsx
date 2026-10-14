@@ -1,114 +1,238 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { Check, Hash, Lock, MessageCircle, RefreshCw, ShieldCheck, Users } from "lucide-react";
 import { Github } from "@/components/ui/icon/OAuthIcons";
-import { QslCard } from "@/components/landing/QslCard";
-import { oauthLoginUrl } from "@/lib/api/authApi";
+import { HeroLight } from "@/components/landing/HeroLight";
+import { HeroHeadline } from "@/components/landing/HeroHeadline";
+import { LiveChatDemo } from "@/components/landing/LiveChatDemo";
+import { EveryoneSees } from "@/components/landing/EveryoneSees";
+import SpotlightCard from "@/components/fx/spotlight-card";
+import { StartCta } from "@/components/landing/StartCta";
+import { Marquee } from "@/components/fx/marquee";
 
 export const metadata: Metadata = {
-  title: "ChatMee: every message, confirmed both ways",
+  title: "ChatMee: chat with your people and know it landed",
   description:
-    "A real-time chat app with a hand-built realtime layer: rooms, direct messages, presence and typing on Spring Boot and STOMP.",
+    "Rooms for your groups, direct messages for one-on-ones, live presence and typing. Every message shows a check and the time the moment it is delivered.",
 };
 
 const REPOSITORY_URL = "https://github.com/N-Tien-L/ChatMee";
 
-const FACTS = [
+const FEATURES: { icon: typeof Check; title: string; body: string; wide?: boolean; full?: boolean }[] = [
   {
-    title: "Nothing sent twice",
-    body: "A resend with the same client id returns the message already stored.",
-    mechanism: "unique (chatRoomId, senderId, clientMessageId)",
+    icon: Check,
+    title: "Know it landed",
+    body: "Every message you send gets a check and the time the moment ChatMee has it. No more “did that go through?”",
+    wide: true,
   },
   {
-    title: "Back after a drop",
-    body: "Reconnects with capped backoff and jitter, a fresh single-use token each try, then merges missed messages by id.",
-    mechanism: "POST /api/v1/auth/ws-token · CONNECT · resync",
+    icon: Hash,
+    title: "Rooms for every group",
+    body: "Open a public room anyone can discover, or keep a private one just for your members.",
   },
   {
-    title: "Only for members",
-    body: "Every subscription is checked against membership; leaving a room stops its frames.",
-    mechanism: "/topic/rooms/{id} · /user/queue/events",
+    icon: MessageCircle,
+    title: "Direct messages",
+    body: "Start a one-on-one from a name. They accept first, so nobody lands in your inbox uninvited.",
+  },
+  {
+    icon: Users,
+    title: "See who's here",
+    body: "Live presence and typing, so you know when someone is around and about to answer.",
+  },
+  {
+    icon: ShieldCheck,
+    title: "Members only",
+    body: "Only a room's members receive its messages. Leave, and the room goes quiet for you.",
+  },
+  {
+    icon: RefreshCw,
+    title: "Drops don't lose messages",
+    body: "Lost signal on the train? ChatMee reconnects by itself and catches you up without duplicates.",
+    full: true,
   },
 ];
 
-const STACK = ["Spring Boot 4", "STOMP / WebSocket", "MongoDB", "Redis", "Next.js 16"];
+const CROWDS = [
+  "Study groups",
+  "Project teams",
+  "Gaming squads",
+  "Club committees",
+  "Hackathon crews",
+  "Weekend trips",
+  "Book clubs",
+  "Family plans",
+  "Flatmates",
+  "Lab partners",
+];
 
-/** Public landing page (CM-084, owner-approved exception to SPEC-008 §2, decision D-6). */
+const STACK = ["Spring Boot 4", "Spring Security", "STOMP over WebSocket", "MongoDB", "Redis", "Next.js 16"];
+
+/** Public landing page (CM-084, owner-approved exception to SPEC-008 §2, decisions D-6 and D-14). */
 export default function Home() {
   return (
-    <div className="theme-public min-h-dvh bg-background text-foreground">
-      <header className="mx-auto flex max-w-[1312px] items-center gap-6 px-4 py-5 sm:px-8 lg:px-16">
-        <span className="pt-2 font-brand text-[26px] leading-none">ChatMee</span>
-        <nav aria-label="Main" className="ml-auto flex items-center gap-5 text-sm text-muted-foreground sm:gap-7">
-          <a href="#how" className="hidden rounded-sm hover:text-foreground sm:inline">
-            How it works
+    <div className="theme-public min-h-dvh overflow-x-clip bg-background text-foreground">
+      <section className="relative isolate">
+        <HeroLight />
+        <header className="relative z-10 mx-auto flex max-w-[1240px] items-center gap-6 px-4 py-5 sm:px-8">
+          <span className="pt-2 font-brand text-[26px] leading-none">ChatMee</span>
+          <nav aria-label="Main" className="ml-auto flex items-center gap-5 text-sm text-muted-foreground sm:gap-7">
+            <a href="#features" className="hidden rounded-sm hover:text-foreground sm:inline">
+              Features
+            </a>
+            <a href="#under-the-hood" className="hidden rounded-sm hover:text-foreground sm:inline">
+              Under the hood
+            </a>
+            <Link
+              href="/login"
+              className="rounded-full border border-white/15 bg-white/5 px-4 py-2 font-medium text-foreground backdrop-blur hover:bg-white/10"
+            >
+              Sign in
+            </Link>
+          </nav>
+        </header>
+
+        <div className="relative z-10 mx-auto grid max-w-[1240px] items-center gap-14 px-4 pt-10 pb-24 sm:px-8 lg:grid-cols-[minmax(0,1.1fr)_minmax(0,0.9fr)] lg:pt-20 lg:pb-32">
+          <div>
+            <p className="mb-6 inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs text-muted-foreground backdrop-blur">
+              <span className="h-1.5 w-1.5 rounded-full bg-primary text-primary animate-live" aria-hidden="true" />
+              Free · open source · sign in with GitHub or Google
+            </p>
+            <HeroHeadline />
+            <p className="mt-7 max-w-[520px] text-lg leading-relaxed text-muted-foreground">
+              Rooms for the group, direct messages for the one-on-one, live presence and typing. And every message you
+              send shows a check and the time the moment it&apos;s delivered.
+            </p>
+            <div className="mt-9 flex flex-wrap items-center gap-x-6 gap-y-4">
+              <StartCta />
+              <a href="#features" className="rounded-sm text-sm font-medium text-foreground underline-offset-4 hover:underline">
+                See what it does
+              </a>
+            </div>
+          </div>
+          <div className="relative">
+            <div
+              aria-hidden="true"
+              className="absolute -inset-8 -z-10 rounded-[40px] bg-[radial-gradient(circle_at_70%_30%,rgb(255_106_61/0.18),transparent_60%)] blur-2xl"
+            />
+            <LiveChatDemo />
+          </div>
+        </div>
+      </section>
+
+      <section aria-label="Made for" className="border-y border-white/5 py-6">
+        <Marquee pauseOnHover className="[--duration:36s] [--gap:2.5rem]">
+          {CROWDS.map((crowd) => (
+            <span key={crowd} className="flex items-center gap-2.5 font-display text-xl font-medium text-muted-foreground">
+              <span className="h-1.5 w-1.5 rounded-full bg-spot" aria-hidden="true" />
+              {crowd}
+            </span>
+          ))}
+        </Marquee>
+      </section>
+
+      <section className="mx-auto grid max-w-[1240px] items-center gap-12 px-4 py-24 sm:px-8 lg:grid-cols-2 lg:py-32">
+        <div className="reveal">
+          <p className="font-mono text-xs tracking-[0.14em] text-primary">REAL TIME</p>
+          <h2 className="mt-4 font-display text-4xl font-bold tracking-[-0.03em] sm:text-5xl">
+            Send once.
+            <br />
+            Everyone sees it.
+          </h2>
+          <p className="mt-5 max-w-[460px] text-lg leading-relaxed text-muted-foreground">
+            Your message reaches every member&apos;s phone, laptop and tablet at the same moment, and you see the check as
+            soon as it&apos;s there. No refresh, no waiting.
+          </p>
+        </div>
+        <EveryoneSees />
+      </section>
+
+      <section id="features" aria-labelledby="features-title" className="mx-auto max-w-[1240px] px-4 pb-24 sm:px-8 lg:pb-32">
+        <div className="reveal">
+          <p className="font-mono text-xs tracking-[0.14em] text-primary">FEATURES</p>
+          <h2 id="features-title" className="mt-4 max-w-[640px] font-display text-4xl font-bold tracking-[-0.03em] sm:text-5xl">
+            Everything a group chat needs. Nothing it doesn&apos;t.
+          </h2>
+        </div>
+        <ul className="mt-12 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          {FEATURES.map((feature, index) => (
+            <li key={feature.title} className={feature.full ? "sm:col-span-2 lg:col-span-3" : feature.wide ? "lg:col-span-2" : ""}>
+              <div className="reveal h-full">
+                <SpotlightCard
+                  theme="dark"
+                  spotlightColor="rgba(46, 230, 193, 0.35)"
+                  className="h-full !rounded-3xl !bg-[#0b1a18] p-7"
+                >
+                  <span className="grid h-11 w-11 place-items-center rounded-xl bg-primary/12 text-primary">
+                    <feature.icon className="h-5 w-5" aria-hidden="true" />
+                  </span>
+                  <h3 className="mt-6 font-display text-xl font-semibold">{feature.title}</h3>
+                  <p className="mt-2 leading-relaxed text-muted-foreground">{feature.body}</p>
+                </SpotlightCard>
+              </div>
+            </li>
+          ))}
+        </ul>
+      </section>
+
+      <section
+        id="under-the-hood"
+        aria-labelledby="hood-title"
+        className="mx-auto max-w-[1240px] px-4 pb-24 sm:px-8 lg:pb-32"
+      >
+        <div className="grid gap-10 rounded-3xl border border-white/10 bg-white/[0.02] p-8 sm:p-12 lg:grid-cols-[1fr_auto] lg:items-end">
+          <div>
+            <p className="font-mono text-xs tracking-[0.14em] text-primary">UNDER THE HOOD</p>
+            <h2 id="hood-title" className="mt-4 font-display text-3xl font-bold tracking-[-0.03em] sm:text-4xl">
+              Built by hand, open to read.
+            </h2>
+            <p className="mt-4 max-w-[560px] leading-relaxed text-muted-foreground">
+              A Spring Boot server validates and stores every message in MongoDB before it goes out over STOMP. Redis keeps
+              presence in step across instances. The check you see is the server&apos;s confirmation, not a guess.
+            </p>
+            <ul className="mt-6 flex flex-wrap gap-2" aria-label="Technology">
+              {STACK.map((item) => (
+                <li key={item} className="rounded-full border border-white/10 px-3 py-1 font-mono text-xs text-foreground">
+                  {item}
+                </li>
+              ))}
+            </ul>
+          </div>
+          <a
+            href={REPOSITORY_URL}
+            className="inline-flex items-center gap-2 self-start rounded-full border border-white/15 px-5 py-3 text-sm font-medium hover:bg-white/5 lg:self-end"
+          >
+            <Github className="h-4 w-4 [&_g]:fill-current" aria-hidden="true" />
+            Read the source
           </a>
-          <a href={REPOSITORY_URL} className="hidden rounded-sm hover:text-foreground sm:inline">
+        </div>
+      </section>
+
+      <section aria-labelledby="cta-title" className="relative isolate overflow-hidden border-t border-white/5">
+        <HeroLight color="#ff6a3d" className="opacity-70" />
+        <div className="relative z-10 mx-auto flex max-w-[1240px] flex-col items-center px-4 py-28 text-center sm:px-8">
+          <h2 id="cta-title" className="font-display text-4xl font-bold tracking-[-0.03em] sm:text-6xl">
+            Your people are waiting.
+          </h2>
+          <p className="mt-4 text-lg text-muted-foreground">Open a room, say hi, watch it land.</p>
+          <div className="mt-9">
+            <StartCta />
+          </div>
+          <p className="mt-5 flex items-center gap-1.5 text-xs text-muted-foreground">
+            <Lock className="h-3 w-3" aria-hidden="true" /> GitHub or Google sign-in. ChatMee never sees a password.
+          </p>
+        </div>
+      </section>
+
+      <footer className="border-t border-white/5">
+        <div className="mx-auto flex max-w-[1240px] flex-wrap items-center justify-between gap-4 px-4 py-8 text-sm text-muted-foreground sm:px-8">
+          <span className="pt-1 font-brand text-xl text-foreground">ChatMee</span>
+          <span>An open-source portfolio project.</span>
+          <a href={REPOSITORY_URL} className="rounded-sm hover:text-foreground">
             GitHub
           </a>
-          <Link
-            href="/login"
-            className="rounded-md bg-primary px-4 py-2 font-semibold text-primary-foreground hover:bg-primary/90"
-          >
-            Sign in
-          </Link>
-        </nav>
-      </header>
-
-      <main className="mx-auto grid max-w-[1312px] gap-12 px-4 pt-6 pb-16 sm:px-8 lg:grid-cols-[minmax(0,440px)_minmax(0,1fr)] lg:gap-14 lg:px-16 lg:pt-10">
-        <div>
-          <h1 className="text-[40px] font-bold leading-[1.02] tracking-[-0.035em] sm:text-[56px]">
-            Every message, <span className="text-highlight">confirmed</span> both ways.
-          </h1>
-          <p className="mt-5 max-w-[460px] text-lg text-muted-foreground">
-            A real-time chat app with a hand-built realtime layer: rooms, direct messages, presence and typing, on Spring
-            Boot and STOMP.
-          </p>
-          <div className="mt-8 flex flex-wrap items-center gap-x-4 gap-y-3">
-            <a
-              href={oauthLoginUrl("github")}
-              className="inline-flex items-center gap-2 rounded-md bg-primary px-5 py-3 font-semibold text-primary-foreground hover:bg-primary/90"
-            >
-              <Github className="h-5 w-5 [&_g]:fill-current" aria-hidden="true" />
-              Sign in with GitHub
-            </a>
-            <span className="text-sm text-muted-foreground">
-              or{" "}
-              <a href={oauthLoginUrl("google")} className="rounded-sm text-foreground underline underline-offset-4">
-                Google
-              </a>
-              . No passwords.
-            </span>
-          </div>
-          <p className="mt-12 font-mono text-xs tracking-[0.06em] text-muted-foreground">
-            BUILT WITH{" "}
-            {STACK.map((item, index) => (
-              <span key={item}>
-                <span className="text-foreground">{item}</span>
-                {index < STACK.length - 1 ? " · " : ""}
-              </span>
-            ))}
-          </p>
         </div>
-
-        <div className="lg:pt-2">
-          <QslCard />
-        </div>
-
-        <section id="how" aria-labelledby="how-title" className="border-t border-border pt-6 lg:col-span-2">
-          <h2 id="how-title" className="sr-only">
-            How it works
-          </h2>
-          <ul className="grid gap-8 md:grid-cols-3 md:gap-6">
-            {FACTS.map((fact) => (
-              <li key={fact.title}>
-                <p className="font-semibold">{fact.title}</p>
-                <p className="mt-1 text-sm text-muted-foreground">{fact.body}</p>
-                <code className="mt-2 block font-mono text-xs text-highlight">{fact.mechanism}</code>
-              </li>
-            ))}
-          </ul>
-        </section>
-      </main>
+      </footer>
     </div>
   );
 }

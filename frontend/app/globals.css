@@ -9,6 +9,10 @@
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
   --font-brand: var(--font-borel);
+  --font-display: var(--font-bricolage);
+  --color-glow: var(--glow);
+  --color-bubble-own-from: var(--bubble-own-from);
+  --color-bubble-own-to: var(--bubble-own-to);
   --color-sidebar-ring: var(--sidebar-ring);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
@@ -58,95 +62,90 @@
 }
 
 /*
- * ChatMee visual system (CM-084, direction "Contact confirmed", docs/frontend/decisions.md D-10).
- * One token set, two fixed surfaces (D-7): the workspace is light (:root), public pages are dark (.theme-public).
- * Colour marks state: teal ink is the shell and your own words, the vermilion spot is live and unread,
- * amber is reconnecting, crimson with words is failure. No user-facing dark mode in v0.
+ * ChatMee visual system (CM-084, direction "Contact confirmed", revised in milestone B2: decisions.md D-14).
+ * The brand hook stays: a message is not done until the server confirms it (check plus time).
+ * Workspace (:root) is light and calm; public pages (.theme-public) are dark, luminous and loud.
+ * Signal teal is the brand and your own words; ember (vermilion) is the confirmation spark, live and unread;
+ * amber is reconnecting; crimson with words is failure.
  */
 :root {
-  --radius: 0.625rem;
-  --background: #f6f8f7; /* paper */
-  --foreground: #14201f;
+  --radius: 0.875rem;
+  --background: #f4f7f6;
+  --foreground: #0f1f1c;
   --card: #ffffff;
-  --card-foreground: #14201f;
+  --card-foreground: #0f1f1c;
   --popover: #ffffff;
-  --popover-foreground: #14201f;
-  --primary: #0e4f55; /* teal ink */
+  --popover-foreground: #0f1f1c;
+  --primary: #0b6b5d; /* signal teal, 6.0:1 on white */
   --primary-foreground: #ffffff;
-  --secondary: #eef3f2;
-  --secondary-foreground: #14201f;
-  --muted: #eef3f2;
-  --muted-foreground: #556564;
-  --accent: #e6f0ef;
-  --accent-foreground: #0a3a3f;
+  --secondary: #e9f1ef;
+  --secondary-foreground: #0f1f1c;
+  --muted: #edf2f1;
+  --muted-foreground: #52625f;
+  --accent: #e3f1ed;
+  --accent-foreground: #08483f;
   --destructive: #b42318;
-  --border: #dde4e2;
-  --input: #cdd7d5;
-  --ring: #1b7a80;
-  /* Shell: the inked header band. */
-  --shell: #0e4f55;
-  --shell-foreground: #e9f3f2;
-  --shell-muted: #a9c9c6;
-  --ink-deep: #0a3a3f;
+  --border: #dce5e2;
+  --input: #cbd8d4;
+  --ring: #12a08a;
+  /* Shell: the deep header band (same night as the public pages). */
+  --shell: #071715;
+  --shell-foreground: #e6f4f0;
+  --shell-muted: #8fb3aa;
+  --ink-deep: #08483f;
+  --glow: #2ee6c1; /* luminous teal: effects and marks on dark grounds only */
   /* State colours. */
-  --spot: #d13b20; /* live, unread */
+  --spot: #d9441f; /* ember: live, unread, confirmation spark */
   --spot-foreground: #ffffff;
-  --spot-on-shell: #ff7a5c; /* the live dot on the teal band (non-text, 3.6:1) */
-  --warning-on-shell: #f2c46b;
+  --spot-on-shell: #ff7a52;
+  --warning-on-shell: #f5c56b;
   --warning: #8a5a0f;
   --warning-surface: #fbf1dc;
   --danger-surface: #fdecea;
-  --success: #1d7a4f;
-  --highlight: #0e4f55;
-  --chart-1: #0e4f55;
-  --chart-2: #1b7a80;
-  --chart-3: #d13b20;
+  --success: #12795f;
+  --highlight: #0b6b5d;
+  --bubble-own-from: #0d7a69;
+  --bubble-own-to: #085a4e;
+  --chart-1: #0b6b5d;
+  --chart-2: #12a08a;
+  --chart-3: #d9441f;
   --chart-4: #8a5a0f;
-  --chart-5: #556564;
-  --sidebar: #ffffff;
-  --sidebar-foreground: #14201f;
-  --sidebar-primary: #0e4f55;
+  --chart-5: #52625f;
+  --sidebar: #fbfdfc;
+  --sidebar-foreground: #0f1f1c;
+  --sidebar-primary: #0b6b5d;
   --sidebar-primary-foreground: #ffffff;
-  --sidebar-accent: #eef5f4;
-  --sidebar-accent-foreground: #0a3a3f;
-  --sidebar-border: #dde4e2;
-  --sidebar-ring: #1b7a80;
+  --sidebar-accent: #e8f3f0;
+  --sidebar-accent-foreground: #08483f;
+  --sidebar-border: #dce5e2;
+  --sidebar-ring: #12a08a;
 }
 
-/* Public pages (landing, sign-in): teal-black ground, the card printed in paper white, one vermilion action. */
+/* Public pages (landing, sign-in): night ground, luminous teal light, one ember action. */
 .theme-public {
-  --background: #0b1f21;
-  --foreground: #e8f1f0;
-  --card: #f6f8f7;
-  --card-foreground: #14201f;
-  --popover: #10292c;
-  --popover-foreground: #e8f1f0;
-  --primary: #d13b20;
-  --primary-foreground: #ffffff;
-  --secondary: #143236;
-  --secondary-foreground: #e8f1f0;
-  --muted: #143236;
-  --muted-foreground: #93a9a7;
-  --accent: #143236;
-  --accent-foreground: #e8f1f0;
+  --background: #050d0c;
+  --foreground: #eaf5f2;
+  --card: #0b1a18;
+  --card-foreground: #eaf5f2;
+  --popover: #0d1f1c;
+  --popover-foreground: #eaf5f2;
+  --primary: #2ee6c1;
+  --primary-foreground: #03201b;
+  --secondary: #10241f;
+  --secondary-foreground: #eaf5f2;
+  --muted: #10241f;
+  --muted-foreground: #93aea7;
+  --accent: #12302a;
+  --accent-foreground: #eaf5f2;
   --destructive: #ff8a7a;
-  --border: rgb(255 255 255 / 12%);
-  --input: rgb(255 255 255 / 18%);
-  --ring: #5fb8b0;
-  --highlight: #5fb8b0;
-  --warning: #f2c46b;
+  --border: rgb(255 255 255 / 10%);
+  --input: rgb(255 255 255 / 16%);
+  --ring: #2ee6c1;
+  --highlight: #2ee6c1;
+  --spot: #ff6a3d;
+  --warning: #f5c56b;
   --danger-surface: rgb(255 138 122 / 12%);
-  --warning-surface: rgb(242 196 107 / 12%);
-}
-
-/* Paper printed on a public page (the landing's QSL card): the workspace's light roles, scoped. */
-.theme-paper {
-  --background: #f6f8f7;
-  --foreground: #14201f;
-  --primary: #0e4f55;
-  --primary-foreground: #ffffff;
-  --muted-foreground: #556564;
-  --border: #d6dfdd;
+  --warning-surface: rgb(245 197 107 / 12%);
 }
 
 @layer base {
@@ -188,13 +187,13 @@
 
 /* The delivery tab presses in once when the server confirms a message; reduced motion swaps states instantly. */
 @keyframes stamp-press {
-  0% { transform: scale(1.18) rotate(-4deg); opacity: 0.4; }
-  60% { transform: scale(0.96) rotate(-1.5deg); opacity: 1; }
-  100% { transform: scale(1) rotate(-1.5deg); opacity: 1; }
+  0% { transform: scale(1.25); opacity: 0.4; }
+  60% { transform: scale(0.95); opacity: 1; }
+  100% { transform: scale(1); opacity: 1; }
 }
 @media (prefers-reduced-motion: no-preference) {
-  .animate-stamp {
-    animation: stamp-press 220ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+  .animate-stamp.animate-confirm {
+    animation: stamp-press 260ms cubic-bezier(0.2, 0.8, 0.2, 1) both, confirm-flash 700ms ease-out 1;
   }
 }
 
@@ -206,5 +205,66 @@
 @media (prefers-reduced-motion: no-preference) {
   .animate-print {
     animation: row-print 300ms ease-out both;
+  }
+}
+
+/* Magic UI marquee and ripple (components/fx); static under reduced motion. */
+@theme inline {
+  --animate-marquee: marquee var(--duration) infinite linear;
+  --animate-marquee-vertical: marquee-vertical var(--duration) linear infinite;
+  --animate-ripple: ripple var(--duration, 2s) ease calc(var(--i, 0) * 0.2s) infinite;
+  @keyframes marquee {
+    from { transform: translateX(0); }
+    to { transform: translateX(calc(-100% - var(--gap))); }
+  }
+  @keyframes marquee-vertical {
+    from { transform: translateY(0); }
+    to { transform: translateY(calc(-100% - var(--gap))); }
+  }
+  @keyframes ripple {
+    0%, 100% { transform: translate(-50%, -50%) scale(1); }
+    50% { transform: translate(-50%, -50%) scale(0.9); }
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .animate-marquee, .animate-marquee-vertical, .animate-ripple { animation: none !important; }
+}
+
+/* A new message rises in; your own confirmed bubble gets one ember flash. */
+@keyframes message-in {
+  from { opacity: 0; transform: translateY(8px) scale(0.98); filter: blur(3px); }
+  to { opacity: 1; transform: none; filter: none; }
+}
+@keyframes confirm-flash {
+  0% { box-shadow: 0 0 0 0 color-mix(in oklab, var(--spot) 55%, transparent); }
+  100% { box-shadow: 0 0 0 10px transparent; }
+}
+@keyframes live-pulse {
+  0% { box-shadow: 0 0 0 0 color-mix(in oklab, currentColor 60%, transparent); }
+  70%, 100% { box-shadow: 0 0 0 7px transparent; }
+}
+@media (prefers-reduced-motion: no-preference) {
+  .animate-message-in { animation: message-in 320ms cubic-bezier(0.2, 0.8, 0.2, 1) both; }
+  .animate-confirm { animation: confirm-flash 700ms ease-out 1; }
+  .animate-live { animation: live-pulse 2.2s ease-out infinite; }
+}
+
+/* Identity tones for avatars without a picture: a stable gradient per name (white initials, >= 4.5:1 at the dark end). */
+.tone-0 { background-image: linear-gradient(135deg, #17a58d, #0a5f53); }
+.tone-1 { background-image: linear-gradient(135deg, #f07a45, #b8361a); }
+.tone-2 { background-image: linear-gradient(135deg, #7180f0, #3c43b8); }
+.tone-3 { background-image: linear-gradient(135deg, #b073ec, #6d35b3); }
+.tone-4 { background-image: linear-gradient(135deg, #3ea9e6, #1a62a6); }
+.tone-5 { background-image: linear-gradient(135deg, #ec6d96, #b2325c); }
+.tone-6 { background-image: linear-gradient(135deg, #dba141, #99600f); }
+
+/* Scroll reveal on public pages: content is always visible; where scroll-driven animations exist, it rises in as it enters. */
+@supports (animation-timeline: view()) {
+  @media (prefers-reduced-motion: no-preference) {
+    .reveal {
+      animation: message-in linear both;
+      animation-timeline: view();
+      animation-range: entry 0% entry 70%;
+    }
   }
 }

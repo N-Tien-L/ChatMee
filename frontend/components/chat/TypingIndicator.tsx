@@ -25,12 +25,12 @@ const TypingIndicator: React.FC<TypingIndicatorProps> = ({
       : "Someone is typing...";
 
   return (
-    <div className="flex flex-shrink-0 items-center gap-2 px-3 pb-1.5 sm:px-7">
-      <span className="flex gap-0.5" aria-hidden="true">
+    <div className="animate-message-in flex flex-shrink-0 items-center gap-2 px-3 pb-2 sm:px-7">
+      <span className="flex gap-1 rounded-full bg-card px-2.5 py-2 shadow-sm ring-1 ring-border" aria-hidden="true">
         {[0, 0.15, 0.3].map((delay) => (
           <span
             key={delay}
-            className="h-1 w-1 rounded-full bg-primary motion-safe:animate-pulse"
+            className="h-1.5 w-1.5 rounded-full bg-primary motion-safe:animate-bounce"
             style={{ animationDelay: `${delay}s` }}
           />
         ))}

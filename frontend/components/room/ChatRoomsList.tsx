@@ -10,7 +10,9 @@ import {
   AlertCircle,
   RotateCw,
   Compass,
+  Hash,
 } from "lucide-react";
+import { motion } from "motion/react";
 import { Skeleton } from "../ui/skeleton";
 import ChatRoomListItem from "./ChatRoomListItem";
 import { useChatRoomsStore } from "@/lib/stores/chatRoomsStore";
@@ -93,46 +95,49 @@ const ChatRoomsListContent: React.FC = () => {
 
   const roomTypeOptions = [
     { value: "ALL", label: "All", icon: MessageSquare },
+    { value: "ROOMS", label: "Rooms", icon: Hash },
     { value: RoomType.DIRECT_MESSAGE, label: "Direct", icon: Users },
   ];
 
   return (
     <div className="h-full flex flex-col bg-sidebar min-w-0 w-full overflow-hidden">
       {/* Header */}
-      <div className="px-3 pt-3.5 pb-3 sm:px-4 border-b flex-shrink-0 sticky top-0 bg-sidebar z-10">
-        <div className="flex items-center justify-between mb-3">
-          <h2 className="text-[15px] font-semibold text-foreground">
+      <div className="px-3 pt-4 pb-3 sm:px-4 flex-shrink-0 sticky top-0 bg-sidebar z-10">
+        <div className="flex items-center justify-between mb-3.5">
+          <h2 className="font-display text-xl font-semibold tracking-[-0.02em] text-foreground">
             Chats
           </h2>
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={() => openDiscoverRooms()}
-              className="p-1.5 sm:p-2 rounded-md border border-border text-foreground hover:bg-accent transition-colors flex-shrink-0"
-              title="Discover rooms"
-              aria-label="Discover rooms"
-            >
-              <Compass className="w-4 h-4 sm:w-5 sm:h-5" aria-hidden="true" />
-            </button>
-            <button
-              type="button"
-              onClick={() => openCreateRoomModal()}
-              className="p-1.5 sm:p-2 rounded-md border border-border text-foreground hover:bg-accent transition-colors flex-shrink-0"
-              title="New group"
-              aria-label="New group"
-            >
-              <UsersRound className="w-4 h-4 sm:w-5 sm:h-5" aria-hidden="true" />
-            </button>
-            <button
-              type="button"
-              onClick={() => openCreateRoomModal()}
-              className="p-1.5 sm:p-2 rounded-md bg-primary text-primary-foreground hover:bg-primary/90 transition-colors flex-shrink-0"
-              title="New message"
-              aria-label="New message"
-            >
-              <MessageSquarePlus className="w-4 h-4 sm:w-5 sm:h-5" aria-hidden="true" />
-            </button>
-          </div>
+          <button
+            type="button"
+            onClick={() => openDiscoverRooms()}
+            className="flex items-center gap-1.5 rounded-full border border-border px-3 py-1.5 text-xs font-medium text-foreground transition-colors hover:border-primary/40 hover:bg-accent"
+            title="Discover rooms"
+            aria-label="Discover rooms"
+          >
+            <Compass className="h-3.5 w-3.5 text-primary" aria-hidden="true" />
+            <span aria-hidden="true">Discover</span>
+          </button>
+        </div>
+
+        <div className="mb-3 grid grid-cols-2 gap-2">
+          <button
+            type="button"
+            onClick={() => openCreateRoomModal("direct")}
+            className="flex items-center justify-center gap-2 rounded-xl bg-gradient-to-br from-bubble-own-from to-bubble-own-to px-3 py-2.5 text-sm font-semibold text-primary-foreground shadow-[0_8px_20px_-10px_rgb(11_107_93/0.8)] transition-transform hover:brightness-110 active:scale-[0.98]"
+            aria-label="New message"
+          >
+            <MessageSquarePlus className="h-4 w-4" aria-hidden="true" />
+            <span aria-hidden="true">Message</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => openCreateRoomModal("room")}
+            className="flex items-center justify-center gap-2 rounded-xl border border-border bg-card px-3 py-2.5 text-sm font-semibold text-foreground transition-colors hover:border-primary/40 hover:bg-accent active:scale-[0.98]"
+            aria-label="New room"
+          >
+            <UsersRound className="h-4 w-4 text-primary" aria-hidden="true" />
+            <span aria-hidden="true">Room</span>
+          </button>
         </div>
 
         {/* Search bar */}
@@ -144,38 +149,43 @@ const ChatRoomsListContent: React.FC = () => {
           <input
             type="search"
             aria-label="Search chats"
-            placeholder="Search chats..."
+            placeholder="Search chats"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full pl-9 pr-3 py-1.5 sm:py-2 text-sm border border-border rounded-md focus:ring-2 focus:ring-ring focus:border-transparent"
+            className="w-full rounded-xl border border-border bg-muted/60 py-2 pl-9 pr-3 text-sm transition-colors placeholder:text-muted-foreground focus:border-ring focus:bg-card focus:outline-none focus:ring-[3px] focus:ring-ring/20"
           />
         </div>
 
         {/* Filter Tabs */}
         <div
-          className="mt-2 sm:mt-3 grid grid-cols-2 gap-1"
+          className="mt-3 grid grid-cols-3 gap-1 rounded-xl bg-muted p-1"
           role="group"
           aria-label="Filter by room type"
         >
-          {roomTypeOptions.map(({ value, label, icon: Icon }) => (
-            <button
-              key={value}
-              onClick={() => setRoomTypeFilter(value as RoomType | "ALL")}
-              aria-label={label}
-              aria-pressed={roomTypeFilter === value}
-              className={`flex items-center justify-center py-1.5 sm:py-2 rounded-md text-xs sm:text-sm font-medium transition-colors ${
-                roomTypeFilter === value
-                  ? "bg-accent text-accent-foreground border border-primary/30"
-                  : "text-muted-foreground hover:bg-accent"
-              }`}
-            >
-              <Icon
-                className="w-3.5 h-3.5 sm:w-4 sm:h-4 sm:mr-1.5"
-                aria-hidden="true"
-              />
-              <span className="hidden sm:inline truncate">{label}</span>
-            </button>
-          ))}
+          {roomTypeOptions.map(({ value, label, icon: Icon }) => {
+            const active = roomTypeFilter === value;
+            return (
+              <button
+                key={value}
+                onClick={() => setRoomTypeFilter(value as RoomType | "ALL" | "ROOMS")}
+                aria-label={label}
+                aria-pressed={active}
+                className={`relative flex items-center justify-center gap-1.5 rounded-lg py-1.5 text-xs font-medium transition-colors ${
+                  active ? "text-foreground" : "text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                {active && (
+                  <motion.span
+                    layoutId="room-filter-indicator"
+                    className="absolute inset-0 rounded-lg bg-card shadow-sm ring-1 ring-border"
+                    transition={{ type: "spring", stiffness: 500, damping: 38 }}
+                  />
+                )}
+                <Icon className="relative h-3.5 w-3.5" aria-hidden="true" />
+                <span className="relative">{label}</span>
+              </button>
+            );
+          })}
         </div>
       </div>
 
@@ -238,16 +248,16 @@ const ChatRoomsListContent: React.FC = () => {
                 : "Create your first chat room to get started"}
             </p>
             <button
-              onClick={() => openCreateRoomModal()}
-              className="px-3 sm:px-4 py-1.5 sm:py-2 text-sm bg-primary text-primary-foreground rounded-md hover:bg-primary/90 transition-colors"
+              onClick={() => openCreateRoomModal("room")}
+              className="rounded-xl bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary/90"
             >
-              Create Chat Room
+              Create a room
             </button>
           </div>
         )}
 
         {!loading && !error && filteredRooms.length > 0 && (
-          <div className="divide-y divide-border/60">
+          <div className="space-y-0.5 px-2 pb-2">
             {filteredRooms.map((room) => (
               <ChatRoomListItem
                 key={room.id}

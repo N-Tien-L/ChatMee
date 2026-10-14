@@ -22,7 +22,12 @@ Lint 0 errors / 16 warnings; tsc OK; 37 files / 225 tests pass; build OK. No-JS 
 - Profile page already used tokens; it has no app header (unchanged behaviour).
 - `app/preview/*` stays until milestone C passes, then is deleted.
 
-## Next: milestone C (blocked on the owner, D-9)
+## Milestone B2 (2026-10-14, D-14)
+
+The owner rejected the milestone B look at the start of milestone C. Revised look, marketing landing, split New message / New room
+flows and a distinct DM presentation are built and ready for review: `milestone-b2/HANDOFF.md`. Milestone C waits for acceptance.
+
+## Next: milestone C (blocked on the owner: B2 acceptance, then sign-in for the journeys)
 
 Needs Docker Desktop and the backend on :8080 with the owner's env. Then: run the four journeys in a browser with console and
 network capture, keyboard walk-through, `./mvnw verify`, Impeccable finish review, DESIGN.md, delete `/preview`.

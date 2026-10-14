@@ -12,6 +12,7 @@ import ChatHeader from "./ChatHeader";
 import MessageList from "./MessageList";
 import TypingIndicator from "./TypingIndicator";
 import MessageInput from "./MessageInput";
+import { RoomType } from "@/lib/types";
 
 /** Typing indicator: how long a typing user is shown after the last event, in ms (SPEC-005 AC-005-5). */
 const SELF_TYPING_IDLE_MS = 2000;
@@ -247,6 +248,11 @@ const ChatRoomView: React.FC<{ roomId: string; onDeleted: () => void }> = ({
           loadingOlder={loadingOlder}
           olderError={olderError}
           onLoadOlder={loadOlder}
+          directWith={
+            currentRoom.roomType === RoomType.DIRECT_MESSAGE && currentRoom.counterpart
+              ? { name: currentRoom.counterpart.name, avatarUrl: currentRoom.counterpart.avatarUrl }
+              : null
+          }
         />
       </div>
 

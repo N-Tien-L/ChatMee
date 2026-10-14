@@ -8,6 +8,7 @@ import React from "react";
 import ChatRoomsList from "@/components/room/ChatRoomsList";
 import ChatInterface from "@/components/chat/ChatInterface";
 import { CreateRoomModal } from "@/components/room/CreateRoomModal";
+import { NewMessageDialog } from "@/components/room/NewMessageDialog";
 import { EmptyState } from "@/components/common/EmptyState";
 import { ArrowLeft, MessageSquare } from "lucide-react";
 
@@ -16,6 +17,7 @@ const DashboardContent = () => {
   const isCreateRoomModalOpen = useChatRoomsStore(
     (state) => state.isCreateRoomModalOpen
   );
+  const createMode = useChatRoomsStore((state) => state.createRoomModalMode);
   const fetchRooms = useChatRoomsStore((state) => state.fetchRooms);
   const closeCreateRoomModal = useChatRoomsStore(
     (state) => state.closeCreateRoomModal
@@ -63,14 +65,18 @@ const DashboardContent = () => {
           <EmptyState
             className="flex-1"
             icon={<MessageSquare className="h-12 w-12" />}
-            title="Select a chat room"
-            description="Choose a chat room from the sidebar to start messaging"
+            title="Pick up where you left off"
+            description="Choose a chat on the left, or start a new message."
           />
         )}
       </main>
 
       <CreateRoomModal
-        isOpen={isCreateRoomModalOpen}
+        isOpen={isCreateRoomModalOpen && createMode === "room"}
+        onClose={() => closeCreateRoomModal()}
+      />
+      <NewMessageDialog
+        isOpen={isCreateRoomModalOpen && createMode === "direct"}
         onClose={() => closeCreateRoomModal()}
       />
     </div>

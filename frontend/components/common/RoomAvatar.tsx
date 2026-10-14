@@ -1,5 +1,6 @@
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { cn } from "@/lib/utils";
+import { avatarTone } from "./avatarTone";
 
 interface RoomAvatarProps {
   name: string;
@@ -12,7 +13,7 @@ export function RoomAvatar({ name, avatarUrl, className }: RoomAvatarProps) {
   return (
     <Avatar className={cn("h-10 w-10 rounded-lg", className)}>
       {avatarUrl ? <AvatarImage src={avatarUrl} alt="" /> : null}
-      <AvatarFallback className="rounded-lg bg-primary/10 font-semibold text-primary">
+      <AvatarFallback className={cn("rounded-[inherit] bg-transparent font-display font-semibold text-white", avatarTone(name))}>
         {initial}
       </AvatarFallback>
     </Avatar>

@@ -41,7 +41,7 @@ const MessageInput: React.FC<MessageInputProps> = ({
       </p>
       <form
         onSubmit={onSubmit}
-        className="flex items-end gap-2 rounded-[10px] border border-border bg-card p-2 pl-3 focus-within:border-ring focus-within:ring-[3px] focus-within:ring-ring/25"
+        className="flex items-end gap-2 rounded-2xl border border-border bg-card p-2 pl-4 shadow-[0_8px_30px_-12px_rgb(15_31_28/0.18)] transition-shadow focus-within:border-ring focus-within:shadow-[0_8px_40px_-10px_rgb(18_160_138/0.35)] focus-within:ring-[3px] focus-within:ring-ring/20"
       >
         <div className="flex-1 relative min-w-0">
           <label htmlFor={MESSAGE_INPUT_ID} className="sr-only">
@@ -72,7 +72,7 @@ const MessageInput: React.FC<MessageInputProps> = ({
           type="submit"
           disabled={disabled}
           aria-label="Send message"
-          className="h-9 flex-shrink-0 gap-1.5 rounded-md px-3 font-semibold disabled:cursor-not-allowed disabled:opacity-50 sm:px-4"
+          className="h-10 flex-shrink-0 gap-1.5 rounded-xl bg-gradient-to-br from-bubble-own-from to-bubble-own-to px-3 font-semibold shadow-[0_6px_18px_-6px_rgb(11_107_93/0.6)] transition-transform hover:brightness-110 active:scale-95 disabled:cursor-not-allowed disabled:opacity-50 disabled:shadow-none sm:px-4"
         >
           <Send size={16} aria-hidden="true" />
           <span className="hidden sm:inline" aria-hidden="true">Send</span>

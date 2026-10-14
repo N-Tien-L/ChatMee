@@ -12,6 +12,8 @@ interface UserSearchListProps {
   onUserAdd: (user: UserSummaryResponse) => void;
   excludeUserIds?: string[];
   placeHolder?: string;
+  /** Verb shown on each result, for example "Message". */
+  actionLabel?: string;
 }
 
 // Stable default: a new [] on every render would re-run the excludeUserIds effect forever.
@@ -21,6 +23,7 @@ const UserSearchList = ({
   onUserAdd,
   excludeUserIds = NO_EXCLUDED_USERS,
   placeHolder = "Search user by name...",
+  actionLabel,
 }: UserSearchListProps) => {
   const { users, loading, error, searchQuery, filteredUsers, setSearchQuery } =
     useUsersStore(
@@ -89,12 +92,12 @@ const UserSearchList = ({
           placeholder={placeHolder}
           value={searchQuery}
           onChange={handleSearchChange}
-          className="pl-10 pr-4 py-2 border-border focus:border-ring focus:ring-ring"
+          className="h-11 rounded-xl pl-10 pr-4 border-border focus:border-ring focus:ring-ring"
         />
       </div>
 
       {/* Search Results */}
-      <div className="max-h-80 overflow-y-auto space-y-2">
+      <div className="max-h-72 overflow-y-auto space-y-0.5">
         {loading ? (
           // Loading State
           <div
@@ -166,6 +169,7 @@ const UserSearchList = ({
               user={user}
               onAdd={() => handleAddUser(user)}
               isAdded={addedUserIds.has(user.id)}
+              actionLabel={actionLabel}
             />
           ))
         )}

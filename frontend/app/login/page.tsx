@@ -59,11 +59,14 @@ const LoginContent = () => {
 
   return (
     <div className="flex w-full max-w-sm flex-col gap-6">
-      <Link href="/" className="self-center rounded-sm pt-2 font-brand text-5xl leading-none">
-        ChatMee
-      </Link>
+      <div className="flex flex-col items-center gap-3 text-center">
+        <Link href="/" className="rounded-sm pt-2 font-brand text-5xl leading-none">
+          ChatMee
+        </Link>
+        <p className="text-sm text-muted-foreground">Your rooms and people are one click away.</p>
+      </div>
       {unreachable ? (
-        <div role="alert" className="rounded-md border border-warning/40 bg-warning-surface px-4 py-3 text-sm">
+        <div role="alert" className="rounded-xl border border-warning/40 bg-warning-surface px-4 py-3 text-sm">
           <p className="font-semibold text-warning">Can&apos;t reach ChatMee right now.</p>
           <p className="mt-1 text-muted-foreground">
             The server may be waking up. Try again in a minute.
@@ -79,7 +82,7 @@ const LoginContent = () => {
         </div>
       ) : (
         expired && (
-          <p role="status" className="rounded-md border border-border bg-secondary px-4 py-3 text-sm">
+          <p role="status" className="rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-sm">
             Your session ended. Sign in again.
           </p>
         )

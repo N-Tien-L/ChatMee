@@ -5,12 +5,14 @@ import { AppHeader } from "@/components/common/AppHeader";
 import { ConnectionBanner } from "@/components/realtime/ConnectionBanner";
 import ChatRoomsList from "@/components/room/ChatRoomsList";
 import { CreateRoomModal } from "@/components/room/CreateRoomModal";
+import { NewMessageDialog } from "@/components/room/NewMessageDialog";
 import ChatHeader from "@/components/chat/ChatHeader";
 import MessageList from "@/components/chat/MessageList";
 import TypingIndicator from "@/components/chat/TypingIndicator";
 import MessageInput from "@/components/chat/MessageInput";
 import { useAuthStore } from "@/lib/stores/authStore";
 import { useChatRoomsStore } from "@/lib/stores/chatRoomsStore";
+import { useUsersStore } from "@/lib/stores/usersStore";
 import type { ConnectionStatus } from "@/lib/realtime/stompSession";
 import { ChatRoom, Message, MessageType, ParticipantRole, RoomType } from "@/lib/types";
 
@@ -60,6 +62,14 @@ const ROOMS: ChatRoom[] = [
   }),
 ];
 
+const PEOPLE = [
+  { id: "u-lan", name: "Lan Pham", avatarUrl: "" },
+  { id: "u-khoa", name: "Khoa Vu", avatarUrl: "" },
+  { id: "u-minh", name: "Minh Tran", avatarUrl: "" },
+  { id: "u-an", name: "An Nguyen", avatarUrl: "" },
+  { id: "u-ha", name: "Ha Le", avatarUrl: "" },
+];
+
 const msg = (m: Partial<Message> & Pick<Message, "id" | "senderId" | "content" | "createdAt">): Message => ({
   chatRoomId: "r-spring", type: MessageType.TEXT, updatedAt: m.createdAt, isUpdated: false, isDeleted: false, ...m,
 });
@@ -73,6 +83,24 @@ const INITIAL_MESSAGES: Message[] = [
   msg({ id: "m5", senderId: "u-minh", senderName: "Minh Tran", content: "If my resend fires twice, do you get two?", createdAt: minutesAgo(2) }),
   msg({ id: "m6", senderId: "u-minh", senderName: "Minh Tran", content: "One. Same tempId, same stored message.", createdAt: minutesAgo(1) }),
 ];
+
+const DM_MESSAGES: Message[] = [
+  msg({ id: "d1", chatRoomId: "r-lan", senderId: "u-lan", senderName: "Lan Pham", content: "Hey, got a minute?", createdAt: minutesAgo(9) }),
+  msg({ id: "d2", chatRoomId: "r-lan", senderId: "u-lan", senderName: "Lan Pham", content: "Can you look at the resync test? It fails only on my laptop.", createdAt: minutesAgo(8) }),
+  msg({ id: "d3", chatRoomId: "r-lan", senderId: ME.id, senderName: ME.name, isOwn: true, status: "sent", content: "Sure, push the branch and I'll run it after lunch.", createdAt: minutesAgo(5) }),
+  msg({ id: "d4", chatRoomId: "r-lan", senderId: "u-lan", senderName: "Lan Pham", content: "Pushed. Thank you!", createdAt: minutesAgo(4) }),
+];
+
+const PENDING_MESSAGES: Message[] = [
+  msg({ id: "p1", chatRoomId: "r-minh", senderId: ME.id, senderName: ME.name, isOwn: true, status: "sent", content: "Hi! Saw your STOMP talk.", createdAt: minutesAgo(60 * 3) }),
+];
+
+type Conversation = "room" | "dm" | "dm-pending";
+const CONVERSATIONS: Record<Conversation, { room: ChatRoom; messages: Message[] }> = {
+  room: { room: ROOMS[0], messages: INITIAL_MESSAGES },
+  dm: { room: ROOMS[1], messages: DM_MESSAGES },
+  "dm-pending": { room: ROOMS[3], messages: PENDING_MESSAGES },
+};
 
 type ConversationState = "populated" | "loading" | "error" | "empty";
 
@@ -93,6 +121,7 @@ export function PreviewWorkspace() {
   const [ready, setReady] = useState(false);
   const [status, setStatus] = useState<ConnectionStatus>("connected");
   const [conversation, setConversation] = useState<ConversationState>("populated");
+  const [which, setWhich] = useState<Conversation>("room");
   const [typing, setTyping] = useState(true);
   const [failNext, setFailNext] = useState(false);
   const [messages, setMessages] = useState<Message[]>(INITIAL_MESSAGES);
@@ -110,6 +139,30 @@ export function PreviewWorkspace() {
       error: null,
       fetchRooms: async () => {},
       markRoomRead: async () => {},
+      // Mock create: adds the room locally so both create flows can be tried without a backend.
+      createRoom: async (request) => {
+        const person = PEOPLE.find((p) => p.id === request.participantId);
+        const created = room({
+          id: `r-new-${Date.now()}`,
+          roomName: request.roomName ?? "new-room",
+          roomType: request.roomType,
+          maxUsers: request.maxUsers ?? 50,
+          participants: [ME.id],
+          myRole: ParticipantRole.OWNER,
+          lastActivityAt: new Date().toISOString(),
+          ...(person ? { displayName: person.name, counterpart: person, state: "REQUESTED" as const } : {}),
+        });
+        useChatRoomsStore.getState().addRoom(created);
+        return true;
+      },
+    });
+    useUsersStore.setState({
+      users: PEOPLE,
+      filteredUsers: PEOPLE,
+      fetchUsers: async (query = "") => {
+        const q = query.trim().toLowerCase();
+        useUsersStore.setState({ filteredUsers: PEOPLE.filter((p) => p.name.toLowerCase().includes(q)) });
+      },
     });
     setReady(true);
     const pending = timers.current;
@@ -118,6 +171,12 @@ export function PreviewWorkspace() {
 
   const connected = status === "connected";
   const createOpen = useChatRoomsStore((state) => state.isCreateRoomModalOpen);
+  const createMode = useChatRoomsStore((state) => state.createRoomModalMode);
+
+  const pickConversation = (next: Conversation) => {
+    setWhich(next);
+    setMessages(CONVERSATIONS[next].messages);
+  };
 
   const deliver = (tempId: string) => {
     const fail = failNext;
@@ -156,7 +215,7 @@ export function PreviewWorkspace() {
     deliver(tempId);
   };
 
-  const current = ROOMS[0];
+  const current = CONVERSATIONS[which].room;
   const shown = conversation === "populated" ? messages : [];
 
   if (!ready) return null;
@@ -176,13 +235,13 @@ export function PreviewWorkspace() {
             memberCount={current.participants?.length ?? 0}
             onlineCount={5}
             presenceKnown
-            counterpartOnline={false}
+            counterpartOnline={which === "dm"}
             onOpenInfo={() => {}}
           />
           <div className="min-h-0 flex-1">
             <MessageList
               messages={shown}
-              onlineUsers={new Set(["u-minh"])}
+              onlineUsers={new Set(["u-minh", "u-lan"])}
               presenceKnown
               formatDate={formatDate}
               formatTime={formatTime}
@@ -195,9 +254,10 @@ export function PreviewWorkspace() {
               canResend={connected}
               hasMore={false}
               onLoadOlder={() => {}}
+              directWith={current.roomType === RoomType.DIRECT_MESSAGE && current.counterpart ? current.counterpart : null}
             />
           </div>
-          {typing && <TypingIndicator typingUserNames={["Lan Pham"]} typingUsersCount={1} />}
+          {typing && which !== "dm-pending" && <TypingIndicator typingUserNames={["Lan Pham"]} typingUsersCount={1} />}
           <MessageInput
             value={draft}
             onChange={(event) => setDraft(event.target.value)}
@@ -209,8 +269,17 @@ export function PreviewWorkspace() {
         </main>
       </div>
 
-      <CreateRoomModal isOpen={createOpen} onClose={() => useChatRoomsStore.getState().closeCreateRoomModal()} />
+      <CreateRoomModal
+        isOpen={createOpen && createMode === "room"}
+        onClose={() => useChatRoomsStore.getState().closeCreateRoomModal()}
+      />
+      <NewMessageDialog
+        isOpen={createOpen && createMode === "direct"}
+        onClose={() => useChatRoomsStore.getState().closeCreateRoomModal()}
+      />
       <PreviewControls
+        which={which}
+        onWhich={pickConversation}
         status={status}
         onStatus={setStatus}
         conversation={conversation}
@@ -225,6 +294,8 @@ export function PreviewWorkspace() {
 }
 
 interface PreviewControlsProps {
+  which: Conversation;
+  onWhich: (c: Conversation) => void;
   status: ConnectionStatus;
   onStatus: (s: ConnectionStatus) => void;
   conversation: ConversationState;
@@ -252,6 +323,14 @@ function PreviewControls(props: PreviewControlsProps) {
       </div>
       {open && (
         <div className="mt-2 grid gap-2">
+          <label className="grid gap-1">
+            Open chat
+            <select className={field} value={props.which} onChange={(e) => props.onWhich(e.target.value as Conversation)}>
+              <option value="room">room: spring-internals</option>
+              <option value="dm">direct: Lan Pham</option>
+              <option value="dm-pending">direct: Khoa Vu (request)</option>
+            </select>
+          </label>
           <label className="grid gap-1">
             Connection
             <select className={field} value={props.status} onChange={(e) => props.onStatus(e.target.value as ConnectionStatus)}>

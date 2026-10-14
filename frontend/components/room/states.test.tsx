@@ -43,7 +43,7 @@ describe('ChatRoomsList states', () => {
         useChatRoomsStore.setState({ loading: false, error: null, filteredRooms: [] });
         render(<ChatRoomsList />);
         expect(screen.getByRole('button', { name: 'New message' })).toBeInTheDocument();
-        expect(screen.getByRole('button', { name: 'New group' })).toBeInTheDocument();
+        expect(screen.getByRole('button', { name: 'New room' })).toBeInTheDocument();
         expect(screen.getByRole('button', { name: 'Direct', pressed: false })).toBeInTheDocument();
         expect(screen.getByRole('searchbox', { name: 'Search chats' })).toBeInTheDocument();
     });

@@ -1,6 +1,7 @@
 import { User } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { cn } from "@/lib/utils";
+import { avatarTone } from "./avatarTone";
 
 type UserAvatarSize = "sm" | "md" | "lg" | "xl";
 
@@ -20,14 +21,6 @@ const SIZE_CLASSES: Record<UserAvatarSize, string> = {
   xl: "h-24 w-24 text-2xl",
 };
 
-const COLOR_CLASSES = [
-  "bg-chart-1",
-  "bg-chart-2",
-  "bg-chart-3",
-  "bg-chart-4",
-  "bg-chart-5",
-];
-
 export function getInitials(name: string | null | undefined): string {
   const words = (name ?? "").trim().split(/\s+/).filter(Boolean);
   if (words.length === 0) return "?";
@@ -35,14 +28,6 @@ export function getInitials(name: string | null | undefined): string {
   if (words.length === 1) return first.toUpperCase();
   const last = Array.from(words[words.length - 1])[0];
   return (first + last).toUpperCase();
-}
-
-function colorFor(name: string | null | undefined): string {
-  let hash = 0;
-  for (const char of name ?? "") {
-    hash = (hash * 31 + (char.codePointAt(0) ?? 0)) >>> 0;
-  }
-  return COLOR_CLASSES[hash % COLOR_CLASSES.length];
 }
 
 export function UserAvatar({
@@ -67,7 +52,7 @@ export function UserAvatar({
           "font-medium",
           neutral
             ? "bg-muted text-muted-foreground"
-            : `${colorFor(name)} text-primary-foreground`
+            : `bg-transparent ${avatarTone(name)} text-white`
         )}
       >
         {neutral ? <User className="h-1/2 w-1/2" aria-hidden="true" /> : getInitials(name)}

@@ -1,572 +1,329 @@
 "use client";
 
-import { useChatRoomsStore } from "@/lib/stores";
-import { useAuthStore } from "@/lib/stores";
-import { RoomType } from "@/lib/types";
-import { UserSummaryResponse } from "@/lib/types";
-import {
-  Dialog,
-  DialogContent,
-  DialogTitle,
-  DialogHeader,
-  DialogFooter,
-  DialogClose,
-} from "@/components/ui/dialog";
-import { useState, useEffect } from "react";
+import { useState } from "react";
+import { useRouter } from "next/navigation";
+import { ChevronDown, Globe, Hash, Lock, Minus, Plus } from "lucide-react";
+import { useAuthStore, useChatRoomsStore } from "@/lib/stores";
+import { CreateChatRoomRequest, RoomType } from "@/lib/types";
+import { Dialog, DialogClose, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { Checkbox } from "../ui/checkbox";
-import { CreateChatRoomRequest } from "@/lib/types";
-import UserSearchList from "../user/UserSearchList";
-import { X } from "lucide-react";
+import { RoomAvatar } from "@/components/common/RoomAvatar";
+import { cn } from "@/lib/utils";
 
 interface CreateRoomModalProps {
   isOpen: boolean;
   onClose: () => void;
 }
 
+type GroupRoomType = RoomType.PUBLIC | RoomType.PRIVATE;
+
+const TYPES: { value: GroupRoomType; icon: typeof Globe; title: string; body: string }[] = [
+  { value: RoomType.PUBLIC, icon: Globe, title: "Public", body: "Anyone can find it in Discover and join." },
+  { value: RoomType.PRIVATE, icon: Lock, title: "Private", body: "Hidden from Discover. Members only." },
+];
+
+const SIZES = [
+  { label: "Small", value: 10 },
+  { label: "Group", value: 50 },
+  { label: "Community", value: 200 },
+];
+
+const MIN_USERS = 2;
+const MAX_USERS = 1000;
+const MIN_NAME = 3;
+
+/** "New room": a group room (public or private). Direct messages have their own flow (NewMessageDialog). */
 export const CreateRoomModal = ({ isOpen, onClose }: CreateRoomModalProps) => {
+  const router = useRouter();
+  const createRoom = useChatRoomsStore((state) => state.createRoom);
+  const currentUser = useAuthStore((state) => state.user);
+
   const [roomName, setRoomName] = useState("");
   const [description, setDescription] = useState("");
-  const [roomType, setRoomType] = useState<RoomType>(RoomType.PUBLIC);
-  const createRoom = useChatRoomsStore((state) => state.createRoom);
-  const [maxUser, setMaxUser] = useState(2);
-  const [displayMaxUser, setDisplayMaxUser] = useState("2");
+  const [roomType, setRoomType] = useState<GroupRoomType>(RoomType.PUBLIC);
+  const [maxUser, setMaxUser] = useState(50);
+  const [moreOpen, setMoreOpen] = useState(false);
   const [welcomeMessage, setWelcomeMessage] = useState("");
   const [allowFileSharing, setAllowFileSharing] = useState(false);
   const [allowGuestUsers, setAllowGuestUsers] = useState(false);
   const [moderationRequired, setModerationRequired] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
 
-  // Direct Message specific state
-  const [selectedUser, setSelectedUser] = useState<UserSummaryResponse | null>(null);
-  const { user: currentUser } = useAuthStore();
+  const name = roomName.trim();
+  const valid = name.length >= MIN_NAME;
+  const clamp = (value: number) => Math.min(MAX_USERS, Math.max(MIN_USERS, value));
 
-  // Sync displayMaxUser with maxUser when maxUser changes from buttons
-  useEffect(() => {
-    setDisplayMaxUser(maxUser.toString());
-  }, [maxUser]);
-
-  // Reset selected user when room type changes
-  useEffect(() => {
-    if (roomType !== RoomType.DIRECT_MESSAGE) {
-      setSelectedUser(null);
-    }
-  }, [roomType]);
-
-  const increaseMaxUser = () => {
-    const newValue = Math.min(1000, maxUser + 1); // Cap at 1000
-    setMaxUser(newValue);
+  const reset = () => {
+    setRoomName("");
+    setDescription("");
+    setRoomType(RoomType.PUBLIC);
+    setMaxUser(50);
+    setMoreOpen(false);
+    setWelcomeMessage("");
+    setAllowFileSharing(false);
+    setAllowGuestUsers(false);
+    setModerationRequired(false);
   };
 
-  const decreaseMaxUser = () => {
-    const newValue = Math.max(2, maxUser - 1); // Minimum of 2
-    setMaxUser(newValue);
-  };
-
-  const handleUserAdd = (user: UserSummaryResponse) => {
-    setSelectedUser(user);
-  };
-
-  const handleRemoveSelectedUser = () => {
-    setSelectedUser(null);
-  };
-
-  const handleCreateRoom = async () => {
+  const handleCreate = async (event: React.FormEvent) => {
+    event.preventDefault();
+    if (!valid || submitting) return;
     const request: CreateChatRoomRequest = {
-      roomName:
-        roomType === RoomType.DIRECT_MESSAGE
-          ? `${currentUser?.name} & ${selectedUser?.name}`
-          : roomName,
-      description,
-      roomType: roomType,
-      maxUsers: roomType === RoomType.DIRECT_MESSAGE ? 2 : maxUser,
-      settings: {
-        welcomeMessage,
-        allowFileSharing,
-        allowGuestUsers,
-        moderationRequired,
-      },
-      // Add participant for Direct Message
-      ...(roomType === RoomType.DIRECT_MESSAGE &&
-        selectedUser && {
-          participantId: selectedUser.id,
-        }),
+      roomName: name,
+      description: description.trim(),
+      roomType,
+      maxUsers: maxUser,
+      settings: { welcomeMessage, allowFileSharing, allowGuestUsers, moderationRequired },
     };
-
+    setSubmitting(true);
     const success = await createRoom(request);
-    if (success) {
-      // Reset form
-      setRoomName("");
-      setDescription("");
-      setRoomType(RoomType.PUBLIC);
-      setSelectedUser(null);
-      setAllowFileSharing(false);
-      setAllowGuestUsers(false);
-      setModerationRequired(false);
-      setWelcomeMessage("");
-      onClose();
-    }
-  };
-
-  // Check if form is valid
-  const isFormValid = () => {
-    if (roomType === RoomType.DIRECT_MESSAGE) {
-      return selectedUser !== null;
-    }
-    return roomName.trim().length >= 3;
+    setSubmitting(false);
+    if (!success) return;
+    const created = useChatRoomsStore
+      .getState()
+      .rooms.find((room) => room.roomName === name && room.roomType === roomType && room.createdBy === currentUser?.id);
+    reset();
+    onClose();
+    if (created) router.push(`/dashboard?roomId=${created.id}`, { scroll: false });
   };
 
   return (
-    <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="sm:max-w-[900px] max-h-[90vh] overflow-y-auto">
-        <DialogHeader className="space-y-3">
-          <DialogTitle className="text-2xl font-semibold text-center">
-            {roomType === RoomType.DIRECT_MESSAGE
-              ? "Start a Direct Conversation"
-              : "Create a New Chat Room"}
-          </DialogTitle>
-        </DialogHeader>
-
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 py-4">
-          {/* Left Column - Form */}
-          <div className="space-y-6">
-            {/* Room Type Selection */}
-            <div className="space-y-3">
-              <Label htmlFor="room-type" className="text-sm font-medium">
-                Room Type
-              </Label>
-              <Select
-                value={roomType}
-                onValueChange={(value) => setRoomType(value as RoomType)}
-              >
-                <SelectTrigger className="w-full">
-                  <SelectValue placeholder="Select a room type" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value={RoomType.PUBLIC}>
-                    <div className="flex items-center gap-2">
-                      <span className="w-2 h-2 bg-success rounded-full"></span>
-                      Public Room
-                    </div>
-                  </SelectItem>
-                  <SelectItem value={RoomType.PRIVATE}>
-                    <div className="flex items-center gap-2">
-                      <span className="w-2 h-2 bg-warning rounded-full"></span>
-                      Private Room
-                    </div>
-                  </SelectItem>
-                  <SelectItem value={RoomType.DIRECT_MESSAGE}>
-                    <div className="flex items-center gap-2">
-                      <span className="w-2 h-2 bg-primary rounded-full"></span>
-                      Direct Message
-                    </div>
-                  </SelectItem>
-                </SelectContent>
-              </Select>
+    <Dialog open={isOpen} onOpenChange={(next) => !next && onClose()}>
+      <DialogContent className="max-h-[92dvh] gap-0 overflow-y-auto rounded-2xl p-0 sm:max-w-[820px]">
+        <form onSubmit={handleCreate} className="grid md:grid-cols-[minmax(0,1fr)_300px]">
+          <div className="space-y-6 p-6 sm:p-7">
+            <div>
+              <DialogTitle className="font-display text-2xl font-semibold tracking-[-0.02em]">New room</DialogTitle>
+              <DialogDescription className="mt-1">A place for a group. You can change all of this later.</DialogDescription>
             </div>
 
-            {/* Form Fields - Only for non-DM rooms */}
-            {roomType !== RoomType.DIRECT_MESSAGE ? (
-              <div className="space-y-5">
-                {/* Room Name */}
-                <div className="space-y-2">
-                  <Label htmlFor="room-name" className="text-sm font-medium">
-                    Room Name <span className="text-destructive">*</span>
-                  </Label>
-                  <Input
-                    id="room-name"
-                    value={roomName}
-                    onChange={(e) => setRoomName(e.target.value)}
-                    className="w-full"
-                    placeholder="e.g., Project Phoenix, Marketing Team"
-                    maxLength={50}
-                  />
-                  <p className="text-xs text-muted-foreground">
-                    3-50 characters. This will be displayed in room listings and
-                    invitations.
-                  </p>
-                </div>
+            <div className="space-y-2">
+              <Label htmlFor="room-name">Room name</Label>
+              <Input
+                id="room-name"
+                autoFocus
+                value={roomName}
+                onChange={(e) => setRoomName(e.target.value)}
+                placeholder="e.g. weekend-hike, cs101-study"
+                maxLength={60}
+                aria-describedby="room-name-hint"
+                className="h-11 rounded-xl"
+              />
+              <p id="room-name-hint" className="text-xs text-muted-foreground">
+                At least {MIN_NAME} characters.
+              </p>
+            </div>
 
-                {/* Description */}
-                <div className="space-y-2">
-                  <Label htmlFor="description" className="text-sm font-medium">
-                    Description
-                  </Label>
-                  <Input
-                    id="description"
-                    value={description}
-                    onChange={(e) => setDescription(e.target.value)}
-                    className="w-full"
-                    placeholder="Brief description of this room's purpose"
-                    maxLength={200}
-                  />
-                  <p className="text-xs text-muted-foreground">
-                    Optional. Up to 200 characters. Help others understand what
-                    this room is for.
-                  </p>
-                </div>
-
-                {/* Max Users */}
-                <div className="space-y-2">
-                  <Label htmlFor="maxUser" className="text-sm font-medium">
-                    Maximum Users
-                  </Label>
-                  <div className="flex items-center gap-3">
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      onClick={decreaseMaxUser}
-                      aria-label="Decrease maximum users"
-                      className="h-9 w-9 p-0"
-                      disabled={maxUser <= 2}
-                    >
-                      -
-                    </Button>
-                    <Input
-                      id="maxUser"
-                      type="number"
-                      value={displayMaxUser}
-                      onChange={(e) => {
-                        const val = e.target.value;
-                        setDisplayMaxUser(val);
-                        if (val === "") return;
-                        const num = parseInt(val, 10);
-                        if (!isNaN(num) && num >= 2 && num <= 1000) {
-                          setMaxUser(num);
-                        }
-                      }}
-                      onBlur={() => {
-                        if (
-                          displayMaxUser === "" ||
-                          isNaN(parseInt(displayMaxUser, 10))
-                        ) {
-                          setDisplayMaxUser("2");
-                          setMaxUser(2);
-                        } else {
-                          const num = parseInt(displayMaxUser, 10);
-                          const clampedNum = Math.max(2, Math.min(1000, num));
-                          setDisplayMaxUser(clampedNum.toString());
-                          setMaxUser(clampedNum);
-                        }
-                      }}
-                      min={2}
-                      max={1000}
-                      className="w-20 text-center"
-                    />
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      onClick={increaseMaxUser}
-                      aria-label="Increase maximum users"
-                      className="h-9 w-9 p-0"
-                      disabled={maxUser >= 1000}
-                    >
-                      +
-                    </Button>
-                    <span className="text-sm text-muted-foreground ml-2">users</span>
-                  </div>
-                  <p className="text-xs text-muted-foreground">
-                    Set the maximum number of users allowed in this room
-                    (2-1000).
-                  </p>
-                </div>
-
-                {/* Welcome Message */}
-                <div className="space-y-2">
-                  <Label
-                    htmlFor="welcome-message"
-                    className="text-sm font-medium"
-                  >
-                    Welcome Message
-                  </Label>
-                  <Input
-                    id="welcome-message"
-                    value={welcomeMessage}
-                    onChange={(e) => setWelcomeMessage(e.target.value)}
-                    className="w-full"
-                    placeholder="Say hello to other participants!"
-                  />
-                </div>
-
-                {/* Settings */}
-                <div className="space-y-3">
-                  <Label className="text-sm font-medium">Room Settings</Label>
-                  <div className="space-y-4 bg-muted rounded-lg p-4">
-                    <div className="space-y-1">
-                      <div className="flex items-center space-x-3">
-                        <Checkbox
-                          id="allowFileSharing"
-                          checked={allowFileSharing}
-                          onCheckedChange={(checked) =>
-                            setAllowFileSharing(!!checked)
-                          }
-                        />
-                        <Label
-                          htmlFor="allowFileSharing"
-                          className="text-sm text-foreground cursor-pointer font-medium"
-                        >
-                          Allow file sharing
-                        </Label>
-                      </div>
-                      <p className="text-xs text-muted-foreground ml-7">
-                        Members can upload and share files, images, and
-                        documents
-                      </p>
-                    </div>
-
-                    <div className="space-y-1">
-                      <div className="flex items-center space-x-3">
-                        <Checkbox
-                          id="allowGuestUsers"
-                          checked={allowGuestUsers}
-                          onCheckedChange={(checked) =>
-                            setAllowGuestUsers(!!checked)
-                          }
-                        />
-                        <Label
-                          htmlFor="allowGuestUsers"
-                          className="text-sm text-foreground cursor-pointer font-medium"
-                        >
-                          Allow guest users
-                        </Label>
-                      </div>
-                      <p className="text-xs text-muted-foreground ml-7">
-                        {roomType === RoomType.PUBLIC
-                          ? "Anyone can join without registration (recommended for public rooms)"
-                          : "Unregistered users can join via invitation link"}
-                      </p>
-                    </div>
-
-                    <div className="space-y-1">
-                      <div className="flex items-center space-x-3">
-                        <Checkbox
-                          id="moderationRequired"
-                          checked={moderationRequired}
-                          onCheckedChange={(checked) =>
-                            setModerationRequired(!!checked)
-                          }
-                        />
-                        <Label
-                          htmlFor="moderationRequired"
-                          className="text-sm text-foreground cursor-pointer font-medium"
-                        >
-                          Moderation required
-                        </Label>
-                      </div>
-                      <p className="text-xs text-muted-foreground ml-7">
-                        Messages from new members require approval before being
-                        visible
-                      </p>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            ) : (
-              <div className="space-y-4">
-                {/* Selected User Display */}
-                {selectedUser && (
-                  <div className="space-y-2">
-                    <Label className="text-sm font-medium">Selected User</Label>
-                    <div className="flex items-center gap-3 p-3 bg-accent border border-primary/30 rounded-lg">
-                      {selectedUser.avatarUrl ? (
-                        <img
-                          src={selectedUser.avatarUrl}
-                          alt={`${selectedUser.name}'s avatar`}
-                          className="w-8 h-8 rounded-full object-cover"
-                        />
-                      ) : (
-                        <div className="w-8 h-8 rounded-full bg-primary flex items-center justify-center text-primary-foreground text-xs font-medium">
-                          {selectedUser.name
-                            .split(" ")
-                            .map((n) => n[0])
-                            .join("")
-                            .toUpperCase()
-                            .slice(0, 2)}
-                        </div>
+            <fieldset className="space-y-2">
+              <legend className="mb-2 text-sm font-medium">Who can join</legend>
+              <div className="grid gap-3 sm:grid-cols-2">
+                {TYPES.map(({ value, icon: Icon, title, body }) => {
+                  const selected = roomType === value;
+                  return (
+                    <label
+                      key={value}
+                      className={cn(
+                        "relative flex cursor-pointer gap-3 rounded-xl border p-4 transition-all has-[:focus-visible]:ring-[3px] has-[:focus-visible]:ring-ring/30",
+                        selected
+                          ? "border-primary bg-accent shadow-[0_8px_24px_-14px_rgb(11_107_93/0.7)]"
+                          : "border-border hover:border-primary/40 hover:bg-accent/40"
                       )}
-                      <div className="flex-1">
-                        <p className="font-medium text-sm">
-                          {selectedUser.name}
-                        </p>
-                      </div>
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        onClick={handleRemoveSelectedUser}
-                        className="h-6 w-6 p-0 text-muted-foreground hover:text-destructive"
-                        aria-label={`Remove ${selectedUser.name}`}
+                    >
+                      <input
+                        type="radio"
+                        name="room-type"
+                        value={value}
+                        checked={selected}
+                        onChange={() => setRoomType(value)}
+                        className="sr-only"
+                      />
+                      <span
+                        className={cn(
+                          "grid h-9 w-9 flex-shrink-0 place-items-center rounded-lg",
+                          selected ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground"
+                        )}
                       >
-                        <X className="w-4 h-4" aria-hidden="true" />
-                      </Button>
-                    </div>
-                  </div>
-                )}
+                        <Icon className="h-4 w-4" aria-hidden="true" />
+                      </span>
+                      <span>
+                        <span className="block text-sm font-semibold">{title}</span>
+                        <span className="block text-xs text-muted-foreground">{body}</span>
+                      </span>
+                    </label>
+                  );
+                })}
+              </div>
+            </fieldset>
 
-                {/* User Search */}
-                <div className="space-y-2">
-                  <Label className="text-sm font-medium">
-                    {selectedUser
-                      ? "Change Partner"
-                      : "Choose Your Chat Partner"}
-                  </Label>
-                  <UserSearchList
-                    onUserAdd={handleUserAdd}
-                    excludeUserIds={currentUser?.id ? [currentUser.id] : []}
-                    placeHolder="Search for someone to chat with..."
+            <fieldset className="space-y-2">
+              <legend className="mb-2 text-sm font-medium">Size</legend>
+              <div className="flex flex-wrap items-center gap-2">
+                {SIZES.map((size) => (
+                  <button
+                    key={size.value}
+                    type="button"
+                    aria-pressed={maxUser === size.value}
+                    onClick={() => setMaxUser(size.value)}
+                    className={cn(
+                      "rounded-full border px-3.5 py-1.5 text-sm transition-colors",
+                      maxUser === size.value
+                        ? "border-primary bg-primary text-primary-foreground"
+                        : "border-border hover:bg-accent"
+                    )}
+                  >
+                    {size.label} <span className="font-mono text-xs tabular opacity-75">{size.value}</span>
+                  </button>
+                ))}
+                <div className="ml-auto flex items-center rounded-full border border-border">
+                  <button
+                    type="button"
+                    aria-label="Decrease maximum members"
+                    onClick={() => setMaxUser((v) => clamp(v - 1))}
+                    disabled={maxUser <= MIN_USERS}
+                    className="grid h-8 w-8 place-items-center rounded-full hover:bg-accent disabled:opacity-40"
+                  >
+                    <Minus className="h-3.5 w-3.5" aria-hidden="true" />
+                  </button>
+                  <label htmlFor="maxUser" className="sr-only">
+                    Maximum members
+                  </label>
+                  <input
+                    id="maxUser"
+                    type="number"
+                    min={MIN_USERS}
+                    max={MAX_USERS}
+                    value={maxUser}
+                    onChange={(e) => setMaxUser(clamp(Number(e.target.value) || MIN_USERS))}
+                    className="w-14 bg-transparent text-center font-mono text-sm tabular outline-none [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none"
                   />
+                  <button
+                    type="button"
+                    aria-label="Increase maximum members"
+                    onClick={() => setMaxUser((v) => clamp(v + 1))}
+                    disabled={maxUser >= MAX_USERS}
+                    className="grid h-8 w-8 place-items-center rounded-full hover:bg-accent disabled:opacity-40"
+                  >
+                    <Plus className="h-3.5 w-3.5" aria-hidden="true" />
+                  </button>
                 </div>
               </div>
-            )}
-          </div>
+            </fieldset>
 
-          {/* Right Column - Room Type Info & Tips */}
-          <div className="space-y-4">
-            <div className="space-y-3">
-              <h3 className="text-lg font-semibold text-foreground">
-                {roomType === RoomType.DIRECT_MESSAGE
-                  ? "Direct Message Guide"
-                  : "Room Type Guide"}
-              </h3>
+            <div className="space-y-2">
+              <Label htmlFor="description">
+                Description <span className="font-normal text-muted-foreground">(optional)</span>
+              </Label>
+              <Input
+                id="description"
+                value={description}
+                onChange={(e) => setDescription(e.target.value)}
+                placeholder="What is this room for?"
+                maxLength={200}
+                className="h-11 rounded-xl"
+              />
+            </div>
 
-              {/* Room Type Descriptions */}
-              {roomType === RoomType.PUBLIC && (
-                <div className="bg-accent border border-primary/30 rounded-lg p-4">
-                  <div className="flex items-center gap-2 mb-2">
-                    <span className="w-3 h-3 bg-success rounded-full"></span>
-                    <span className="text-sm font-medium text-foreground">
-                      Public Room
-                    </span>
+            <div className="rounded-xl border border-border">
+              <button
+                type="button"
+                aria-expanded={moreOpen}
+                aria-controls="room-more-options"
+                onClick={() => setMoreOpen((v) => !v)}
+                className="flex w-full items-center justify-between rounded-xl px-4 py-3 text-sm font-medium hover:bg-accent/50"
+              >
+                More options
+                <ChevronDown
+                  className={cn("h-4 w-4 transition-transform", moreOpen && "rotate-180")}
+                  aria-hidden="true"
+                />
+              </button>
+              {moreOpen && (
+                <div id="room-more-options" className="space-y-4 border-t border-border px-4 py-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="welcomeMessage">Welcome message</Label>
+                    <Input
+                      id="welcomeMessage"
+                      value={welcomeMessage}
+                      onChange={(e) => setWelcomeMessage(e.target.value)}
+                      placeholder="Say hello to new members"
+                      className="rounded-xl"
+                    />
                   </div>
-                  <p className="text-sm text-success mb-3">
-                    • Anyone can discover and join this room
-                    <br />
-                    • Visible in public room listings
-                    <br />
-                    • No invitation required
-                    <br />• Best for open discussions and communities
-                  </p>
-                  <div className="bg-secondary rounded-lg p-3">
-                    <p className="text-xs text-muted-foreground">
-                      💡 <strong>Public Room Tip:</strong> Moderation is
-                      recommended for large public rooms. Guest access makes it
-                      easier for new users to join your community.
-                    </p>
-                  </div>
-                </div>
-              )}
-
-              {roomType === RoomType.PRIVATE && (
-                <div className="bg-warning-surface border border-warning/30 rounded-lg p-4">
-                  <div className="flex items-center gap-2 mb-2">
-                    <span className="w-3 h-3 bg-warning rounded-full"></span>
-                    <span className="text-sm font-medium text-foreground">
-                      Private Room
-                    </span>
-                  </div>
-                  <p className="text-sm text-warning mb-3">
-                    • Invitation-only access
-                    <br />
-                    • Not visible in public listings
-                    <br />
-                    • Members must be invited by room admin
-                    <br />• Best for team discussions and private groups
-                  </p>
-                  <div className="bg-warning-surface rounded-lg p-3">
-                    <p className="text-xs text-warning">
-                      💡 <strong>Private Room Tip:</strong> Consider enabling
-                      moderation for better control over discussions. File
-                      sharing can be disabled if you prefer external file
-                      management.
-                    </p>
-                  </div>
-                </div>
-              )}
-
-              {roomType === RoomType.DIRECT_MESSAGE && (
-                <div className="bg-accent border border-primary/30 rounded-lg p-4">
-                  <div className="flex items-center gap-2 mb-2">
-                    <span className="w-3 h-3 bg-primary rounded-full"></span>
-                    <span className="text-sm font-medium text-foreground">
-                      Direct Message
-                    </span>
-                  </div>
-                  <p className="text-sm text-primary mb-3">
-                    • One-on-one private conversations
-                    <br />
-                    • Direct and immediate communication
-                    <br />
-                    • Only visible to participants
-                    <br />• Perfect for private discussions
-                  </p>
-                  <div className="bg-accent rounded-lg p-3">
-                    <p className="text-xs text-primary">
-                      💡 <strong>Direct Message Tip:</strong> Choose your chat
-                      partner carefully. Once created, you can start chatting
-                      immediately with full privacy.
-                    </p>
-                  </div>
+                  {[
+                    { id: "allowFileSharing", label: "Allow file sharing", checked: allowFileSharing, set: setAllowFileSharing },
+                    { id: "allowGuestUsers", label: "Allow guest users", checked: allowGuestUsers, set: setAllowGuestUsers },
+                    { id: "moderationRequired", label: "Require moderation", checked: moderationRequired, set: setModerationRequired },
+                  ].map((option) => (
+                    <div key={option.id} className="flex items-center gap-2.5">
+                      <Checkbox
+                        id={option.id}
+                        checked={option.checked}
+                        onCheckedChange={(checked) => option.set(checked === true)}
+                      />
+                      <Label htmlFor={option.id} className="font-normal">
+                        {option.label}
+                      </Label>
+                    </div>
+                  ))}
                 </div>
               )}
             </div>
+          </div>
 
-            {/* General Tips */}
-            {roomType !== RoomType.DIRECT_MESSAGE && (
-              <div className="space-y-3">
-                <h4 className="text-md font-medium text-foreground">
-                  General Guidelines
-                </h4>
-                <div className="bg-muted border border-border rounded-lg p-4">
-                  <div className="space-y-3 text-xs text-muted-foreground">
-                    <div>
-                      <strong>Room Name:</strong> Choose descriptive names that
-                      clearly indicate the room&apos;s purpose.
-                    </div>
-                    <div>
-                      <strong>Max Users:</strong> Consider your community size.
-                      Start small and increase as needed.
-                    </div>
-                    <div>
-                      <strong>File Sharing:</strong> Enable for collaborative
-                      work, disable for focused discussions.
-                    </div>
-                    <div>
-                      <strong>Guest Access:</strong> Great for public engagement
-                      but consider moderation needs.
-                    </div>
+          <aside
+            aria-label="Preview"
+            className="flex flex-col justify-between gap-6 border-t border-border bg-gradient-to-b from-accent/70 to-secondary p-6 md:border-t-0 md:border-l"
+          >
+            <div>
+              <p className="text-[11px] font-medium uppercase tracking-[0.1em] text-muted-foreground">Preview</p>
+              <div className="mt-3 rounded-2xl bg-card p-4 shadow-[0_18px_40px_-24px_rgb(15_31_28/0.45)] ring-1 ring-border">
+                <div className="flex items-center gap-3">
+                  <RoomAvatar name={name || "#"} className="h-11 w-11 rounded-xl" />
+                  <div className="min-w-0">
+                    <p className="flex items-center gap-1.5 truncate font-display text-lg font-semibold">
+                      {roomType === RoomType.PRIVATE ? (
+                        <Lock className="h-3.5 w-3.5 flex-shrink-0 text-muted-foreground" aria-hidden="true" />
+                      ) : (
+                        <Hash className="h-3.5 w-3.5 flex-shrink-0 text-muted-foreground" aria-hidden="true" />
+                      )}
+                      <span className="truncate">{name || "your-room"}</span>
+                    </p>
+                    <p className="truncate text-xs text-muted-foreground">
+                      {description.trim() || (roomType === RoomType.PRIVATE ? "Private room" : "Public room")}
+                    </p>
                   </div>
                 </div>
+                <dl className="mt-4 grid grid-cols-2 gap-2 text-xs">
+                  <div className="rounded-lg bg-muted px-2.5 py-2">
+                    <dt className="text-muted-foreground">Members</dt>
+                    <dd className="font-mono font-medium tabular">1/{maxUser}</dd>
+                  </div>
+                  <div className="rounded-lg bg-muted px-2.5 py-2">
+                    <dt className="text-muted-foreground">Visibility</dt>
+                    <dd className="font-medium">{roomType === RoomType.PRIVATE ? "Members only" : "Discoverable"}</dd>
+                  </div>
+                </dl>
               </div>
-            )}
-          </div>
-        </div>
-
-        <DialogFooter className="gap-3 pt-4">
-          <DialogClose asChild>
-            <Button type="button" variant="outline" className="flex-1">
-              Cancel
-            </Button>
-          </DialogClose>
-          <Button
-            type="submit"
-            onClick={handleCreateRoom}
-            disabled={!isFormValid()}
-            className="flex-1 bg-primary hover:bg-primary/90"
-          >
-            {roomType === RoomType.DIRECT_MESSAGE
-              ? "Start Chat"
-              : "Create Room"}
-          </Button>
-        </DialogFooter>
+            </div>
+            <div className="flex gap-2">
+              <DialogClose asChild>
+                <Button type="button" variant="outline" className="h-11 flex-1 rounded-xl">
+                  Cancel
+                </Button>
+              </DialogClose>
+              <Button
+                type="submit"
+                disabled={!valid || submitting}
+                className="h-11 flex-1 rounded-xl bg-gradient-to-br from-bubble-own-from to-bubble-own-to font-semibold shadow-[0_8px_20px_-8px_rgb(11_107_93/0.7)]"
+              >
+                {submitting ? "Creating…" : "Create room"}
+              </Button>
+            </div>
+          </aside>
+        </form>
       </DialogContent>
     </Dialog>
   );

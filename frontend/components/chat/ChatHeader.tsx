@@ -2,8 +2,10 @@
 
 import React from "react";
 import { Button } from "../ui/button";
-import { Info, Lock } from "lucide-react";
+import { Hash, Info, Lock } from "lucide-react";
 import { ChatRoom, RoomType } from "@/lib/types";
+import { RoomAvatar } from "@/components/common/RoomAvatar";
+import { UserAvatar } from "@/components/common/UserAvatar";
 
 interface ChatHeaderProps {
   room: ChatRoom;
@@ -43,39 +45,87 @@ export const roomFields = ({
   return fields;
 };
 
-const ChatHeader: React.FC<ChatHeaderProps> = (props) => {
+const shell =
+  "relative flex flex-shrink-0 items-center gap-3 border-b border-border bg-card/80 px-3 py-3 backdrop-blur sm:gap-4 sm:px-7 sm:py-3.5";
+
+function InfoButton({ onOpenInfo }: { onOpenInfo: () => void }) {
+  return (
+    <Button variant="ghost" size="sm" className="flex-shrink-0 rounded-xl p-2" aria-label="Room info" onClick={onOpenInfo}>
+      <Info size={18} aria-hidden="true" />
+    </Button>
+  );
+}
+
+/** A direct message reads as a person: avatar with presence, name and status. No room fields. */
+function DirectHeader({ room, presenceKnown, counterpartOnline, onOpenInfo }: ChatHeaderProps) {
+  const name = room.counterpart?.name || room.displayName || room.roomName;
+  const pending = room.state === "REQUESTED";
+  const status = !presenceKnown ? "Direct message" : counterpartOnline ? "Online now" : "Offline";
+  return (
+    <div className={shell}>
+      <div className="relative flex-shrink-0">
+        <UserAvatar name={name} avatarUrl={room.counterpart?.avatarUrl} size="lg" className="h-11 w-11" />
+        {presenceKnown && (
+          <span
+            aria-hidden="true"
+            className={`absolute -right-0.5 -bottom-0.5 h-3.5 w-3.5 rounded-full border-2 border-card ${
+              counterpartOnline ? "bg-success text-success animate-live" : "bg-muted-foreground/40"
+            }`}
+          />
+        )}
+      </div>
+      <div className="min-w-0 flex-1">
+        <h2 className="truncate font-display text-xl font-semibold leading-tight tracking-[-0.02em] text-foreground sm:text-2xl">
+          {name}
+        </h2>
+        <p className="mt-0.5 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+          <span>{status}</span>
+          {pending && (
+            <span className="rounded-full bg-warning-surface px-2 py-0.5 font-medium text-warning">
+              Waiting for them to accept
+            </span>
+          )}
+        </p>
+      </div>
+      <InfoButton onOpenInfo={onOpenInfo} />
+    </div>
+  );
+}
+
+/** A group room reads as a place: room mark, name and labelled fields (type, members, online). */
+function RoomHeader(props: ChatHeaderProps) {
   const { room, onOpenInfo } = props;
   const fields = roomFields(props);
   const title = room.displayName || room.roomName;
+  const isPrivate = room.roomType === RoomType.PRIVATE;
 
   return (
-    <div className="flex flex-shrink-0 items-end gap-3 border-b bg-card px-3 py-3 sm:gap-5 sm:px-7 sm:py-4">
-      <div className="min-w-0 flex-1 sm:flex sm:items-end sm:gap-6">
-        <h2 className="flex min-w-0 items-center gap-2 text-xl font-bold leading-none tracking-[-0.02em] text-foreground sm:text-[26px]">
-          {room.roomType === RoomType.PRIVATE && (
+    <div className={shell}>
+      <RoomAvatar name={title} className="hidden h-11 w-11 flex-shrink-0 rounded-xl sm:flex" />
+      <div className="min-w-0 flex-1">
+        <h2 className="flex min-w-0 items-center gap-1.5 font-display text-xl font-semibold leading-tight tracking-[-0.02em] text-foreground sm:text-2xl">
+          {isPrivate ? (
             <Lock className="h-4 w-4 flex-shrink-0 text-muted-foreground" aria-hidden="true" />
+          ) : (
+            <Hash className="h-4 w-4 flex-shrink-0 text-muted-foreground" aria-hidden="true" />
           )}
           <span className="truncate">{title}</span>
         </h2>
-        <dl className="mt-2 flex gap-4 sm:mt-0 sm:gap-6">
+        <dl className="mt-1 flex flex-wrap gap-1.5">
           {fields.map((field) => (
-            <div key={field.label} className="min-w-0">
-              <dt className="text-[10px] uppercase leading-none tracking-[0.1em] text-muted-foreground">
-                {field.label}
-              </dt>
-              <dd className="mt-1 font-mono text-[13px] font-medium leading-none tabular text-foreground">
-                {field.value}
-              </dd>
+            <div key={field.label} className="flex items-center gap-1 rounded-full bg-muted px-2 py-0.5 text-[11px]">
+              <dt className="text-muted-foreground">{field.label}</dt>
+              <dd className="font-mono font-medium tabular text-foreground">{field.value}</dd>
             </div>
           ))}
         </dl>
       </div>
-
-      <Button variant="ghost" size="sm" className="flex-shrink-0 p-2" aria-label="Room info" onClick={onOpenInfo}>
-        <Info size={18} aria-hidden="true" />
-      </Button>
+      <InfoButton onOpenInfo={onOpenInfo} />
     </div>
   );
-};
+}
+
+const ChatHeader: React.FC<ChatHeaderProps> = (props) =>
+  props.room.roomType === RoomType.DIRECT_MESSAGE ? <DirectHeader {...props} /> : <RoomHeader {...props} />;
 
 export default ChatHeader;

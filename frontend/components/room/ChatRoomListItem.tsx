@@ -22,9 +22,10 @@ interface ChatRoomListItemProps {
 const previewText = (room: ChatRoom, currentUserId: string | undefined): string => {
   const last = room.lastMessage;
   if (!last) return room.description || "No messages yet";
-  return last.senderId === currentUserId
-    ? `You: ${last.preview}`
-    : `${last.senderName || "Someone"}: ${last.preview}`;
+  if (last.senderId === currentUserId) return `You: ${last.preview}`;
+  // In a direct message the sender is obvious; the preview is just their words.
+  if (room.roomType === RoomType.DIRECT_MESSAGE) return last.preview;
+  return `${last.senderName || "Someone"}: ${last.preview}`;
 };
 
 const ChatRoomListItem: React.FC<ChatRoomListItemProps> = ({
@@ -96,23 +97,23 @@ const ChatRoomListItem: React.FC<ChatRoomListItemProps> = ({
 
   return (
     <div
-      className={`relative group cursor-pointer border-l-[3px] transition-colors ${
+      className={`relative group cursor-pointer rounded-xl transition-all duration-200 ${
         isSelected
-          ? "border-primary bg-sidebar-accent"
-          : "border-transparent hover:bg-accent/60 active:bg-accent"
+          ? "bg-sidebar-accent shadow-[inset_3px_0_0_var(--primary)] ring-1 ring-primary/15"
+          : "hover:bg-accent/60 active:bg-accent"
       }`}
       onClick={onClick}
     >
-      <div className="flex min-h-14 items-center gap-2.5 px-3 py-2.5 sm:px-4">
+      <div className="flex min-h-14 items-center gap-3 px-2.5 py-2.5">
         <div className="flex-shrink-0">
           {isDirect ? (
             <UserAvatar
               name={roomName}
               avatarUrl={room.counterpart?.avatarUrl}
-              size="md"
+              size="lg"
             />
           ) : (
-            <RoomAvatar name={roomName} className="h-9 w-9" />
+            <RoomAvatar name={roomName} className="h-10 w-10 rounded-xl" />
           )}
         </div>
 
