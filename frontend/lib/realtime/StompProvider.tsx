@@ -6,6 +6,7 @@ import axios from "axios";
 import { authApi } from "@/lib/api/authApi";
 import { chatRoomApi } from "@/lib/api/chatRoomApi";
 import { useAuthStore } from "@/lib/stores/authStore";
+import { useInboxStore } from "@/lib/stores/inboxStore";
 import { useChatRoomsStore } from "@/lib/stores/chatRoomsStore";
 import { PresenceMessage, useChatStore } from "@/lib/stores/chatStore";
 import { createStompClientFactory } from "./stompClient";
@@ -83,6 +84,7 @@ export function StompProvider({ children }: { children: ReactNode }) {
             return; // Ignore malformed event frames.
         }
         void useChatRoomsStore.getState().handleUserEvent(event);
+        useInboxStore.getState().handleUserEvent(event);
     }), [session]);
 
     // Events are not replayed, so every connect (first and reconnect) refetches the room list and
@@ -91,6 +93,7 @@ export function StompProvider({ children }: { children: ReactNode }) {
         if (!userId) return;
         const refetch = () => {
             void useChatRoomsStore.getState().fetchRooms();
+            void useInboxStore.getState().fetchInbox();
             chatRoomApi.getOnlineUsers()
                 .then(users => useChatStore.getState().setOnlineUsers(users))
                 .catch(() => {
