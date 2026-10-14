@@ -7,7 +7,7 @@ import { Skeleton } from "../ui/skeleton";
 import { Button } from "../ui/button";
 import { UserAvatar } from "../common/UserAvatar";
 import { isDeletedUser } from "../common/deletedUser";
-import { DeliveryTab } from "./DeliveryTab";
+import { DeliveryTab, useJustConfirmed } from "./DeliveryTab";
 
 /** Distance from the top of the list at which the next older page is requested. */
 const LOAD_OLDER_THRESHOLD_PX = 48;
@@ -52,6 +52,13 @@ const startsGroup = (messages: Message[], index: number, showDate: boolean) => {
   if (previous.senderId !== current.senderId) return true;
   return Date.parse(current.createdAt) - Date.parse(previous.createdAt) > GROUP_WINDOW_MS;
 };
+
+/** Your own bubble: floats a little while sending, then settles with one ember ring when the server confirms. */
+function OwnBubble({ status, className, children }: { status: Message["status"]; className: string; children: React.ReactNode }) {
+  const confirmed = useJustConfirmed(status);
+  const motionClass = status === "sending" ? "is-sending" : confirmed ? "animate-sent" : "";
+  return <div className={`${className} ${motionClass}`}>{children}</div>;
+}
 
 const MessageList: React.FC<MessageListProps> = (props) => {
   const { messages, messagesEndRef, hasMore = false, loadingOlder = false, olderError = null, onLoadOlder, loading = false, error = null } = props;
@@ -323,8 +330,9 @@ const MessageListContent: React.FC<MessageListContentProps> = ({
                   data-message-type={message.type}
                   className={`animate-message-in flex flex-col items-end gap-1 ${groupStart ? "mt-4" : "mt-1"}`}
                 >
-                  <div
-                    className={`max-w-[85%] sm:max-w-md lg:max-w-xl rounded-2xl rounded-br-md px-3.5 py-2 break-words transition-colors duration-300 ${
+                  <OwnBubble
+                    status={message.status}
+                    className={`max-w-[85%] sm:max-w-md lg:max-w-xl rounded-2xl rounded-br-md px-3.5 py-2 break-words transition-[colors,transform,box-shadow] duration-300 ${
                       failed
                         ? "border-[1.5px] border-destructive bg-card text-foreground"
                         : pending
@@ -333,7 +341,7 @@ const MessageListContent: React.FC<MessageListContentProps> = ({
                     }`}
                   >
                     <p className="text-sm whitespace-pre-wrap break-words">{message.content}</p>
-                  </div>
+                  </OwnBubble>
                   <div className="flex flex-wrap items-center justify-end gap-x-2 gap-y-1 text-xs">
                     {failed && message.tempId && (
                       <>

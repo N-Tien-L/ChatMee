@@ -6,6 +6,7 @@ import { Hash, Info, Lock } from "lucide-react";
 import { ChatRoom, RoomType } from "@/lib/types";
 import { RoomAvatar } from "@/components/common/RoomAvatar";
 import { UserAvatar } from "@/components/common/UserAvatar";
+import { RoomCover } from "@/components/common/RoomCover";
 
 interface ChatHeaderProps {
   room: ChatRoom;
@@ -16,6 +17,8 @@ interface ChatHeaderProps {
   /** DM only: whether the other member is online. */
   counterpartOnline: boolean;
   onOpenInfo: () => void;
+  /** Members online right now (group rooms): shown as a stack of faces (D-16). */
+  onlineMembers?: { id: string; name: string; avatarUrl?: string | null }[];
 }
 
 interface HeaderField {
@@ -30,7 +33,7 @@ export const roomFields = ({
   onlineCount,
   presenceKnown,
   counterpartOnline,
-}: Omit<ChatHeaderProps, "onOpenInfo">): HeaderField[] => {
+}: Omit<ChatHeaderProps, "onOpenInfo" | "onlineMembers">): HeaderField[] => {
   if (room.roomType === RoomType.DIRECT_MESSAGE) {
     if (!presenceKnown) return [{ label: "Direct", value: "1:1" }];
     return [{ label: "Status", value: counterpartOnline ? "Online" : "Offline" }];
@@ -46,7 +49,45 @@ export const roomFields = ({
 };
 
 const shell =
-  "relative flex flex-shrink-0 items-center gap-3 border-b border-border bg-card/80 px-3 py-3 backdrop-blur sm:gap-4 sm:px-7 sm:py-3.5";
+  "relative isolate flex flex-shrink-0 items-center gap-3 overflow-hidden border-b border-border bg-card/80 px-3 py-3 backdrop-blur sm:gap-4 sm:px-7 sm:py-3.5";
+
+const MAX_FACES = 4;
+
+/** The room's own colour behind the header, fading into the card so text stays on a calm ground (D-16). */
+function HeaderCover({ name }: { name: string }) {
+  return (
+    <div aria-hidden="true" className="absolute inset-0 -z-10">
+      <RoomCover name={name} className="absolute inset-y-0 right-0 w-3/4 opacity-60 dark:opacity-45" />
+      <div className="absolute inset-0 bg-gradient-to-r from-card from-25% via-card/75 to-card/10" />
+    </div>
+  );
+}
+
+/** Online members as overlapping faces with a live ring, plus a count for the rest. */
+function PresenceStack({ members }: { members: NonNullable<ChatHeaderProps["onlineMembers"]> }) {
+  if (members.length === 0) return null;
+  const extra = members.length - MAX_FACES;
+  return (
+    <div className="hidden items-center sm:flex" aria-label={`${members.length} online`} role="img">
+      <div className="flex -space-x-2">
+        {members.slice(0, MAX_FACES).map((member, index) => (
+          <span
+            key={member.id}
+            className="relative animate-message-in rounded-full"
+            style={{ animationDelay: `${index * 60}ms` }}
+            title={member.name}
+          >
+            <UserAvatar name={member.name} avatarUrl={member.avatarUrl} size="md" className="ring-2 ring-card" />
+            <span className="absolute -right-0.5 -bottom-0.5 h-2.5 w-2.5 rounded-full border-2 border-card bg-success" />
+          </span>
+        ))}
+      </div>
+      {extra > 0 && (
+        <span className="ml-1.5 rounded-full bg-muted px-2 py-0.5 font-mono text-[11px] text-muted-foreground">+{extra}</span>
+      )}
+    </div>
+  );
+}
 
 function InfoButton({ onOpenInfo }: { onOpenInfo: () => void }) {
   return (
@@ -63,6 +104,7 @@ function DirectHeader({ room, presenceKnown, counterpartOnline, onOpenInfo }: Ch
   const status = !presenceKnown ? "Direct message" : counterpartOnline ? "Online now" : "Offline";
   return (
     <div className={shell}>
+      <HeaderCover name={name} />
       <div className="relative flex-shrink-0">
         <UserAvatar name={name} avatarUrl={room.counterpart?.avatarUrl} size="lg" className="h-11 w-11" />
         {presenceKnown && (
@@ -101,6 +143,7 @@ function RoomHeader(props: ChatHeaderProps) {
 
   return (
     <div className={shell}>
+      <HeaderCover name={title} />
       <RoomAvatar name={title} className="hidden h-11 w-11 flex-shrink-0 rounded-xl sm:flex" />
       <div className="min-w-0 flex-1">
         <h2 className="flex min-w-0 items-center gap-1.5 font-display text-xl font-semibold leading-tight tracking-[-0.02em] text-foreground sm:text-2xl">
@@ -120,6 +163,7 @@ function RoomHeader(props: ChatHeaderProps) {
           ))}
         </dl>
       </div>
+      {props.presenceKnown && <PresenceStack members={props.onlineMembers ?? []} />}
       <InfoButton onOpenInfo={onOpenInfo} />
     </div>
   );

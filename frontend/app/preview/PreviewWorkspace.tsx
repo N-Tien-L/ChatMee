@@ -6,6 +6,8 @@ import { ConnectionBanner } from "@/components/realtime/ConnectionBanner";
 import ChatRoomsList from "@/components/room/ChatRoomsList";
 import { CreateRoomModal } from "@/components/room/CreateRoomModal";
 import { NewMessageDialog } from "@/components/room/NewMessageDialog";
+import { WelcomePanel } from "@/components/room/WelcomePanel";
+import { QuickSwitcher, openQuickSwitcher } from "@/components/room/QuickSwitcher";
 import ChatHeader from "@/components/chat/ChatHeader";
 import MessageList from "@/components/chat/MessageList";
 import TypingIndicator from "@/components/chat/TypingIndicator";
@@ -97,11 +99,12 @@ const PENDING_MESSAGES: Message[] = [
   msg({ id: "p1", chatRoomId: "r-minh", senderId: ME.id, senderName: ME.name, isOwn: true, status: "sent", content: "Hi! Saw your STOMP talk.", createdAt: minutesAgo(60 * 3) }),
 ];
 
-type Conversation = "room" | "dm" | "dm-pending";
+type Conversation = "room" | "dm" | "dm-pending" | "none";
 const CONVERSATIONS: Record<Conversation, { room: ChatRoom; messages: Message[] }> = {
   room: { room: ROOMS[0], messages: INITIAL_MESSAGES },
   dm: { room: ROOMS[1], messages: DM_MESSAGES },
   "dm-pending": { room: ROOMS[3], messages: PENDING_MESSAGES },
+  none: { room: ROOMS[0], messages: [] },
 };
 
 type ConversationState = "populated" | "loading" | "error" | "empty";
@@ -237,12 +240,17 @@ export function PreviewWorkspace() {
           </Suspense>
         </aside>
         <main className="flex min-w-0 flex-1 flex-col overflow-hidden bg-background">
+          {which === "none" ? (
+            <WelcomePanel onOpenSwitcher={openQuickSwitcher} />
+          ) : (
+          <>
           <ChatHeader
             room={current}
             memberCount={current.participants?.length ?? 0}
             onlineCount={5}
             presenceKnown
             counterpartOnline={which === "dm"}
+            onlineMembers={PEOPLE.slice(0, 5)}
             onOpenInfo={() => {}}
           />
           <div className="min-h-0 flex-1">
@@ -273,6 +281,8 @@ export function PreviewWorkspace() {
             inputRef={inputRef}
             pausedHint={connected ? null : "Reconnecting. Keep typing; sending resumes when the connection is back."}
           />
+          </>
+          )}
         </main>
       </div>
 
@@ -280,6 +290,7 @@ export function PreviewWorkspace() {
         isOpen={createOpen && createMode === "room"}
         onClose={() => useChatRoomsStore.getState().closeCreateRoomModal()}
       />
+      <QuickSwitcher />
       <NewMessageDialog
         isOpen={createOpen && createMode === "direct"}
         onClose={() => useChatRoomsStore.getState().closeCreateRoomModal()}
@@ -336,6 +347,7 @@ function PreviewControls(props: PreviewControlsProps) {
               <option value="room">room: spring-internals</option>
               <option value="dm">direct: Lan Pham</option>
               <option value="dm-pending">direct: Khoa Vu (request)</option>
+              <option value="none">no chat open (welcome)</option>
             </select>
           </label>
           <label className="grid gap-1">

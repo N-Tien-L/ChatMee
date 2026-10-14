@@ -9,8 +9,9 @@ import ChatRoomsList from "@/components/room/ChatRoomsList";
 import ChatInterface from "@/components/chat/ChatInterface";
 import { CreateRoomModal } from "@/components/room/CreateRoomModal";
 import { NewMessageDialog } from "@/components/room/NewMessageDialog";
-import { EmptyState } from "@/components/common/EmptyState";
-import { ArrowLeft, MessageSquare } from "lucide-react";
+import { WelcomePanel } from "@/components/room/WelcomePanel";
+import { QuickSwitcher, openQuickSwitcher } from "@/components/room/QuickSwitcher";
+import { ArrowLeft } from "lucide-react";
 
 const DashboardContent = () => {
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
@@ -62,12 +63,7 @@ const DashboardContent = () => {
             <ChatInterface key={roomId} roomId={roomId} />
           </>
         ) : (
-          <EmptyState
-            className="flex-1"
-            icon={<MessageSquare className="h-12 w-12" />}
-            title="Pick up where you left off"
-            description="Choose a chat on the left, or start a new message."
-          />
+          <WelcomePanel onOpenSwitcher={openQuickSwitcher} />
         )}
       </main>
 
@@ -75,6 +71,7 @@ const DashboardContent = () => {
         isOpen={isCreateRoomModalOpen && createMode === "room"}
         onClose={() => closeCreateRoomModal()}
       />
+      <QuickSwitcher />
       <NewMessageDialog
         isOpen={isCreateRoomModalOpen && createMode === "direct"}
         onClose={() => closeCreateRoomModal()}

@@ -226,6 +226,9 @@ const ChatRoomView: React.FC<{ roomId: string; onDeleted: () => void }> = ({
         presenceKnown={presenceLoaded}
         counterpartOnline={counterpartOnline}
         onOpenInfo={() => setShowInfo(true)}
+        onlineMembers={(currentRoom.participants ?? [])
+          .filter((id) => onlineUsers.has(id))
+          .map((id) => ({ id, name: memberNames[id] ?? getUserFromCache(id)?.name ?? "Member", avatarUrl: getUserFromCache(id)?.avatarUrl }))}
       />
       <RoomInfoDialog roomId={roomId} isOpen={showInfo} onClose={() => setShowInfo(false)} />
 

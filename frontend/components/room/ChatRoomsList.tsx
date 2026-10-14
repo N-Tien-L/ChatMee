@@ -16,6 +16,7 @@ import {
 import { AnimatePresence, motion } from "motion/react";
 import { useInboxStore } from "@/lib/stores/inboxStore";
 import { InboxDialog } from "./InboxDialog";
+import { openQuickSwitcher } from "./QuickSwitcher";
 import { Skeleton } from "../ui/skeleton";
 import ChatRoomListItem from "./ChatRoomListItem";
 import { useChatRoomsStore } from "@/lib/stores/chatRoomsStore";
@@ -183,8 +184,17 @@ const ChatRoomsListContent: React.FC = () => {
             placeholder="Search chats"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full rounded-xl border border-border bg-muted/60 py-2 pl-9 pr-3 text-sm transition-colors placeholder:text-muted-foreground focus:border-ring focus:bg-card focus:outline-none focus:ring-[3px] focus:ring-ring/20"
+            className="w-full rounded-xl border border-border bg-muted/60 py-2 pl-9 pr-16 text-sm transition-colors placeholder:text-muted-foreground focus:border-ring focus:bg-card focus:outline-none focus:ring-[3px] focus:ring-ring/20"
           />
+          <button
+            type="button"
+            onClick={openQuickSwitcher}
+            title="Quick switcher"
+            aria-label="Open quick switcher"
+            className="absolute top-1/2 right-2 -translate-y-1/2 rounded-md border border-border bg-card px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground hover:text-foreground"
+          >
+            Ctrl K
+          </button>
         </div>
 
         {/* Filter Tabs */}
@@ -289,15 +299,22 @@ const ChatRoomsListContent: React.FC = () => {
 
         {!loading && !error && filteredRooms.length > 0 && (
           <div className="space-y-0.5 px-2 pb-2">
+            {/* Rooms glide to their new place when activity reorders the list (D-16). */}
             {filteredRooms.map((room) => (
-              <ChatRoomListItem
+              <motion.div
                 key={room.id}
-                room={room}
-                onLeave={() => leaveRoom(room.id)}
-                onDelete={() => deleteRoomById(room.id)}
-                onClick={() => handleRoomClick(room.id)}
-                isSelected={selectedRoomId === room.id}
-              />
+                layout="position"
+                initial={false}
+                transition={{ type: "spring", stiffness: 420, damping: 36 }}
+              >
+                <ChatRoomListItem
+                  room={room}
+                  onLeave={() => leaveRoom(room.id)}
+                  onDelete={() => deleteRoomById(room.id)}
+                  onClick={() => handleRoomClick(room.id)}
+                  isSelected={selectedRoomId === room.id}
+                />
+              </motion.div>
             ))}
           </div>
         )}

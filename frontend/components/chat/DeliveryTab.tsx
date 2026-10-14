@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { AlertCircle, Check } from "lucide-react";
+import { AlertCircle } from "lucide-react";
 import type { Message } from "@/lib/types";
 
 interface DeliveryTabProps {
@@ -15,14 +15,19 @@ interface DeliveryTabProps {
  * dashed while sending, inked with the confirmed time once the server echo arrives (AC-004-5, AC-008-13),
  * crimson "Not sent" on failure. The press animation runs only when motion is allowed.
  */
-export function DeliveryTab({ message, formatTime }: DeliveryTabProps) {
-  // Press only on the sending -> sent transition, never for history or when a room remounts.
-  const previousStatus = useRef(message.status);
-  const [pressed, setPressed] = useState(false);
+/** True once this message moved from sending to sent while on screen (never for history or a remounted room). */
+export function useJustConfirmed(status: Message["status"]): boolean {
+  const previousStatus = useRef(status);
+  const [confirmed, setConfirmed] = useState(false);
   useEffect(() => {
-    if (previousStatus.current === "sending" && message.status === "sent") setPressed(true);
-    previousStatus.current = message.status;
-  }, [message.status]);
+    if (previousStatus.current === "sending" && status === "sent") setConfirmed(true);
+    previousStatus.current = status;
+  }, [status]);
+  return confirmed;
+}
+
+export function DeliveryTab({ message, formatTime }: DeliveryTabProps) {
+  const pressed = useJustConfirmed(message.status);
 
   const base =
     "inline-flex items-center gap-1 rounded-full px-2 font-mono text-[11px] leading-[18px] tabular";
@@ -55,7 +60,19 @@ export function DeliveryTab({ message, formatTime }: DeliveryTabProps) {
       }`}
     >
       <span role="img" aria-label="Sent" className="grid h-3.5 w-3.5 place-items-center rounded-full bg-spot text-spot-foreground">
-        <Check className="h-2.5 w-2.5" strokeWidth={3.5} aria-hidden="true" />
+        {/* The check draws itself when the server confirms (signature moment, D-16). */}
+        <svg viewBox="0 0 12 12" className="h-2.5 w-2.5" aria-hidden="true">
+          <path
+            d="M2.5 6.4 5 8.8l4.6-5.4"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            pathLength={1}
+            className={pressed ? "animate-draw-check" : undefined}
+          />
+        </svg>
       </span>
       <time dateTime={message.createdAt}>{formatTime(new Date(message.createdAt))}</time>
     </span>
