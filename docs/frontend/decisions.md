@@ -2,6 +2,27 @@
 
 Newest first. A decision changes only through a new entry that supersedes it.
 
+## D-14: Owner rejects the milestone B look; visual direction reopened (milestone B2)
+
+- Date: 2026-10-14 · Phase: 3 (revisit) · Status: confirmed
+- Decided by: owner chat after reviewing `/preview`, `/`, `/login` once more; answers to four agent questions
+- Context: owner feedback: every page is too simple and boring, with no eye-catching effects or animation and no visible use of
+  third-party components (React Bits and similar); the r7 lab variant looked better but still not enough. The landing only explains
+  the system and stack and needs marketing. Creating rooms needs smarter, more convenient UX, and DMs must differ from rooms. The
+  owner releases the milestone B design: nothing of it has to be preserved.
+- Decision:
+  1. Keep the "message confirmed" idea (check plus time, the delivery tab) as the brand hook; redo the look freely (palette, type
+     scale, backgrounds, motion). Supersedes the visual parts of D-10, D-11 and D-12; D-13 stands for the concept only.
+  2. Intensity: loud on public pages (landing, login: animated backgrounds, text reveals, spotlight cards, beams), lively but calm in
+     the workspace (message arrival, send confirm, hover, room switch, presence).
+  3. Dependencies: small effect libraries (for example ogl, gsap) allowed when an effect needs them, reason stated in the PR; no
+     three.js-size packages without asking. Third-party code lives in `components/fx/` with a `PROVENANCE.md` row.
+  4. Scope addition: split creation into "New message" (find a person, start or request a DM) and "New room"; DM conversations get
+     their own presentation (person and presence in the header, no room fields). Frontend only, existing APIs. D-4 still holds for
+     the requests inbox and safety UI.
+- Consequences: milestone C is paused. A revised live preview (milestone B2) comes first, then milestone C on the accepted look.
+- Revisit if: the owner rejects milestone B2.
+
 ## D-13: Owner chooses "Contact confirmed"; "Registered airmail" rejected
 
 - Date: 2026-10-14 · Phase: 3 · Status: confirmed
