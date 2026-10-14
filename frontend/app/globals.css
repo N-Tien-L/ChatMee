@@ -197,3 +197,14 @@
     animation: stamp-press 220ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
   }
 }
+
+/* Landing card rows print in once; without the delay the row is simply visible (no-JS safe, reduced motion static). */
+@keyframes row-print {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: none; }
+}
+@media (prefers-reduced-motion: no-preference) {
+  .animate-print {
+    animation: row-print 300ms ease-out both;
+  }
+}

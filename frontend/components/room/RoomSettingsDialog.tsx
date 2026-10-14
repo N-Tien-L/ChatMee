@@ -266,10 +266,10 @@ export const RoomSettingsDialog: React.FC<RoomSettingsDialogProps> = ({
           className="flex flex-col items-center text-center gap-3 py-6"
           role="alert"
         >
-          <AlertCircle className="w-8 h-8 text-red-400" aria-hidden="true" />
+          <AlertCircle className="w-8 h-8 text-destructive" aria-hidden="true" />
           <div>
-            <p className="font-medium text-gray-900">Could not load room settings</p>
-            <p className="text-sm text-gray-500">{loadError}</p>
+            <p className="font-medium text-foreground">Could not load room settings</p>
+            <p className="text-sm text-muted-foreground">{loadError}</p>
           </div>
           <Button variant="outline" size="sm" onClick={() => loadRoomData()}>
             <RotateCw className="w-4 h-4 mr-2" aria-hidden="true" />
@@ -296,7 +296,7 @@ export const RoomSettingsDialog: React.FC<RoomSettingsDialogProps> = ({
                 disabled={room.roomType === RoomType.DIRECT_MESSAGE}
               />
               {room.roomType === RoomType.DIRECT_MESSAGE && (
-                <p className="text-xs text-gray-500">
+                <p className="text-xs text-muted-foreground">
                   Direct message room names cannot be changed
                 </p>
               )}
@@ -311,18 +311,18 @@ export const RoomSettingsDialog: React.FC<RoomSettingsDialogProps> = ({
                   handleInputChange("description", e.target.value)
                 }
                 placeholder="Enter room description"
-                className="w-full min-h-[80px] px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full min-h-[80px] px-3 py-2 text-sm border border-border rounded-md focus:outline-none focus:ring-2 focus:ring-ring"
               />
             </div>
 
             <div className="space-y-2">
               <Label htmlFor="roomType">Room Type</Label>
-              <div className="px-3 py-2 text-sm border border-gray-300 rounded-md bg-gray-50">
+              <div className="px-3 py-2 text-sm border border-border rounded-md bg-muted">
                 {room.roomType === RoomType.PUBLIC && "Public"}
                 {room.roomType === RoomType.PRIVATE && "Private"}
                 {room.roomType === RoomType.DIRECT_MESSAGE && "Direct Message"}
               </div>
-              <p className="text-xs text-gray-500">
+              <p className="text-xs text-muted-foreground">
                 Room type cannot be changed after creation
               </p>
             </div>
@@ -341,14 +341,14 @@ export const RoomSettingsDialog: React.FC<RoomSettingsDialogProps> = ({
                 disabled={room.roomType === RoomType.DIRECT_MESSAGE}
               />
               {room.roomType === RoomType.DIRECT_MESSAGE ? (
-                <p className="text-xs text-gray-500">
+                <p className="text-xs text-muted-foreground">
                   Direct message rooms have a fixed number of participants
                 </p>
               ) : (
                 formData.maxUsers > 0 &&
                 room.participants &&
                 formData.maxUsers < room.participants.length && (
-                  <p className="text-xs text-orange-600">
+                  <p className="text-xs text-warning">
                     Warning: Max users is less than current participant count (
                     {room.participants.length})
                   </p>
@@ -377,7 +377,7 @@ export const RoomSettingsDialog: React.FC<RoomSettingsDialogProps> = ({
                   participants.map((participant) => (
                     <div
                       key={participant.id}
-                      className="flex items-center gap-3 p-2 rounded hover:bg-gray-50"
+                      className="flex items-center gap-3 p-2 rounded hover:bg-accent/60"
                     >
                       <UserAvatar
                         name={participant.name || DELETED_USER}
@@ -392,7 +392,7 @@ export const RoomSettingsDialog: React.FC<RoomSettingsDialogProps> = ({
                     </div>
                   ))
                 ) : (
-                  <p className="text-sm text-gray-500 text-center py-4">
+                  <p className="text-sm text-muted-foreground text-center py-4">
                     No participants
                   </p>
                 )}
@@ -449,7 +449,7 @@ export const RoomSettingsDialog: React.FC<RoomSettingsDialogProps> = ({
               </Button>
             </div>
 
-            <p className="text-xs text-gray-500">
+            <p className="text-xs text-muted-foreground">
               Note: Removing and role management features coming soon
             </p>
           </TabsContent>
@@ -457,14 +457,14 @@ export const RoomSettingsDialog: React.FC<RoomSettingsDialogProps> = ({
           {/* Advanced Tab */}
           <TabsContent value="advanced" className="space-y-4">
             <div className="space-y-4">
-              <div className="border border-red-200 rounded-lg p-4 bg-red-50">
+              <div className="border border-destructive/30 rounded-lg p-4 bg-danger-surface">
                 <div className="flex items-start gap-3">
-                  <AlertTriangle className="w-5 h-5 text-red-600 mt-0.5" />
+                  <AlertTriangle className="w-5 h-5 text-destructive mt-0.5" />
                   <div className="flex-1">
-                    <h4 className="text-sm font-semibold text-red-900 mb-2">
+                    <h4 className="text-sm font-semibold text-destructive mb-2">
                       Danger Zone
                     </h4>
-                    <p className="text-sm text-red-800 mb-4">
+                    <p className="text-sm text-destructive mb-4">
                       Deleting this room is permanent and cannot be undone. All
                       messages and data will be lost.
                     </p>
@@ -484,7 +484,7 @@ export const RoomSettingsDialog: React.FC<RoomSettingsDialogProps> = ({
           </TabsContent>
         </Tabs>
       ) : (
-        <div className="text-center text-gray-500">Room not found</div>
+        <div className="text-center text-muted-foreground">Room not found</div>
       )}
     </div>
   );

@@ -4,6 +4,7 @@ import { Suspense, useEffect, useRef, useState } from "react";
 import { AppHeader } from "@/components/common/AppHeader";
 import { ConnectionBanner } from "@/components/realtime/ConnectionBanner";
 import ChatRoomsList from "@/components/room/ChatRoomsList";
+import { CreateRoomModal } from "@/components/room/CreateRoomModal";
 import ChatHeader from "@/components/chat/ChatHeader";
 import MessageList from "@/components/chat/MessageList";
 import TypingIndicator from "@/components/chat/TypingIndicator";
@@ -116,6 +117,7 @@ export function PreviewWorkspace() {
   }, []);
 
   const connected = status === "connected";
+  const createOpen = useChatRoomsStore((state) => state.isCreateRoomModalOpen);
 
   const deliver = (tempId: string) => {
     const fail = failNext;
@@ -207,6 +209,7 @@ export function PreviewWorkspace() {
         </main>
       </div>
 
+      <CreateRoomModal isOpen={createOpen} onClose={() => useChatRoomsStore.getState().closeCreateRoomModal()} />
       <PreviewControls
         status={status}
         onStatus={setStatus}

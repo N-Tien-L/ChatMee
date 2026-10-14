@@ -36,14 +36,14 @@ const UserSearchItem = ({ user, onAdd, isAdded }: UserSearchItemProps) => {
       .slice(0, 2);
 
     return (
-      <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white font-medium text-sm">
+      <div className="w-10 h-10 rounded-full bg-primary flex items-center justify-center text-primary-foreground font-medium text-sm">
         {initials}
       </div>
     );
   };
 
   return (
-    <Card className="hover:shadow-md transition-all duration-200 border-gray-200">
+    <Card className="hover:shadow-md transition-all duration-200 border-border">
       <CardContent className="p-3">
         <div className="flex items-center gap-3">
           {/* Avatar */}
@@ -52,7 +52,7 @@ const UserSearchItem = ({ user, onAdd, isAdded }: UserSearchItemProps) => {
           {/* User Info */}
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2 mb-1">
-              <h4 className="font-medium text-gray-900 truncate">
+              <h4 className="font-medium text-foreground truncate">
                 {user.name}
               </h4>
             </div>
@@ -65,8 +65,8 @@ const UserSearchItem = ({ user, onAdd, isAdded }: UserSearchItemProps) => {
             disabled={isAdded}
             className={`h-8 px-3 transition-all duration-200 ${
               isAdded
-                ? "bg-green-100 text-green-700 hover:bg-green-100 cursor-not-allowed"
-                : "bg-blue-600 hover:bg-blue-700 text-white"
+                ? "bg-accent text-success hover:bg-accent cursor-not-allowed"
+                : "bg-primary hover:bg-primary/90 text-primary-foreground"
             }`}
           >
             {isAdded ? (

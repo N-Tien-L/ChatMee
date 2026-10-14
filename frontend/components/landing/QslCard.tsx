@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { motion, useReducedMotion } from "motion/react";
+import { useReducedMotion } from "motion/react";
 import { Check } from "lucide-react";
 
 interface ExchangeRow {
@@ -41,8 +41,8 @@ function Mark({ confirmed }: { confirmed: boolean | null }) {
 }
 
 /**
- * ChatMee's own contact-confirmation card (CM-084 landing). The exchange prints in once, then rests;
- * with reduced motion the final card shows at once.
+ * ChatMee's own contact-confirmation card (CM-084 landing). The rows print in once with a CSS animation (so they
+ * need no JavaScript and never wait for hydration), then rest; with reduced motion the final card shows at once.
  */
 export function QslCard() {
   const reduceMotion = useReducedMotion();
@@ -89,12 +89,10 @@ export function QslCard() {
           {ROWS.map((row, index) => {
             const isLast = index === ROWS.length - 1;
             return (
-              <motion.tr
+              <tr
                 key={`${row.time}-${index}`}
-                className="border-b border-border/70 align-top"
-                initial={reduceMotion ? false : { opacity: 0, y: 6 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.3 + index * ROW_DELAY_S, duration: 0.3, ease: "easeOut" }}
+                className="animate-print border-b border-border/70 align-top"
+                style={{ animationDelay: `${0.3 + index * ROW_DELAY_S}s` }}
               >
                 <td className="py-2.5 pr-2 font-mono text-xs tabular">{row.time}</td>
                 <td className="hidden py-2.5 pr-2 font-mono text-xs sm:table-cell">{row.from}</td>
@@ -107,7 +105,7 @@ export function QslCard() {
                 <td className="py-2 font-mono">
                   <Mark confirmed={isLast ? (lastConfirmed ? true : false) : row.confirmed} />
                 </td>
-              </motion.tr>
+              </tr>
             );
           })}
         </tbody>

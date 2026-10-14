@@ -2,6 +2,14 @@
 
 Newest first. A decision changes only through a new entry that supersedes it.
 
+## D-12: Owner freezes the milestone B version provisionally
+
+- Date: 2026-10-14 · Phase: 3 · Status: provisional by owner
+- Decided by: owner chat ("freeze this version for now, finish the remaining parts, we edit later")
+- Decision: the milestone B look (tokens, workspace, landing, sign-in) is kept as the working baseline. The owner reported several things they find wrong but has not listed them; the design was authored by the agent without owner-supplied references (D-10 correction). Review states stay `not reviewed`.
+- Consequences: Phase 4 migrates remaining screens to the same tokens; a later owner edit pass changes tokens and components centrally.
+- Revisit if: the owner lists feedback or supplies references.
+
 ## D-11: Milestone B build choices
 
 - Date: 2026-10-14 · Phase: 3 · Status: confirmed within delegated scope (agent), owner reviews at milestone B
@@ -20,8 +28,8 @@ Newest first. A decision changes only through a new entry that supersedes it.
 
 ## D-10: Milestone A answers: principal direction and agent recommendations adopted
 
-- Date: 2026-10-14 · Phase: 3 · Status: confirmed (owner may edit later)
-- Decided by: owner chat ("do everything as you recommend, I will edit later")
+- Date: 2026-10-14 · Phase: 3 · Status: provisional (owner confirmation pending, see D-12)
+- Decided by: agent, under the owner's blanket delegation ("do everything as you recommend, I will edit later"). Corrected 2026-10-14: the owner did not choose these five items individually; item 2 was never proposed before and is the agent's own choice.
 - Decision:
   1. Direction: principal "Contact confirmed" (QSL card world). The airmail alternative is rejected for this run (loud for a working
      screen, red action competes with unread).

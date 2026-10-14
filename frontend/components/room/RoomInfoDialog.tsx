@@ -54,20 +54,20 @@ const showToast = (message: string, type: "success" | "error" = "success") => {
 const roomTypeConfig = {
   [RoomType.PUBLIC]: {
     Icon: Globe,
-    color: "text-green-500",
-    bgColor: "bg-green-50",
+    color: "text-success",
+    bgColor: "bg-accent",
     label: "Public Room",
   },
   [RoomType.PRIVATE]: {
     Icon: Lock,
-    color: "text-orange-500",
-    bgColor: "bg-orange-50",
+    color: "text-warning",
+    bgColor: "bg-warning-surface",
     label: "Private Room",
   },
   [RoomType.DIRECT_MESSAGE]: {
     Icon: Users,
-    color: "text-blue-500",
-    bgColor: "bg-blue-50",
+    color: "text-primary",
+    bgColor: "bg-accent",
     label: "Direct Message",
   },
 };
@@ -203,10 +203,10 @@ export const RoomInfoDialog: React.FC<RoomInfoDialogProps> = ({
           className="flex flex-col items-center text-center gap-3 py-6"
           role="alert"
         >
-          <AlertCircle className="w-8 h-8 text-red-400" aria-hidden="true" />
+          <AlertCircle className="w-8 h-8 text-destructive" aria-hidden="true" />
           <div>
-            <p className="font-medium text-gray-900">Could not load room information</p>
-            <p className="text-sm text-gray-500">{loadError}</p>
+            <p className="font-medium text-foreground">Could not load room information</p>
+            <p className="text-sm text-muted-foreground">{loadError}</p>
           </div>
           <Button variant="outline" size="sm" onClick={() => loadRoomInfo()}>
             <RotateCw className="w-4 h-4 mr-2" aria-hidden="true" />
@@ -217,7 +217,7 @@ export const RoomInfoDialog: React.FC<RoomInfoDialogProps> = ({
         <>
           {/* Header Section */}
           <div className="flex flex-col items-center text-center space-y-3 pb-4 border-b">
-            <div className="w-20 h-20 rounded-full bg-gradient-to-br from-blue-400 to-purple-500 flex items-center justify-center text-white font-bold text-3xl">
+            <div className="w-20 h-20 rounded-full bg-primary flex items-center justify-center text-primary-foreground font-bold text-3xl">
               {(room.displayName || room.roomName || "DM")
                 .charAt(0)
                 .toUpperCase()}
@@ -244,17 +244,17 @@ export const RoomInfoDialog: React.FC<RoomInfoDialogProps> = ({
           {/* Description */}
           {room.description && (
             <div className="space-y-2">
-              <h4 className="text-sm font-semibold text-gray-700">
+              <h4 className="text-sm font-semibold text-foreground">
                 Description
               </h4>
-              <p className="text-sm text-gray-600">{room.description}</p>
+              <p className="text-sm text-muted-foreground">{room.description}</p>
             </div>
           )}
 
           {/* Stats */}
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-1">
-              <div className="flex items-center gap-2 text-gray-500">
+              <div className="flex items-center gap-2 text-muted-foreground">
                 <Users className="w-4 h-4" />
                 <span className="text-xs">Members</span>
               </div>
@@ -264,7 +264,7 @@ export const RoomInfoDialog: React.FC<RoomInfoDialogProps> = ({
               </p>
             </div>
             <div className="space-y-1">
-              <div className="flex items-center gap-2 text-gray-500">
+              <div className="flex items-center gap-2 text-muted-foreground">
                 <Calendar className="w-4 h-4" />
                 <span className="text-xs">Created</span>
               </div>
@@ -277,10 +277,10 @@ export const RoomInfoDialog: React.FC<RoomInfoDialogProps> = ({
           {/* Participants List */}
           {participants.length > 0 && (
             <div className="space-y-3">
-              <h4 className="text-sm font-semibold text-gray-700">
+              <h4 className="text-sm font-semibold text-foreground">
                 Participants ({participants.length}
                 {room.participants && room.participants.length > 10 && (
-                  <span className="text-gray-500">
+                  <span className="text-muted-foreground">
                     {" "}
                     / {room.participants.length}
                   </span>
@@ -291,7 +291,7 @@ export const RoomInfoDialog: React.FC<RoomInfoDialogProps> = ({
                 {participants.map((participant) => (
                   <div
                     key={participant.id}
-                    className="flex items-center gap-3 p-2 rounded-lg hover:bg-gray-50"
+                    className="flex items-center gap-3 p-2 rounded-lg hover:bg-accent/60"
                   >
                     <UserAvatar
                       name={participant.name || DELETED_USER}
@@ -302,20 +302,20 @@ export const RoomInfoDialog: React.FC<RoomInfoDialogProps> = ({
                       <p className="text-sm font-medium truncate">
                         {participant.name || DELETED_USER}
                         {participant.id === user?.id && (
-                          <span className="text-xs text-gray-500 ml-1">
+                          <span className="text-xs text-muted-foreground ml-1">
                             (You)
                           </span>
                         )}
                       </p>
                     </div>
                     {participant.id === room.createdBy && (
-                      <Shield className="w-4 h-4 text-yellow-500" />
+                      <Shield className="w-4 h-4 text-warning" />
                     )}
                   </div>
                 ))}
               </div>
               {room.participants && room.participants.length > 10 && (
-                <p className="text-xs text-gray-500 text-center">
+                <p className="text-xs text-muted-foreground text-center">
                   Showing first 10 participants
                 </p>
               )}
@@ -360,7 +360,7 @@ export const RoomInfoDialog: React.FC<RoomInfoDialogProps> = ({
           </div>
         </>
       ) : (
-        <div className="text-center text-gray-500">Room not found</div>
+        <div className="text-center text-muted-foreground">Room not found</div>
       )}
     </div>
   );

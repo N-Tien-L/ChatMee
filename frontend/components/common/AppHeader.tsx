@@ -15,7 +15,7 @@ export function AppHeader({ user, onSignOut, status }: AppHeaderProps) {
     <header className="z-10 flex h-[52px] flex-shrink-0 items-center gap-4 bg-shell px-3 text-shell-foreground sm:gap-6 sm:px-5">
       <Link
         href="/dashboard"
-        className="rounded-sm pt-2 font-brand text-[22px] leading-none text-white focus-visible:outline-shell-foreground"
+        className="rounded-sm pt-2 font-brand text-[22px] leading-none text-primary-foreground focus-visible:outline-shell-foreground"
       >
         ChatMee
       </Link>

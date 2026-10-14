@@ -80,7 +80,7 @@ const UserSearchList = ({
       {/* Search Input */}
       <div className="relative">
         <Search
-          className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400"
+          className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-muted-foreground"
           aria-hidden="true"
         />
         <Input
@@ -89,7 +89,7 @@ const UserSearchList = ({
           placeholder={placeHolder}
           value={searchQuery}
           onChange={handleSearchChange}
-          className="pl-10 pr-4 py-2 border-gray-300 focus:border-blue-500 focus:ring-blue-500"
+          className="pl-10 pr-4 py-2 border-border focus:border-ring focus:ring-ring"
         />
       </div>
 
@@ -119,9 +119,9 @@ const UserSearchList = ({
           </div>
         ) : error ? (
           // Error State
-          <div className="text-center py-8 text-gray-500" role="alert">
+          <div className="text-center py-8 text-muted-foreground" role="alert">
             <AlertCircle
-              className="w-10 h-10 mx-auto mb-3 text-red-400"
+              className="w-10 h-10 mx-auto mb-3 text-destructive"
               aria-hidden="true"
             />
             <p className="text-sm">{error}</p>
@@ -137,24 +137,24 @@ const UserSearchList = ({
           </div>
         ) : !searchQuery.trim() ? (
           // Initial State
-          <div className="text-center py-8 text-gray-500">
+          <div className="text-center py-8 text-muted-foreground">
             <Search
-              className="w-12 h-12 mx-auto mb-3 text-gray-300"
+              className="w-12 h-12 mx-auto mb-3 text-border"
               aria-hidden="true"
             />
             <p className="text-sm">Start typing to search for users</p>
           </div>
         ) : displayUsers.length === 0 ? (
           // No Results State
-          <div className="text-center py-8 text-gray-500">
+          <div className="text-center py-8 text-muted-foreground">
             <User
-              className="w-12 h-12 mx-auto mb-3 text-gray-300"
+              className="w-12 h-12 mx-auto mb-3 text-border"
               aria-hidden="true"
             />
             <p className="text-sm">
               No users found matching &ldquo;{searchQuery}&rdquo;
             </p>
-            <p className="text-xs text-gray-400 mt-1">
+            <p className="text-xs text-muted-foreground mt-1">
               Try searching with a different name
             </p>
           </div>
@@ -173,7 +173,7 @@ const UserSearchList = ({
 
       {/* Results Count */}
       {searchQuery.trim() && !loading && displayUsers.length > 0 && (
-        <div className="text-xs text-gray-500 text-center" role="status">
+        <div className="text-xs text-muted-foreground text-center" role="status">
           Found {displayUsers.length} user{displayUsers.length !== 1 ? "s" : ""}
         </div>
       )}
