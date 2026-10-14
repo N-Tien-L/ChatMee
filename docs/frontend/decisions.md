@@ -2,6 +2,21 @@
 
 Newest first. A decision changes only through a new entry that supersedes it.
 
+## D-15: Workspace gets dark and light themes; landing polish set
+
+- Date: 2026-10-15 · Phase: 3 (revisit) · Status: confirmed
+- Decided by: owner chat (answers to agent options)
+- Context: with the louder public pages (D-14) the dark landing and the light-only workspace no longer read as one product.
+- Decision:
+  1. Supersedes D-7 for the workspace: dark and light themes; the default follows the operating system, and a Theme choice
+     (System, Light, Dark) sits in the account menu and is remembered in the browser. The dark workspace uses the landing's
+     night-teal. Public pages (landing, sign-in) stay dark in both modes, since their effects are designed for a dark ground.
+  2. Landing polish: opening sequence (headline lines and demo enter once), sticky navigation that turns to glass after the hero,
+     word-by-word heading reveals (CSS scroll-driven, content visible without it), a magnetic main button with a click spark
+     (React Bits ClickSpark), and smooth inertial scrolling with Lenis (new small dependency, off under reduced motion).
+  3. Not adopted: cursor spotlight (owner did not select it), tilting cards, invented statistics or testimonials.
+- Revisit if: the owner wants the public pages to follow the theme too.
+
 ## D-14: Owner rejects the milestone B look; visual direction reopened (milestone B2)
 
 - Date: 2026-10-14 · Phase: 3 (revisit) · Status: confirmed

@@ -121,6 +121,55 @@
   --sidebar-ring: #12a08a;
 }
 
+/* Dark workspace (D-15): the landing's night-teal. Own words and primary actions are bright teal with dark text (as on the landing). */
+.dark {
+  --background: #07110f;
+  --foreground: #e6f2ee;
+  --card: #0c1a17;
+  --card-foreground: #e6f2ee;
+  --popover: #0f1e1b;
+  --popover-foreground: #e6f2ee;
+  --primary: #2ee6c1;
+  --primary-foreground: #03201b;
+  --secondary: #12221f;
+  --secondary-foreground: #e6f2ee;
+  --muted: #11201d;
+  --muted-foreground: #93aea7;
+  --accent: #143029;
+  --accent-foreground: #d8f3ec;
+  --destructive: #ff7a6b;
+  --border: #1c2e2a;
+  --input: #24403a;
+  --ring: #2ee6c1;
+  --shell: #040b0a;
+  --shell-foreground: #e6f4f0;
+  --shell-muted: #8fb3aa;
+  --ink-deep: #0b2e28;
+  --spot: #ff6a3d;
+  --spot-foreground: #1b0a04;
+  --spot-on-shell: #ff7a52;
+  --warning: #f5c56b;
+  --warning-surface: #2a2414;
+  --danger-surface: #2c1512;
+  --success: #3ddc97;
+  --highlight: #2ee6c1;
+  --bubble-own-from: #2ee6c1;
+  --bubble-own-to: #1fb99a;
+  --chart-1: #2ee6c1;
+  --chart-2: #1fb99a;
+  --chart-3: #ff6a3d;
+  --chart-4: #f5c56b;
+  --chart-5: #93aea7;
+  --sidebar: #091614;
+  --sidebar-foreground: #e6f2ee;
+  --sidebar-primary: #2ee6c1;
+  --sidebar-primary-foreground: #03201b;
+  --sidebar-accent: #12302a;
+  --sidebar-accent-foreground: #d8f3ec;
+  --sidebar-border: #1c2e2a;
+  --sidebar-ring: #2ee6c1;
+}
+
 /* Public pages (landing, sign-in): night ground, luminous teal light, one ember action. */
 .theme-public {
   --background: #050d0c;

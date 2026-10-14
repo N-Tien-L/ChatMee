@@ -1,7 +1,9 @@
 "use client";
 
 import Link from "next/link";
-import { LogOut, User } from "lucide-react";
+import { Check, LogOut, Monitor, Moon, Sun, User } from "lucide-react";
+import { useThemeChoice } from "@/lib/theme/useThemeChoice";
+import type { ThemeChoice } from "@/lib/theme/theme";
 import { useEffect, useRef, useState } from "react";
 import { UserAvatar } from "./UserAvatar";
 
@@ -10,6 +12,12 @@ interface UserMenuProps {
   onSignOut: () => void;
 }
 
+const THEMES: { value: ThemeChoice; label: string; icon: typeof Sun }[] = [
+  { value: "system", label: "System", icon: Monitor },
+  { value: "light", label: "Light", icon: Sun },
+  { value: "dark", label: "Dark", icon: Moon },
+];
+
 const ITEM_CLASS =
   "flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-left text-sm text-foreground hover:bg-accent focus-visible:bg-accent";
 
@@ -17,6 +25,7 @@ export function UserMenu({ user, onSignOut }: UserMenuProps) {
   const [open, setOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
+  const [theme, setTheme] = useThemeChoice();
 
   useEffect(() => {
     if (!open) return;
@@ -73,6 +82,23 @@ export function UserMenu({ user, onSignOut }: UserMenuProps) {
             <User className="h-4 w-4" aria-hidden="true" />
             Profile
           </Link>
+          <div role="group" aria-label="Theme" className="my-1 border-y border-border py-1">
+            <p className="px-2 pt-1 pb-0.5 text-[11px] uppercase tracking-[0.1em] text-muted-foreground">Theme</p>
+            {THEMES.map(({ value, label, icon: Icon }) => (
+              <button
+                key={value}
+                type="button"
+                role="menuitemradio"
+                aria-checked={theme === value}
+                className={ITEM_CLASS}
+                onClick={() => setTheme(value)}
+              >
+                <Icon className="h-4 w-4" aria-hidden="true" />
+                <span className="flex-1">{label}</span>
+                {theme === value && <Check className="h-4 w-4 text-primary" aria-hidden="true" />}
+              </button>
+            ))}
+          </div>
           <button
             type="button"
             role="menuitem"

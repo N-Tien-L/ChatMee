@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { Borel, Bricolage_Grotesque, Geist, Geist_Mono } from "next/font/google";
 import { Toaster } from "react-hot-toast";
 import { MotionProvider } from "@/components/fx/motion-provider";
+import { THEME_BOOT_SCRIPT } from "@/lib/theme/theme";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -45,7 +46,11 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className="h-full">
+    <html lang="en" className="h-full" suppressHydrationWarning>
+      <head>
+        {/* Applies the saved or system theme before first paint (D-15). */}
+        <script dangerouslySetInnerHTML={{ __html: THEME_BOOT_SCRIPT }} />
+      </head>
       <body
         className={`${geistSans.variable} ${geistMono.variable} ${borel.variable} ${bricolage.variable} antialiased h-full`}
         suppressHydrationWarning={true}
