@@ -1,5 +1,5 @@
 # CM-084: Unify the frontend visual system and verify the priority journeys
-- Status: in progress (2026-10-14: owner answered Phase 1 and milestone A, see D-6..D-10)
+- Status: merged to develop, awaiting smoke (2026-10-15: code complete, automated gates green; AC-1/AC-2 browser evidence pending)
 - Type: feat
 - Spec: SPEC-001 (AC-001-1, -4, -5, -9), SPEC-002 (AC-002-2..4), SPEC-004 (AC-004-3..8), SPEC-008 (AC-008-2, -4, -10, -11, -13, -14)
   · Design: docs/design/ui-workflow.md, docs/frontend/context.md · ADR: none
@@ -32,7 +32,8 @@ journeys (OAuth sign-in, browse and join rooms, realtime room messaging, reconne
 - [ ] AC-2: Session expiry (session cookie removed) lands on `/login`, not an endless "Reconnecting" (AC-008-14).
 - [ ] AC-3: Tokens only in app components (no raw palette classes), layout works at 360, 768 and 1440 px, reduced motion honoured.
 - [ ] AC-4: Existing a11y behaviour (role="log", focus return, live regions) survives; existing tests pass or have explained query updates.
-- [ ] `./mvnw verify` and `npm run lint && npx tsc --noEmit && npm test && npm run build` are green.
+- [x] `./mvnw verify` and `npm run lint && npx tsc --noEmit && npm test && npm run build` are green.
+      -> 2026-10-15: backend `./mvnw verify` BUILD SUCCESS on develop 7aeffae (105 tests, 0 failures); frontend lint (0 errors, 11 warnings), tsc, vitest and build pass on 34521c6; `/preview` route removed.
 - [ ] `docs/frontend/*` updated; spec AC lines updated only where the owner approves.
 
 ## Technical Notes / Hints
@@ -43,5 +44,9 @@ journeys (OAuth sign-in, browse and join rooms, realtime room messaging, reconne
   colour open (D-8); owner runs the backend at milestone C (D-9).
 - Proposed SPEC-008 amendment for the owner (not applied): "§2: the public landing page moves into v0 as a static page (CM-084);
   public pages use a fixed dark theme, the workspace a fixed light theme; a user-facing dark mode stays v1+."
+
+## Verification status (2026-10-15)
+- Done: automated gates (see above). Pending, owner-run against the real backend: AC-1 (sign-in, browse/join rooms, realtime messaging, Room info, Room settings, profile), AC-2 (session expiry lands on `/login`), AC-3 viewport and reduced-motion check, AC-4 a11y spot check.
+- Spec status: SPEC-001/002/004/008 AC lines are not changed; they move to `Implemented` only after the smoke evidence is recorded and the owner approves.
 
 ## Follow-ups (New findings, DO NOT do in this ticket)
