@@ -3,12 +3,11 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { AnimatePresence, motion } from "motion/react";
-import { ArrowRight, ChevronDown, Globe, Hash, Lock, Minus, Plus, Users } from "lucide-react";
+import { ArrowRight, Globe, Hash, Lock, Minus, Plus, Users } from "lucide-react";
 import { useAuthStore, useChatRoomsStore } from "@/lib/stores";
 import { CreateChatRoomRequest, RoomType, UserSummaryResponse } from "@/lib/types";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
-import { Checkbox } from "../ui/checkbox";
 import { RoomCover } from "@/components/common/RoomCover";
 import { RoomAvatar } from "@/components/common/RoomAvatar";
 import { UserAvatar } from "@/components/common/UserAvatar";
@@ -39,7 +38,7 @@ const field =
 /**
  * "New room" (D-16): details with a live preview. Creating closes the dialog and opens the room; people are
  * invited from the room's info.
- * Direct messages have their own flow (NewMessageDialog); a room's size sits under More options.
+ * Direct messages have their own flow (NewMessageDialog). v0 offers only options with behaviour: name, type, size, description.
  */
 export const CreateRoomModal = ({ isOpen, onClose }: CreateRoomModalProps) => {
   const router = useRouter();
@@ -50,10 +49,6 @@ export const CreateRoomModal = ({ isOpen, onClose }: CreateRoomModalProps) => {
   const [description, setDescription] = useState("");
   const [roomType, setRoomType] = useState<GroupRoomType>(RoomType.PRIVATE);
   const [maxUser, setMaxUser] = useState(DEFAULT_SIZE);
-  const [moreOpen, setMoreOpen] = useState(false);
-  const [welcomeMessage, setWelcomeMessage] = useState("");
-  const [allowFileSharing, setAllowFileSharing] = useState(false);
-  const [moderationRequired, setModerationRequired] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [step, setStep] = useState<Step>("details");
   const [createdId, setCreatedId] = useState<string | null>(null);
@@ -69,10 +64,6 @@ export const CreateRoomModal = ({ isOpen, onClose }: CreateRoomModalProps) => {
     setDescription("");
     setRoomType(RoomType.PRIVATE);
     setMaxUser(DEFAULT_SIZE);
-    setMoreOpen(false);
-    setWelcomeMessage("");
-    setAllowFileSharing(false);
-    setModerationRequired(false);
     setStep("details");
     setCreatedId(null);
     setInvited([]);
@@ -93,12 +84,12 @@ export const CreateRoomModal = ({ isOpen, onClose }: CreateRoomModalProps) => {
   const handleCreate = async (event: React.FormEvent) => {
     event.preventDefault();
     if (!valid || submitting) return;
+    // v0 sends no room settings: welcome message, file sharing, guests and moderation have no behaviour (SPEC-008 §2).
     const request: CreateChatRoomRequest = {
       roomName: name,
       description: description.trim(),
       roomType,
       maxUsers: maxUser,
-      settings: { welcomeMessage, allowFileSharing, allowGuestUsers: false, moderationRequired },
     };
     setSubmitting(true);
     const created = await createRoom(request);
@@ -278,46 +269,6 @@ export const CreateRoomModal = ({ isOpen, onClose }: CreateRoomModalProps) => {
                   rows={2}
                   className={cn(field, "h-auto resize-none py-2.5")}
                 />
-              </div>
-
-              <div className="rounded-2xl border border-border">
-                <button
-                  type="button"
-                  aria-expanded={moreOpen}
-                  aria-controls="room-more-options"
-                  onClick={() => setMoreOpen((v) => !v)}
-                  className="flex w-full items-center justify-between rounded-2xl px-4 py-3 text-sm font-medium hover:bg-accent/50"
-                >
-                  <span>
-                    More options
-                  </span>
-                  <ChevronDown className={cn("h-4 w-4 transition-transform", moreOpen && "rotate-180")} aria-hidden="true" />
-                </button>
-                {moreOpen && (
-                  <div id="room-more-options" className="space-y-4 border-t border-border px-4 py-4">
-                    <div className="space-y-2.5">
-                      <Label htmlFor="welcomeMessage" className="block leading-5">Welcome message</Label>
-                      <input
-                        id="welcomeMessage"
-                        value={welcomeMessage}
-                        onChange={(e) => setWelcomeMessage(e.target.value)}
-                        placeholder="Say hello to new members"
-                        className={cn(field, "h-11")}
-                      />
-                    </div>
-                    {[
-                      { id: "allowFileSharing", label: "Allow file sharing", checked: allowFileSharing, set: setAllowFileSharing },
-                      { id: "moderationRequired", label: "Require moderation", checked: moderationRequired, set: setModerationRequired },
-                    ].map((option) => (
-                      <div key={option.id} className="flex items-center gap-2.5">
-                        <Checkbox id={option.id} checked={option.checked} onCheckedChange={(checked) => option.set(checked === true)} />
-                        <Label htmlFor={option.id} className="font-normal">
-                          {option.label}
-                        </Label>
-                      </div>
-                    ))}
-                  </div>
-                )}
               </div>
 
               <div className="flex gap-2">
