@@ -124,7 +124,7 @@ function DirectHeader({ room, presenceKnown, counterpartOnline, onOpenInfo }: Ch
           <span>{status}</span>
           {pending && (
             <span className="rounded-full bg-warning-surface px-2 py-0.5 font-medium text-warning">
-              Waiting for them to accept
+              Waiting for {name} to accept
             </span>
           )}
         </p>

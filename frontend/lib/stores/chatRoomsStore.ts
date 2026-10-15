@@ -292,16 +292,17 @@ export const useChatRoomsStore = create<chatRoomState>((set, get) => ({
                         ? { ...response.data, displayName: await get().getDirectMessageDisplayName(response.data) }
                         : response.data;
                 get().addRoom(room);
-                toast.success(
-                    response.data.roomType === RoomType.DIRECT_MESSAGE ? "Message request sent" : "Room created successfully!"
-                );
+                // A DM that comes back ACTIVE already existed or accepted their pending request (AC-009-9): no request toast.
+                if (response.data.roomType !== RoomType.DIRECT_MESSAGE) toast.success("Room created successfully!");
+                else if (response.data.state === "REQUESTED") toast.success("Message request sent");
                 return room;
             } else {
                 toast.error(response.message || "Failed to create room");
                 return null;
             }
-        } catch {
-            toast.error("Failed to create room");
+        } catch (error) {
+            // Keep the server's reason, e.g. "Cannot message this user" (block or decline cooldown) or a daily limit.
+            toast.error(error instanceof Error && error.message ? error.message : "Failed to create room");
             return null;
         }
     },

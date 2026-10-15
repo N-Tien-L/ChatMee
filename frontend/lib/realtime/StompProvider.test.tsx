@@ -4,6 +4,7 @@ import { StompProvider } from './StompProvider';
 import { useAuthStore } from '@/lib/stores/authStore';
 import { useChatRoomsStore } from '@/lib/stores/chatRoomsStore';
 import { useChatStore } from '@/lib/stores/chatStore';
+import { useInboxStore } from '@/lib/stores/inboxStore';
 import { chatRoomApi } from '@/lib/api/chatRoomApi';
 
 const session = vi.hoisted(() => ({
@@ -96,6 +97,34 @@ describe('StompProvider', () => {
             expect(fetchRooms).toHaveBeenCalledTimes(2);
             expect(chatRoomApi.getOnlineUsers).toHaveBeenCalledTimes(2);
             expect([...useChatStore.getState().onlineUsers].sort()).toEqual(['u2', 'u3']);
+        });
+
+        it('connected_firstConnectAndReconnect_refetchesInboxEachTime', async () => {
+            const fetchInbox = vi.fn().mockResolvedValue(undefined);
+            useChatRoomsStore.setState({ fetchRooms: vi.fn().mockResolvedValue(undefined) });
+            useInboxStore.setState({ fetchInbox });
+            vi.mocked(chatRoomApi.getOnlineUsers).mockResolvedValue([]);
+            signIn();
+            render(<StompProvider><p>x</p></StompProvider>);
+
+            const listeners = session.onConnected.mock.calls.map(call => (call as unknown[])[0] as (i: { reconnected: boolean }) => void);
+            await act(async () => { listeners.forEach(l => l({ reconnected: false })); });
+            await act(async () => { listeners.forEach(l => l({ reconnected: true })); });
+
+            expect(fetchInbox).toHaveBeenCalledTimes(2);
+        });
+
+        it('userEvent_dmRequestReceived_reachesTheInbox', () => {
+            const handleUserEvent = vi.fn();
+            useChatRoomsStore.setState({ handleUserEvent: vi.fn().mockResolvedValue(undefined) });
+            useInboxStore.setState({ handleUserEvent });
+            signIn();
+            render(<StompProvider><p>x</p></StompProvider>);
+
+            const handler = subscribedTo('/user/queue/events')[0][1] as (m: { body: string }) => void;
+            const envelope = { type: 'DM_REQUEST_RECEIVED', payload: { request: { roomId: 'dm1' } }, occurredAt: '' };
+            handler({ body: JSON.stringify(envelope) });
+            expect(handleUserEvent).toHaveBeenCalledWith(envelope);
         });
     });
 });

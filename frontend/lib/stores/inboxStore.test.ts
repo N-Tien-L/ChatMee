@@ -12,6 +12,7 @@ import { invitationApi } from '@/lib/api/invitationApi';
 import { dmRequestApi } from '@/lib/api/dmRequestApi';
 import { useInboxStore } from './inboxStore';
 import { useChatRoomsStore } from './chatRoomsStore';
+import toast from 'react-hot-toast';
 
 const person = { id: 'u2', name: 'Lan', avatarUrl: '' };
 const invitation = {
@@ -77,5 +78,48 @@ describe('inboxStore', () => {
         useInboxStore.setState({ requests: [request] });
         useInboxStore.getState().handleUserEvent({ type: 'ROOM_REMOVED', payload: { roomId: 'dm1', reason: 'EXPIRED' } });
         expect(useInboxStore.getState().requests).toEqual([]);
+    });
+
+    it('events_thenReconnectRefetch_keepOneRowPerInvitationAndRequest', async () => {
+        const store = useInboxStore.getState();
+        store.handleUserEvent({ type: 'INVITATION_RECEIVED', payload: { invitation } });
+        store.handleUserEvent({ type: 'INVITATION_RECEIVED', payload: { invitation } });
+        store.handleUserEvent({ type: 'DM_REQUEST_RECEIVED', payload: { request } });
+        expect(useInboxStore.getState().invitations).toHaveLength(1);
+
+        // Reconnect: the server list replaces what events built up.
+        vi.mocked(invitationApi.listMine).mockResolvedValue({ success: true, data: [invitation] } as never);
+        vi.mocked(dmRequestApi.listMine).mockResolvedValue({ success: true, data: [{ ...request, preview: 'Hi!' }] } as never);
+        await useInboxStore.getState().fetchInbox();
+        expect(useInboxStore.getState().invitations).toEqual([invitation]);
+        expect(useInboxStore.getState().requests).toEqual([{ ...request, preview: 'Hi!' }]);
+    });
+
+    it('handleUserEvent_roomAddedForWaitingRequest_dropsTheRequest', () => {
+        useInboxStore.setState({ requests: [request] });
+        useInboxStore.getState().handleUserEvent({ type: 'ROOM_ADDED', payload: { room: { id: 'dm1' } } });
+        expect(useInboxStore.getState().requests).toEqual([]);
+    });
+
+    it('acceptRequest_expiredOnServer_toastsReasonAndResyncsTheInbox', async () => {
+        useInboxStore.setState({ requests: [request] });
+        vi.mocked(dmRequestApi.accept).mockRejectedValue(new Error('Request not found'));
+        vi.mocked(invitationApi.listMine).mockResolvedValue({ success: true, data: [] } as never);
+        vi.mocked(dmRequestApi.listMine).mockResolvedValue({ success: true, data: [] } as never);
+
+        expect(await useInboxStore.getState().acceptRequest('dm1')).toBeNull();
+
+        expect(toast.error).toHaveBeenCalledWith('Request not found');
+        await vi.waitFor(() => expect(useInboxStore.getState().requests).toEqual([]));
+        expect(dmRequestApi.listMine).toHaveBeenCalledTimes(1);
+    });
+
+    it('acceptRequest_success_removesItRefetchesRoomsAndReturnsRoomId', async () => {
+        useInboxStore.setState({ requests: [request] });
+        vi.mocked(dmRequestApi.accept).mockResolvedValue(undefined);
+        expect(await useInboxStore.getState().acceptRequest('dm1')).toBe('dm1');
+        expect(dmRequestApi.accept).toHaveBeenCalledWith('dm1');
+        expect(useInboxStore.getState().requests).toEqual([]);
+        expect(useChatRoomsStore.getState().fetchRooms).toHaveBeenCalledTimes(1);
     });
 });

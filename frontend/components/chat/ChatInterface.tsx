@@ -10,7 +10,7 @@ import { useAuthStore } from "@/lib/stores/authStore";
 import { useUsersStore } from "@/lib/stores/usersStore";
 import { RoomInfoDialog } from "@/components/room/RoomInfoDialog";
 import { RoomSettingsDialog } from "@/components/room/RoomSettingsDialog";
-import { ParticipantRole } from "@/lib/types";
+import { MessageType, ParticipantRole } from "@/lib/types";
 import ChatHeader from "./ChatHeader";
 import MessageList from "./MessageList";
 import TypingIndicator from "./TypingIndicator";
@@ -140,6 +140,12 @@ const ChatRoomView: React.FC<{ roomId: string; onDeleted: () => void }> = ({
     ? currentRoom.myRole === ParticipantRole.OWNER
     : currentRoom?.createdBy === currentUserId;
   const memberCount = currentRoom?.participants?.length ?? 0;
+  // A pending DM request allows the sender one message (SPEC-009 AC-009-10). It counts as used once the room has a
+  // lastMessage or this view holds an own message that did not fail; ROOM_UPDATED {state: ACTIVE} lifts the lock.
+  const requestUsed =
+    currentRoom?.state === "REQUESTED" &&
+    (!!currentRoom.lastMessage ||
+      messages.some((m) => m.senderId === currentUserId && m.type !== MessageType.SYSTEM && m.status !== "failed"));
   const memberNames = useRoomMemberNames(roomId, memberCount);
 
   // Get user cache for names
@@ -206,7 +212,7 @@ const ChatRoomView: React.FC<{ roomId: string; onDeleted: () => void }> = ({
   const handleSendMessage = (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (!newMessage.trim() || !connected) return;
+    if (!newMessage.trim() || !connected || requestUsed) return;
 
     // Stop typing indicator when sending message
     handleTyping(false);
@@ -291,7 +297,7 @@ const ChatRoomView: React.FC<{ roomId: string; onDeleted: () => void }> = ({
           onRetryLoad={reload}
           onResend={resendMessage}
           onDiscard={discardMessage}
-          canResend={connected}
+          canResend={connected && !requestUsed}
           hasMore={hasMoreMessages}
           loadingOlder={loadingOlder}
           olderError={olderError}
@@ -313,12 +319,15 @@ const ChatRoomView: React.FC<{ roomId: string; onDeleted: () => void }> = ({
         value={newMessage}
         onChange={handleInputChange}
         onSubmit={handleSendMessage}
-        disabled={!newMessage.trim() || !connected}
+        disabled={!newMessage.trim() || !connected || requestUsed}
+        inputDisabled={requestUsed}
         inputRef={inputRef}
         pausedHint={
-          !connected && !loading
-            ? "Reconnecting. Keep typing; sending resumes when the connection is back."
-            : null
+          requestUsed
+            ? `Request sent. You can send more messages once ${currentRoom.counterpart?.name || currentRoom.displayName || "they"} accepts.`
+            : !connected && !loading
+              ? "Reconnecting. Keep typing; sending resumes when the connection is back."
+              : null
         }
       />
     </div>

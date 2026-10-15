@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { useChatRoomsStore } from './chatRoomsStore';
 import { chatRoomApi } from '../api/chatRoomApi';
 import { userApi } from '../api/userApi';
+import toast from 'react-hot-toast';
 import { RoomType, RoomSettings } from "@/lib/types";
 import { ChatRoomResponse } from "@/lib/types";
 
@@ -179,5 +180,26 @@ describe('chatRoomsStore', () => {
 
         expect(name).toBe('Bob');
         expect(userApi.getUserById).not.toHaveBeenCalled();
+    });
+
+    it('createRoom_declineCooldownOrBlock_toastsTheServerReason', async () => {
+        vi.mocked(chatRoomApi.createChatRoom).mockRejectedValueOnce(new Error('Cannot message this user'));
+        const created = await useChatRoomsStore.getState().createRoom({ roomType: RoomType.DIRECT_MESSAGE, participantId: 'u2', maxUsers: 2 });
+        expect(created).toBeNull();
+        expect(toast.error).toHaveBeenCalledWith('Cannot message this user');
+    });
+
+    it.each([
+        ['REQUESTED', true],
+        ['ACTIVE', false],
+    ] as const)('createRoom_directMessageReturned%s_requestToastOnlyWhenPending', async (state, toasted) => {
+        const dm: ChatRoomResponse = {
+            ...mockRoom, id: 'dm1', roomName: '', roomType: RoomType.DIRECT_MESSAGE, state,
+            participants: ['currentUser', 'u2'], counterpart: { id: 'u2', name: 'Bob', avatarUrl: '' },
+        };
+        vi.mocked(chatRoomApi.createChatRoom).mockResolvedValueOnce({ success: true, data: dm });
+        expect(await useChatRoomsStore.getState().createRoom({ roomType: RoomType.DIRECT_MESSAGE, participantId: 'u2', maxUsers: 2 })).not.toBeNull();
+        if (toasted) expect(toast.success).toHaveBeenCalledWith('Message request sent');
+        else expect(toast.success).not.toHaveBeenCalled();
     });
 });
