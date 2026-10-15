@@ -102,6 +102,29 @@ class ChatWebSocketControllerValidationTest {
     }
 
     @Test
+    void sendMessage_tempIdOf65Characters_reportsErrorWithoutSavingOrBroadcasting() {
+        dispatch("/app/chat.sendMessage", 10, com.lnt.chatmee.model.Message.MessageType.TEXT, "t".repeat(65));
+        verifyNoInteractions(messages, users, participants);
+        ArgumentCaptor<StompError> error = ArgumentCaptor.forClass(StompError.class);
+        verify(messaging).convertAndSendToUser(eq("test-user"), eq("/queue/errors"), error.capture(), privateTo("test-session"));
+        assertEquals("VALIDATION_FAILED", error.getValue().getCode());
+        assertTrue(error.getValue().getMessage().contains("64"));
+        verifyNoMoreInteractions(messaging);
+    }
+
+    @Test
+    void sendMessage_tempIdOf64Characters_savesAndBroadcasts() {
+        when(users.findById("test-user")).thenReturn(Optional.of(
+                User.builder().id("test-user").name("Test User").build()));
+        when(participants.isUserParticipant("test-room", "test-user")).thenReturn(true);
+        doAnswer(invocation -> invocation.getArgument(0)).when(messages).persistMessage(any());
+        dispatch("/app/chat.sendMessage", 10, com.lnt.chatmee.model.Message.MessageType.TEXT, "t".repeat(64));
+        verify(messages).persistMessage(argThat(message -> "t".repeat(64).equals(message.getClientMessageId())));
+        verify(messaging).convertAndSend(eq("/topic/rooms/test-room"), any(ChatMessageResponse.class));
+        verifyNoMoreInteractions(messaging);
+    }
+
+    @Test
     void addUser_removedDestination_isNotHandled() {
         dispatch("/app/chat.addUser", 10);
         verifyNoInteractions(messages, users, participants, messaging);
@@ -112,11 +135,15 @@ class ChatWebSocketControllerValidationTest {
     }
 
     private void dispatch(String destination, int length, com.lnt.chatmee.model.Message.MessageType type) {
+        dispatch(destination, length, type, "test-temp");
+    }
+
+    private void dispatch(String destination, int length, com.lnt.chatmee.model.Message.MessageType type, String tempId) {
         ChatMessageRequest request = new ChatMessageRequest();
         request.setRoomId("test-room");
         request.setContent("x".repeat(length));
         request.setMessageType(type);
-        request.setTempId("test-temp");
+        request.setTempId(tempId);
         SimpMessageHeaderAccessor headers = SimpMessageHeaderAccessor.create(SimpMessageType.MESSAGE);
         headers.setDestination(destination);
         headers.setSessionId("test-session");
