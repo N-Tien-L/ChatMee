@@ -19,6 +19,8 @@ import { RoomType } from "@/lib/types";
 
 /** Typing indicator: how long a typing user is shown after the last event, in ms (SPEC-005 AC-005-5). */
 const SELF_TYPING_IDLE_MS = 2000;
+/** Minimum gap between "typing: true" frames. The server allows 10 typing frames per 5 s per user (CM-056). */
+const TYPING_SEND_INTERVAL_MS = 1000;
 
 type EndedReason = "removed" | "deleted";
 interface EndedState {
@@ -108,6 +110,7 @@ const ChatRoomView: React.FC<{ roomId: string; onDeleted: () => void }> = ({
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const lastTypingSentRef = useRef(0);
   useEffect(
     () => () => {
       if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
@@ -161,6 +164,8 @@ const ChatRoomView: React.FC<{ roomId: string; onDeleted: () => void }> = ({
   // Typing detection logic
   const handleTyping = useCallback(
     (typing: boolean) => {
+      // A stop frame always goes out, so the next start is never throttled.
+      if (!typing) lastTypingSentRef.current = 0;
       if (wsConnected && roomId) {
         sendTyping(roomId, typing);
       }
@@ -175,7 +180,12 @@ const ChatRoomView: React.FC<{ roomId: string; onDeleted: () => void }> = ({
 
     if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
     if (value.trim()) {
-      handleTyping(true);
+      // Throttled: a frame per keystroke would exhaust the server budget and drop the stop frame.
+      const now = Date.now();
+      if (now - lastTypingSentRef.current >= TYPING_SEND_INTERVAL_MS) {
+        lastTypingSentRef.current = now;
+        handleTyping(true);
+      }
       typingTimeoutRef.current = setTimeout(() => handleTyping(false), SELF_TYPING_IDLE_MS);
     } else handleTyping(false);
   };
