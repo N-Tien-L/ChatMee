@@ -135,12 +135,26 @@ class MessageServiceTest {
     }
 
     @Test
-    void getRecentMessages_nonParticipant_throwsException() {
+    void getRecentMessages_nonParticipantOfActiveRoom_throwsRoomNotFound() {
         when(chatRoomRepository.existsById("room1")).thenReturn(true);
         when(participantService.isUserParticipant("room1", "user1")).thenReturn(false);
+        when(chatRoomRepository.findByIdAndIsActiveTrue("room1"))
+                .thenReturn(Optional.of(com.lnt.chatmee.model.ChatRoom.builder().id("room1").isActive(true).build()));
+
+        assertThatThrownBy(() -> messageService.getRecentMessages("room1", "user1"))
+                .isInstanceOf(ChatRoomNotFoundException.class);
+        verifyNoInteractions(messageRepository);
+    }
+
+    @Test
+    void getRecentMessages_softDeletedRoom_throwsForbidden() {
+        when(chatRoomRepository.existsById("room1")).thenReturn(true);
+        when(participantService.isUserParticipant("room1", "user1")).thenReturn(false);
+        when(chatRoomRepository.findByIdAndIsActiveTrue("room1")).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> messageService.getRecentMessages("room1", "user1"))
                 .isInstanceOf(ForbiddenActionException.class);
+        verifyNoInteractions(messageRepository);
     }
 
     @Test
