@@ -1,15 +1,15 @@
 import React, { useEffect, useRef, useState } from "react";
-import { ChatRoom, ParticipantRole, RoomType } from "@/lib/types";
+import { ChatRoom, RoomType } from "@/lib/types";
 import { MoreVertical, Lock, Trash2, UserMinus, Info } from "lucide-react";
 import { useAuthStore } from "@/lib/stores/authStore";
-import { useChatRoomsStore } from "@/lib/stores/chatRoomsStore";
 import { ConfirmDialog } from "@/components/common/ConfirmDialog";
 import { RelativeTime } from "@/components/common/RelativeTime";
 import { RoomAvatar } from "@/components/common/RoomAvatar";
 import { UnreadBadge } from "@/components/common/UnreadBadge";
 import { UserAvatar } from "@/components/common/UserAvatar";
-import { RoomInfoDialog } from "./RoomInfoDialog";
-import { RoomSettingsDialog } from "./RoomSettingsDialog";
+import { RoomPanel } from "./RoomPanel";
+import { LeaveRoomConfirm } from "./LeaveRoomConfirm";
+import { canDeleteRoom } from "./roomPermissions";
 
 interface ChatRoomListItemProps {
   room: ChatRoom;
@@ -38,22 +38,18 @@ const ChatRoomListItem: React.FC<ChatRoomListItemProps> = ({
   const [showActions, setShowActions] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [showInfoDialog, setShowInfoDialog] = useState(false);
-  const [showSettingsDialog, setShowSettingsDialog] = useState(false);
   const [confirming, setConfirming] = useState<"leave" | "delete" | null>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
   // Dialogs opened from the menu return focus here (the menu item is gone by then).
   const actionsButtonRef = useRef<HTMLButtonElement>(null);
   const roomName = room.displayName || room.roomName || "Direct Message";
   const user = useAuthStore((state) => state.user);
-  const updateRoom = useChatRoomsStore((state) => state.updateRoom);
 
   const isDirect = room.roomType === RoomType.DIRECT_MESSAGE;
   const isPending = room.state === "REQUESTED";
   const unread = room.unreadCount ?? 0;
-  // myRole comes with the room; creator is the fallback for payloads that predate it.
-  const isOwner = room.myRole
-    ? room.myRole === ParticipantRole.OWNER
-    : room.createdBy === user?.id;
+  // Actions follow the caller's participant role, never `createdBy` (SPEC-009 AC-009-25).
+  const mayDelete = canDeleteRoom(room.myRole);
   const activityAt = room.lastActivityAt || room.createdAt;
 
   useEffect(() => {
@@ -201,7 +197,7 @@ const ChatRoomListItem: React.FC<ChatRoomListItemProps> = ({
                     Info
                   </button>
 
-                  {!isOwner && onLeave && !isDirect && (
+                  {onLeave && !isDirect && (
                     <button
                       onClick={(e) => {
                         e.stopPropagation();
@@ -215,7 +211,7 @@ const ChatRoomListItem: React.FC<ChatRoomListItemProps> = ({
                     </button>
                   )}
 
-                  {isOwner && (
+                  {mayDelete && (
                     <button
                       onClick={(e) => {
                         e.stopPropagation();
@@ -241,13 +237,14 @@ const ChatRoomListItem: React.FC<ChatRoomListItemProps> = ({
         </div>
       )}
 
-      <ConfirmDialog
+      <LeaveRoomConfirm
         open={confirming === "leave"}
         onOpenChange={(open) => !open && setConfirming(null)}
-        title="Leave this room?"
-        description={`You will stop receiving messages from "${roomName}".`}
-        confirmLabel="Leave"
-        destructive
+        roomId={room.id}
+        roomName={roomName}
+        roomType={room.roomType}
+        myRole={room.myRole}
+        myUserId={user?.id}
         onConfirm={() => void runConfirmed(onLeave)}
       />
       <ConfirmDialog
@@ -260,25 +257,12 @@ const ChatRoomListItem: React.FC<ChatRoomListItemProps> = ({
         onConfirm={() => void runConfirmed(onDelete)}
       />
 
-      <RoomInfoDialog
+      <RoomPanel
         roomId={room.id}
         isOpen={showInfoDialog}
         onClose={() => setShowInfoDialog(false)}
-        onOpenSettings={() => setShowSettingsDialog(true)}
         returnFocusRef={actionsButtonRef}
       />
-
-      {isOwner && (
-        <RoomSettingsDialog
-          roomId={room.id}
-          isOpen={showSettingsDialog}
-          onClose={() => setShowSettingsDialog(false)}
-          returnFocusRef={actionsButtonRef}
-          onSaved={(updatedRoom) => {
-            updateRoom(room.id, updatedRoom);
-          }}
-        />
-      )}
     </div>
   );
 };

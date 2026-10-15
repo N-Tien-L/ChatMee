@@ -1,11 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import ChatRoomListItem from './ChatRoomListItem';
 import { useAuthStore } from '@/lib/stores/authStore';
-import { ChatRoom, RoomSettings, RoomType } from '@/lib/types';
+import { ChatRoom, ParticipantRole, RoomSettings, RoomType } from '@/lib/types';
 
-vi.mock('./RoomInfoDialog', () => ({ RoomInfoDialog: () => null }));
-vi.mock('./RoomSettingsDialog', () => ({ RoomSettingsDialog: () => null }));
+vi.mock('./RoomPanel', () => ({ RoomPanel: () => null }));
 
 const base: ChatRoom = {
     id: 'r1',
@@ -63,5 +62,29 @@ describe('ChatRoomListItem', () => {
     it('render_privateRoom_showsLockIcon', () => {
         renderRow({ roomType: RoomType.PRIVATE });
         expect(screen.getByLabelText('Private room')).toBeTruthy();
+    });
+
+    const openMenu = () => fireEvent.click(screen.getByRole('button', { name: 'Actions for General' }));
+
+    it('menu_ownerByRole_offersLeaveAndDelete', () => {
+        // createdBy is someone else: ownership moved to the caller.
+        renderRow({ myRole: ParticipantRole.OWNER, createdBy: 'u1' });
+        openMenu();
+        expect(screen.getByRole('button', { name: 'Leave' })).toBeTruthy();
+        expect(screen.getByRole('button', { name: 'Delete' })).toBeTruthy();
+    });
+
+    it('menu_creatorWhoIsNowAdmin_offersLeaveButNoDelete', () => {
+        renderRow({ myRole: ParticipantRole.ADMIN, createdBy: 'me' });
+        openMenu();
+        expect(screen.getByRole('button', { name: 'Leave' })).toBeTruthy();
+        expect(screen.queryByRole('button', { name: 'Delete' })).toBeNull();
+    });
+
+    it('menu_member_offersLeaveOnly', () => {
+        renderRow({ myRole: ParticipantRole.MEMBER });
+        openMenu();
+        expect(screen.getByRole('button', { name: 'Leave' })).toBeTruthy();
+        expect(screen.queryByRole('button', { name: 'Delete' })).toBeNull();
     });
 });

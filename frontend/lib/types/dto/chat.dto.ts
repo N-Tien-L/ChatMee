@@ -20,11 +20,6 @@ export interface UpdateChatRoomRequest {
     settings?: Partial<RoomSettings>;
 }
 
-export interface JoinChatRoomRequest {
-    userId: string;
-    role?: string;
-}
-
 export interface ChatMessageRequest {
     roomId: string;
     content: string;

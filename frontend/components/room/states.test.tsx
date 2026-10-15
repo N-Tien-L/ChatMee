@@ -1,12 +1,12 @@
 import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import ChatRoomsList from './ChatRoomsList';
-import { RoomInfoDialog } from './RoomInfoDialog';
-import { RoomSettingsDialog } from './RoomSettingsDialog';
+import { RoomPanel } from './RoomPanel';
 import { userApi } from '@/lib/api/userApi';
 import UserSearchList from '../user/UserSearchList';
 import { useChatRoomsStore } from '@/lib/stores/chatRoomsStore';
 import { useUsersStore } from '@/lib/stores/usersStore';
+import { useAuthStore } from '@/lib/stores/authStore';
 import { chatRoomApi } from '@/lib/api/chatRoomApi';
 
 vi.mock('next/navigation', () => ({
@@ -15,7 +15,7 @@ vi.mock('next/navigation', () => ({
 }));
 vi.mock('@/hooks/use-mobile', () => ({ useIsMobile: () => false }));
 vi.mock('@/lib/api/chatRoomApi', () => ({
-    chatRoomApi: { getChatRoomById: vi.fn() },
+    chatRoomApi: { getChatRoomById: vi.fn(), getMembers: vi.fn() },
 }));
 vi.mock('@/lib/api/userApi', () => ({
     userApi: { searchUsers: vi.fn(), getUserById: vi.fn() },
@@ -71,43 +71,36 @@ describe('UserSearchList loading', () => {
     });
 });
 
-describe('RoomInfoDialog states', () => {
+describe('RoomPanel states', () => {
     beforeEach(() => {
         vi.mocked(chatRoomApi.getChatRoomById).mockReset();
+        vi.mocked(chatRoomApi.getMembers).mockReset();
     });
 
     it('render_loading_showsBusyStatus', () => {
         vi.mocked(chatRoomApi.getChatRoomById).mockReturnValue(new Promise(() => {}));
-        render(<RoomInfoDialog roomId="r1" isOpen onClose={vi.fn()} />);
+        render(<RoomPanel roomId="r1" isOpen onClose={vi.fn()} />);
         expect(screen.getByRole('status', { name: 'Loading room information' })).toHaveAttribute('aria-busy', 'true');
     });
 
     it('render_loadFailure_showsErrorAndRetryLoadsAgain', async () => {
         vi.mocked(chatRoomApi.getChatRoomById).mockRejectedValue(new Error('Network Error'));
-        render(<RoomInfoDialog roomId="r1" isOpen onClose={vi.fn()} />);
+        render(<RoomPanel roomId="r1" isOpen onClose={vi.fn()} />);
         expect(await screen.findByText('Could not load room information')).toBeInTheDocument();
         fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
         await waitFor(() => expect(chatRoomApi.getChatRoomById).toHaveBeenCalledTimes(2));
     });
-});
 
-describe('RoomSettingsDialog states', () => {
-    beforeEach(() => {
-        vi.mocked(chatRoomApi.getChatRoomById).mockReset();
-        vi.mocked(userApi.searchUsers).mockResolvedValue({ success: true, data: { content: [] } } as never);
-    });
-
-    it('render_loading_showsBusyStatus', () => {
-        vi.mocked(chatRoomApi.getChatRoomById).mockReturnValue(new Promise(() => {}));
-        render(<RoomSettingsDialog roomId="r1" isOpen onClose={vi.fn()} />);
-        expect(screen.getByRole('status', { name: 'Loading room settings' })).toHaveAttribute('aria-busy', 'true');
-    });
-
-    it('render_loadFailure_showsErrorAndRetryLoadsAgain', async () => {
-        vi.mocked(chatRoomApi.getChatRoomById).mockRejectedValue(new Error('Network Error'));
-        render(<RoomSettingsDialog roomId="r1" isOpen onClose={vi.fn()} />);
-        expect(await screen.findByText('Could not load room settings')).toBeInTheDocument();
+    it('render_membersLoadFailure_showsMembersErrorAndRetryLoadsMembersAgain', async () => {
+        vi.mocked(chatRoomApi.getChatRoomById).mockResolvedValue({
+            success: true,
+            data: { id: 'r1', roomName: 'Room', roomType: 'PUBLIC', createdAt: '2026-10-09T10:00:00Z', participants: ['u1'], myRole: 'MEMBER' },
+        } as never);
+        vi.mocked(chatRoomApi.getMembers).mockRejectedValue(new Error('Network Error'));
+        useAuthStore.setState({ user: { id: 'u1', name: 'Alice' } } as never);
+        render(<RoomPanel roomId="r1" isOpen onClose={vi.fn()} />);
+        expect(await screen.findByText('Could not load the members.')).toBeInTheDocument();
         fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
-        await waitFor(() => expect(chatRoomApi.getChatRoomById).toHaveBeenCalledTimes(2));
+        await waitFor(() => expect(chatRoomApi.getMembers).toHaveBeenCalledTimes(2));
     });
 });

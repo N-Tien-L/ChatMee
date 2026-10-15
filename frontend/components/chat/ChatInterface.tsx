@@ -6,11 +6,8 @@ import { useChatRoomsStore, RoomEndReason } from "@/lib/stores/chatRoomsStore";
 import { useRoomMessages, useRoomMemberNames } from "@/hooks/useRoomMessage";
 import { useChatStore } from "@/lib/stores/chatStore";
 import { useWebSocket } from "@/hooks/useWebSocket";
-import { useAuthStore } from "@/lib/stores/authStore";
 import { useUsersStore } from "@/lib/stores/usersStore";
-import { RoomInfoDialog } from "@/components/room/RoomInfoDialog";
-import { RoomSettingsDialog } from "@/components/room/RoomSettingsDialog";
-import { ParticipantRole } from "@/lib/types";
+import { RoomPanel } from "@/components/room/RoomPanel";
 import ChatHeader from "./ChatHeader";
 import MessageList from "./MessageList";
 import TypingIndicator from "./TypingIndicator";
@@ -117,8 +114,6 @@ const ChatRoomView: React.FC<{ roomId: string; onDeleted: () => void }> = ({
   } = useRoomMessages(roomId, { onRoomDeleted: handleRoomDeleted });
   const [newMessage, setNewMessage] = useState("");
   const [showInfo, setShowInfo] = useState(false);
-  const [showSettings, setShowSettings] = useState(false);
-  const updateRoom = useChatRoomsStore((state) => state.updateRoom);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
@@ -134,11 +129,6 @@ const ChatRoomView: React.FC<{ roomId: string; onDeleted: () => void }> = ({
   const currentRoom = useChatRoomsStore((state) =>
     state.rooms.find((room) => room.id === roomId)
   );
-  const currentUserId = useAuthStore((state) => state.user?.id);
-  // myRole comes with the room; creator is the fallback for payloads that predate it.
-  const isOwner = currentRoom?.myRole
-    ? currentRoom.myRole === ParticipantRole.OWNER
-    : currentRoom?.createdBy === currentUserId;
   const memberCount = currentRoom?.participants?.length ?? 0;
   const memberNames = useRoomMemberNames(roomId, memberCount);
 
@@ -262,20 +252,7 @@ const ChatRoomView: React.FC<{ roomId: string; onDeleted: () => void }> = ({
           .filter((id) => onlineUsers.has(id))
           .map((id) => ({ id, name: memberNames[id] ?? getUserFromCache(id)?.name ?? "Member", avatarUrl: getUserFromCache(id)?.avatarUrl }))}
       />
-      <RoomInfoDialog
-        roomId={roomId}
-        isOpen={showInfo}
-        onClose={() => setShowInfo(false)}
-        onOpenSettings={() => setShowSettings(true)}
-      />
-      {isOwner && (
-        <RoomSettingsDialog
-          roomId={roomId}
-          isOpen={showSettings}
-          onClose={() => setShowSettings(false)}
-          onSaved={(updatedRoom) => updateRoom(roomId, updatedRoom)}
-        />
-      )}
+      <RoomPanel roomId={roomId} isOpen={showInfo} onClose={() => setShowInfo(false)} />
 
       {/* MessageList owns the scroll container (load older on scroll to top, CM-044). */}
       <div className="flex-1 min-h-0">

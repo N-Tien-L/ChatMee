@@ -180,4 +180,29 @@ describe('chatRoomsStore', () => {
         expect(name).toBe('Bob');
         expect(userApi.getUserById).not.toHaveBeenCalled();
     });
+
+    it('startDirectMessage_existingDm_returnsItWithoutCreatingAnother', async () => {
+        const dm = { ...mockRoom, id: 'dm1', roomType: RoomType.DIRECT_MESSAGE, counterpart: { id: 'u2', name: 'Bob', avatarUrl: '' } };
+        useChatRoomsStore.getState().setRooms([dm]);
+
+        const room = await useChatRoomsStore.getState().startDirectMessage('u2');
+
+        expect(room?.id).toBe('dm1');
+        expect(chatRoomApi.createChatRoom).not.toHaveBeenCalled();
+        expect(useChatRoomsStore.getState().rooms).toHaveLength(1);
+    });
+
+    it('startDirectMessage_newPerson_createsDmRequestAndListsItOnce', async () => {
+        const dm = { ...mockRoom, id: 'dm2', roomType: RoomType.DIRECT_MESSAGE, counterpart: { id: 'u3', name: 'Cid', avatarUrl: '' } };
+        vi.mocked(chatRoomApi.createChatRoom).mockResolvedValueOnce({ success: true, data: dm });
+        // The ROOM_ADDED event can list the room before the create response arrives.
+        useChatRoomsStore.getState().setRooms([dm]);
+        useChatRoomsStore.setState({ rooms: [] });
+
+        const room = await useChatRoomsStore.getState().startDirectMessage('u3');
+
+        expect(chatRoomApi.createChatRoom).toHaveBeenCalledWith({ roomType: RoomType.DIRECT_MESSAGE, participantId: 'u3', maxUsers: 2 });
+        expect(room?.id).toBe('dm2');
+        expect(useChatRoomsStore.getState().rooms.filter((r) => r.id === 'dm2')).toHaveLength(1);
+    });
 });

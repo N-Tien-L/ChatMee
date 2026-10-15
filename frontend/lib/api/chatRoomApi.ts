@@ -2,7 +2,7 @@ import { ApiResponse, ChatRoomResponse, MemberResponse, PagedResponse, PublicRoo
 import {
     CreateChatRoomRequest,
     UpdateChatRoomRequest,
-    JoinChatRoomRequest
+    ParticipantRole
 } from "@/lib/types";
 import { apiClient } from "./apiClient";
 
@@ -87,17 +87,6 @@ export const chatRoomApi = {
         }
     },
 
-    // add participant to chat room (admin/owner only)
-    addParticipant: async (roomId: string, request: JoinChatRoomRequest): Promise<ApiResponse<string>> => {
-        try {
-            const response = await apiClient.post<ApiResponse<string>>(`/api/v1/rooms/${roomId}/members`, request)
-            return response.data;
-        } catch (error) {
-            console.error(`Error adding participant to chat room with ID ${roomId}: `, error)
-            throw error
-        }
-    },
-
     // leave chat room by ID
     leaveChatRoom: async (roomId: string): Promise<ApiResponse<string>> => {
         try {
@@ -118,6 +107,16 @@ export const chatRoomApi = {
     getMembers: async (roomId: string): Promise<ApiResponse<MemberResponse[]>> => {
         const response = await apiClient.get<ApiResponse<MemberResponse[]>>(`/api/v1/rooms/${roomId}/members`)
         return response.data;
+    },
+
+    // remove a member (204; OWNER removes anyone but self, ADMIN removes MEMBERs; SPEC-008 AC-008-6)
+    removeMember: async (roomId: string, userId: string): Promise<void> => {
+        await apiClient.delete(`/api/v1/rooms/${roomId}/members/${userId}`)
+    },
+
+    // promote or demote a member between ADMIN and MEMBER (204; OWNER only, SPEC-009 AC-009-23)
+    changeMemberRole: async (roomId: string, userId: string, role: ParticipantRole.ADMIN | ParticipantRole.MEMBER): Promise<void> => {
+        await apiClient.patch(`/api/v1/rooms/${roomId}/members/${userId}/role`, { role })
     },
 
     // ids of the users that are online right now (a plain JSON array, not wrapped in ApiResponse)
