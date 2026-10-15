@@ -87,11 +87,28 @@ Each gap is a small test: a `document.title` render test, a palette grep guard p
 `ChatWebSocketControllerTest`, a `StompProvider` unauthorized redirect test, and an 11th-report boundary test in `RateLimitingServiceTest`.
 
 ## 7. Open items
-- Still `planned` after the section 6 sweep: AC-008-4, AC-008-11, AC-008-13, AC-008-14, AC-009-20 (gaps listed there), and
-  AC-008-16 (draft amendment). AC-008-12 (release) cannot be signed off until they are closed or the owner accepts the gaps.
+- Section 8 closed the five gaps from section 6. The only v0 AC still open is AC-008-16 (draft amendment, owner approval pending),
+  plus AC-008-12 (the release sign-off itself).
 - AGENTS.md §2 lists `./mvnw spotless:apply`, but Spotless is not configured in `backend/pom.xml` (not added, per instructions).
 - `docs/plan/V0-READINESS-A-REPORT.md` is still untracked in the main checkout.
 - `npm run lint` reports 8 warnings, 0 errors (e.g. `@next/next/no-location-assign-relative-destination` in `lib/api/apiClient.ts`,
   `lib/api/authApi.ts`); not changed here.
 - Still to do in CM-067 (owner): full-stack smoke, secrets rotation, backfills, merge to `main`, tag `v0.1.0`, and approval of the
   AC-008-16 draft.
+
+## 8. Closing the five AC gaps (third task)
+Each new test asserts the part that section 6 reported as missing. No production code changed.
+
+| AC | New test | What it asserts | Status |
+|---|---|---|---|
+| AC-008-4 | `frontend/components/room/ChatRoomsList.title.test.tsx#render_unreadRooms_showsTotalInTitleAndClearsWhenRead`, `#render_noUnread_showsPlainTitle` | `document.title` is `(5) ChatMee` for 2 + 3 unread, drops to `(3) ChatMee` and then `ChatMee` as `markRoomRead` clears each room (the real store, with the API mocked) | Implemented |
+| AC-008-11 | `frontend/components/noRawPalette.test.ts#sources_appAndComponents_containNoGrayOrBlueTailwindClasses`, plus `#rawPalettePattern_sample%#_matchesExpectation` (5 samples: variants and opacity match, token classes do not) | no `*-gray-NNN` / `*-blue-NNN` class in `app/` or `components/` (`components/ui` excluded) | Implemented. The 360 px part is covered by the manual smoke checklist ("Mobile width 360 px"), and the AC line says so. No automated test was faked. |
+| AC-008-13 | `backend/.../controller/ChatWebSocketControllerTest#sendMessage_broadcastThrowsAfterSave_logsWarningWithIdsOnly` (logback `ListAppender`) | exactly one WARN, containing the message id, the room id and the exception type, and not the message content, the exception text (which holds the content and a token-like string) or the session id; no throwable attached | Implemented |
+| AC-008-14 | `frontend/lib/realtime/StompProvider.unauthorized.test.tsx#wsToken401_redirectsToLoginExpiredAndStopsTheSocket`, `#wsTokenNetworkError_doesNotRedirect` | real `stompSession` with a fake STOMP client: a ws-token 401 (axios cause) calls `window.location.replace("/login?reason=expired")`, deactivates the client and fetches the token only once; a network error does not redirect. The auth/me 401 path is the existing `apiClient.test.ts#redirects an expired session to login` (any `/api` 401 -> `/login?reason=expired`). | Implemented |
+| AC-009-20 | `backend/.../service/ReportDailyLimitBindingTest#createReport_defaultConfig_allowsTenPerDayAndRejectsTheEleventh`, `#createReport_overriddenLimit_bindsConfiguredValue` | `ApplicationContextRunner` with the real config data (style of `PersistencePropertyBindingTest`): `chatmee.rate-limit.daily.report` resolves to 10, and the real `ReportService` + `RateLimitingService` (Redis counter simulated) store 10 reports and reject the 11th with `RateLimitExceededException`; an override of 3 rejects the 4th | Implemented |
+
+Spec lines changed: SPEC-008 AC-008-4, -11, -13, -14 and SPEC-009 AC-009-20, status and test names only. AC-008-16 is unchanged (draft amendment).
+
+Gates on this commit:
+- Backend `./mvnw verify`: BUILD SUCCESS. Surefire 581 tests (was 578), Failsafe 105, all 0 failures/errors/skipped. JaCoCo checks met.
+- Frontend: `npm run lint` 0 errors (8 existing warnings), `npx tsc --noEmit` clean, `npm test` 56 files / 370 tests passed, `npm run build` success.
