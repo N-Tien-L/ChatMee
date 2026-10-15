@@ -7,7 +7,8 @@ import { RoomType } from '@/lib/types';
 
 const person = { id: 'u2', name: 'Bob Tran', avatarUrl: '' };
 
-vi.mock('next/navigation', () => ({ useRouter: () => ({ push: vi.fn() }) }));
+const push = vi.fn();
+vi.mock('next/navigation', () => ({ useRouter: () => ({ push }) }));
 vi.mock('@/components/user/UserSearchList', () => ({
     default: ({ onUserAdd }: { onUserAdd: (user: typeof person) => void }) => (
         <button type="button" onClick={() => onUserAdd(person)}>Pick Bob</button>
@@ -18,14 +19,15 @@ beforeEach(() => {
     useAuthStore.setState({ user: { id: 'u1', name: 'Nguyen Van A', avatarUrl: '' } } as never);
     useChatRoomsStore.setState({
         rooms: [],
-        createRoom: vi.fn().mockResolvedValue(false),
+        createRoom: vi.fn().mockResolvedValue(null),
     } as never);
+    push.mockReset();
 });
 afterEach(cleanup);
 
 describe('NewMessageDialog', () => {
     it('start_newPerson_createsDirectMessageWithoutRoomName', async () => {
-        const createRoom = vi.fn().mockResolvedValue(false);
+        const createRoom = vi.fn().mockResolvedValue(null);
         useChatRoomsStore.setState({ createRoom } as never);
         render(<NewMessageDialog isOpen onClose={vi.fn()} />);
 
@@ -38,5 +40,31 @@ describe('NewMessageDialog', () => {
             maxUsers: 2,
         });
         expect(createRoom.mock.calls[0][0]).not.toHaveProperty('roomName');
+    });
+
+    it('start_existingConversation_opensItWithoutCreating', async () => {
+        const createRoom = vi.fn();
+        useChatRoomsStore.setState({
+            createRoom,
+            rooms: [{ id: 'dm-bob', roomType: RoomType.DIRECT_MESSAGE, counterpart: person, roomName: '', createdAt: '' }],
+        } as never);
+        const onClose = vi.fn();
+        render(<NewMessageDialog isOpen onClose={onClose} />);
+
+        fireEvent.click(screen.getByRole('button', { name: 'Pick Bob' }));
+
+        await waitFor(() => expect(push).toHaveBeenCalledWith('/dashboard?roomId=dm-bob', { scroll: false }));
+        expect(createRoom).not.toHaveBeenCalled();
+        expect(onClose).toHaveBeenCalled();
+    });
+
+    it('start_newPerson_navigatesToCreatedDirectMessage', async () => {
+        const createRoom = vi.fn().mockResolvedValue({ id: 'dm-new', roomType: RoomType.DIRECT_MESSAGE, counterpart: person });
+        useChatRoomsStore.setState({ createRoom } as never);
+        render(<NewMessageDialog isOpen onClose={vi.fn()} />);
+
+        fireEvent.click(screen.getByRole('button', { name: 'Pick Bob' }));
+
+        await waitFor(() => expect(push).toHaveBeenCalledWith('/dashboard?roomId=dm-new', { scroll: false }));
     });
 });

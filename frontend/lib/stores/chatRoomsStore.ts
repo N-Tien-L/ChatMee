@@ -58,6 +58,8 @@ interface chatRoomState {
     applyFilters: () => void;
     /** Resolves to the created room, or null when creation failed. */
     createRoom: (request: CreateChatRoomRequest) => Promise<ChatRoom | null>;
+    /** The DM with this user: the listed one if it exists (never a duplicate), otherwise a new DM request (AC-008-8). */
+    startDirectMessage: (userId: string) => Promise<ChatRoom | null>;
     getDirectMessageDisplayName: (room: ChatRoom) => Promise<string>;
     openCreateRoomModal: (mode?: "room" | "direct") => void;
     closeCreateRoomModal: () => void;
@@ -304,6 +306,17 @@ export const useChatRoomsStore = create<chatRoomState>((set, get) => ({
             toast.error("Failed to create room");
             return null;
         }
+    },
+
+    startDirectMessage: async (userId: string) => {
+        const isDmWith = (room: ChatRoom) =>
+            room.roomType === RoomType.DIRECT_MESSAGE && room.counterpart?.id === userId;
+        const existing = get().rooms.find(isDmWith);
+        if (existing) return existing;
+        const created = await get().createRoom({ roomType: RoomType.DIRECT_MESSAGE, participantId: userId, maxUsers: 2 });
+        if (!created) return null;
+        // The server returns the existing DM when there is one; the list keeps a single row per id either way.
+        return get().rooms.find((room) => room.id === created.id) ?? created;
     },
 
     joinRoom: async (roomId: string) => {

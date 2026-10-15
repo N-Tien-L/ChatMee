@@ -25,7 +25,7 @@ export function NewMessageDialog({ isOpen, onClose }: NewMessageDialogProps) {
   const router = useRouter();
   const currentUser = useAuthStore((state) => state.user);
   const rooms = useChatRoomsStore((state) => state.rooms);
-  const createRoom = useChatRoomsStore((state) => state.createRoom);
+  const startDirectMessage = useChatRoomsStore((state) => state.startDirectMessage);
   const [starting, setStarting] = useState<string | null>(null);
 
   const directRooms = useMemo(
@@ -39,24 +39,10 @@ export function NewMessageDialog({ isOpen, onClose }: NewMessageDialogProps) {
   };
 
   const start = async (person: UserSummaryResponse) => {
-    const existing = directRooms.find((room) => room.counterpart?.id === person.id);
-    if (existing) {
-      open(existing);
-      return;
-    }
     setStarting(person.id);
-    const created = await createRoom({
-      roomType: RoomType.DIRECT_MESSAGE,
-      participantId: person.id,
-      maxUsers: 2,
-    });
+    const room = await startDirectMessage(person.id);
     setStarting(null);
-    if (!created) return;
-    const room = useChatRoomsStore
-      .getState()
-      .rooms.find((r) => r.roomType === RoomType.DIRECT_MESSAGE && r.counterpart?.id === person.id);
     if (room) open(room);
-    else onClose();
   };
 
   const recent = directRooms.slice(0, MAX_RECENT);

@@ -26,8 +26,7 @@ vi.mock('./ChatHeader', () => ({ default: () => <div>conversation header</div> }
 vi.mock('./MessageList', () => ({ default: () => null }));
 vi.mock('./TypingIndicator', () => ({ default: () => null }));
 vi.mock('./MessageInput', () => ({ default: () => null }));
-vi.mock('@/components/room/RoomInfoDialog', () => ({ RoomInfoDialog: () => null }));
-vi.mock('@/components/room/RoomSettingsDialog', () => ({ RoomSettingsDialog: () => null }));
+vi.mock('@/components/room/RoomPanel', () => ({ RoomPanel: () => null }));
 
 const room = (id: string, roomType = RoomType.PUBLIC): ChatRoom => ({
     id,
