@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import Link from "next/link";
+import { InboxButton } from "./InboxButton";
 import { UserMenu } from "./UserMenu";
 
 interface AppHeaderProps {
@@ -12,7 +13,7 @@ interface AppHeaderProps {
 /** The inked band across the workspace: wordmark, connection state, account menu. */
 export function AppHeader({ user, onSignOut, status }: AppHeaderProps) {
   return (
-    <header className="relative z-10 flex h-14 flex-shrink-0 items-center gap-4 bg-shell bg-[radial-gradient(ellipse_60%_140%_at_15%_0%,rgb(46_230_193/0.18),transparent_70%)] px-3 text-shell-foreground sm:gap-6 sm:px-5">
+    <header className="relative z-20 flex h-14 flex-shrink-0 items-center gap-4 bg-shell bg-[radial-gradient(ellipse_60%_140%_at_15%_0%,rgb(46_230_193/0.18),transparent_70%)] px-3 text-shell-foreground sm:gap-6 sm:px-5">
       <span aria-hidden="true" className="pointer-events-none absolute inset-x-0 bottom-0 h-px bg-gradient-to-r from-transparent via-glow/50 to-transparent" />
       <Link
         href="/dashboard"
@@ -21,7 +22,8 @@ export function AppHeader({ user, onSignOut, status }: AppHeaderProps) {
         ChatMee
       </Link>
       {status}
-      <div className="ml-auto">
+      <div className="ml-auto flex items-center gap-3">
+        {user && <InboxButton />}
         {user && <UserMenu user={user} onSignOut={onSignOut} />}
       </div>
     </header>

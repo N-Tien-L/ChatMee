@@ -11,10 +11,9 @@ import {
   RotateCw,
   Compass,
   Hash,
-  Inbox,
+  ChevronRight,
 } from "lucide-react";
-import { AnimatePresence, motion } from "motion/react";
-import { useInboxStore } from "@/lib/stores/inboxStore";
+import { motion } from "motion/react";
 import { InboxDialog } from "./InboxDialog";
 import { openQuickSwitcher } from "./QuickSwitcher";
 import { Skeleton } from "../ui/skeleton";
@@ -67,8 +66,6 @@ const ChatRoomsListContent: React.FC = () => {
   );
 
   const openDiscoverRooms = useDiscoverRoomsStore((state) => state.open);
-  const openInbox = useInboxStore((state) => state.open);
-  const inboxCount = useInboxStore((state) => state.invitations.length + state.requests.length);
 
   const handleRoomClick = (roomId: string) => {
     router.push(`/dashboard?roomId=${roomId}`, { scroll: false });
@@ -113,42 +110,6 @@ const ChatRoomsListContent: React.FC = () => {
           <h2 className="font-display text-xl font-semibold tracking-[-0.02em] text-foreground">
             Chats
           </h2>
-          <div className="flex items-center gap-1.5">
-          <button
-            type="button"
-            onClick={() => openInbox()}
-            className="relative grid h-8 w-8 place-items-center rounded-full border border-border text-foreground transition-colors hover:border-primary/40 hover:bg-accent"
-            title="Inbox"
-            aria-label={inboxCount > 0 ? `Inbox, ${inboxCount} waiting` : "Inbox"}
-          >
-            <Inbox className="h-4 w-4 text-primary" aria-hidden="true" />
-            <AnimatePresence>
-              {inboxCount > 0 && (
-                <motion.span
-                  key={inboxCount}
-                  initial={{ scale: 0.4, opacity: 0 }}
-                  animate={{ scale: 1, opacity: 1 }}
-                  exit={{ scale: 0.4, opacity: 0 }}
-                  transition={{ type: "spring", stiffness: 600, damping: 18 }}
-                  aria-hidden="true"
-                  className="absolute -top-1 -right-1 grid h-4 min-w-4 place-items-center rounded-full bg-spot px-1 font-mono text-[10px] font-semibold text-spot-foreground"
-                >
-                  {inboxCount}
-                </motion.span>
-              )}
-            </AnimatePresence>
-          </button>
-          <button
-            type="button"
-            onClick={() => openDiscoverRooms()}
-            className="flex items-center gap-1.5 rounded-full border border-border px-3 py-1.5 text-xs font-medium text-foreground transition-colors hover:border-primary/40 hover:bg-accent"
-            title="Discover rooms"
-            aria-label="Discover rooms"
-          >
-            <Compass className="h-3.5 w-3.5 text-primary" aria-hidden="true" />
-            <span aria-hidden="true">Discover</span>
-          </button>
-          </div>
         </div>
 
         <div className="mb-3 grid grid-cols-2 gap-2">
@@ -171,6 +132,25 @@ const ChatRoomsListContent: React.FC = () => {
             <span aria-hidden="true">Room</span>
           </button>
         </div>
+
+        <button
+          type="button"
+          onClick={() => openDiscoverRooms()}
+          className="group mb-3 flex w-full items-center gap-3 rounded-xl border border-primary/30 bg-primary/10 px-3 py-2 text-left transition-colors hover:border-primary/60 hover:bg-primary/15 active:scale-[0.99]"
+          aria-label="Discover rooms"
+        >
+          <span className="grid h-8 w-8 flex-shrink-0 place-items-center rounded-lg bg-primary/20 text-primary">
+            <Compass className="h-4 w-4" aria-hidden="true" />
+          </span>
+          <span className="min-w-0 flex-1" aria-hidden="true">
+            <span className="block text-sm font-semibold text-foreground">Discover rooms</span>
+            <span className="block truncate text-xs text-muted-foreground">Browse and join public rooms</span>
+          </span>
+          <ChevronRight
+            className="h-4 w-4 flex-shrink-0 text-muted-foreground transition-transform group-hover:translate-x-0.5 group-hover:text-primary"
+            aria-hidden="true"
+          />
+        </button>
 
         {/* Search bar */}
         <div className="relative">
