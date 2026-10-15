@@ -13,6 +13,7 @@ vi.mock('../api/chatRoomApi', () => ({
         joinChatRoom: vi.fn(),
         leaveChatRoom: vi.fn(),
         deleteChatRoom: vi.fn(),
+        hideRoom: vi.fn(),
     }
 }));
 
@@ -204,5 +205,36 @@ describe('chatRoomsStore', () => {
         expect(chatRoomApi.createChatRoom).toHaveBeenCalledWith({ roomType: RoomType.DIRECT_MESSAGE, participantId: 'u3', maxUsers: 2 });
         expect(room?.id).toBe('dm2');
         expect(useChatRoomsStore.getState().rooms.filter((r) => r.id === 'dm2')).toHaveLength(1);
+    });
+
+    it('hideRoom_directMessage_removesRowWithHiddenReason', async () => {
+        const dm = { ...mockRoom, id: 'dm1', roomType: RoomType.DIRECT_MESSAGE };
+        useChatRoomsStore.getState().setRooms([dm, mockRoom]);
+        vi.mocked(chatRoomApi.hideRoom).mockResolvedValueOnce(undefined);
+
+        expect(await useChatRoomsStore.getState().hideRoom('dm1')).toBe(true);
+
+        expect(chatRoomApi.hideRoom).toHaveBeenCalledWith('dm1');
+        expect(useChatRoomsStore.getState().rooms.map((r) => r.id)).toEqual(['r1']);
+        expect(useChatRoomsStore.getState().endedRooms.dm1).toBe('HIDDEN');
+    });
+
+    it('hideRoom_serverRejects_keepsRow', async () => {
+        useChatRoomsStore.getState().setRooms([{ ...mockRoom, id: 'dm1', roomType: RoomType.DIRECT_MESSAGE }]);
+        vi.mocked(chatRoomApi.hideRoom).mockRejectedValueOnce(new Error('Forbidden'));
+
+        expect(await useChatRoomsStore.getState().hideRoom('dm1')).toBe(false);
+        expect(useChatRoomsStore.getState().rooms).toHaveLength(1);
+    });
+
+    it('setCounterpartBlocked_dmWithUser_flagsOnlyThatDm', () => {
+        const dm = { ...mockRoom, id: 'dm1', roomType: RoomType.DIRECT_MESSAGE, counterpart: { id: 'u2', name: 'Bob', avatarUrl: '' } };
+        useChatRoomsStore.getState().setRooms([dm, mockRoom]);
+
+        useChatRoomsStore.getState().setCounterpartBlocked('u2', true);
+
+        const rooms = useChatRoomsStore.getState().rooms;
+        expect(rooms.find((r) => r.id === 'dm1')?.blocked).toBe(true);
+        expect(rooms.find((r) => r.id === 'r1')?.blocked).toBeUndefined();
     });
 });

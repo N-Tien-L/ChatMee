@@ -43,8 +43,6 @@ export function LeaveRoomConfirm({
   useEffect(() => {
     if (!open || !isOwner || members) return;
     let active = true;
-    setLoaded(null);
-    setFailed(false);
     chatRoomApi
       .getMembers(roomId)
       .then((response) => {
@@ -59,6 +57,15 @@ export function LeaveRoomConfirm({
       active = false;
     };
   }, [open, isOwner, members, roomId]);
+
+  // A closed confirm forgets the loaded list, so the next open names the owner from fresh data.
+  const handleOpenChange = (next: boolean) => {
+    if (!next) {
+      setLoaded(null);
+      setFailed(false);
+    }
+    onOpenChange(next);
+  };
 
   const list = members ?? loaded;
   let description = leaveCopy(roomType);
@@ -78,7 +85,7 @@ export function LeaveRoomConfirm({
   return (
     <ConfirmDialog
       open={open}
-      onOpenChange={onOpenChange}
+      onOpenChange={handleOpenChange}
       title={`Leave ${roomName}?`}
       description={description}
       confirmLabel="Leave room"

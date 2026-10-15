@@ -1,7 +1,8 @@
 import React, { useEffect, useRef, useState } from "react";
 import { ChatRoom, RoomType } from "@/lib/types";
-import { MoreVertical, Lock, Trash2, UserMinus, Info } from "lucide-react";
+import { MoreVertical, Lock, Trash2, UserMinus, Info, EyeOff } from "lucide-react";
 import { useAuthStore } from "@/lib/stores/authStore";
+import { useChatRoomsStore } from "@/lib/stores/chatRoomsStore";
 import { ConfirmDialog } from "@/components/common/ConfirmDialog";
 import { RelativeTime } from "@/components/common/RelativeTime";
 import { RoomAvatar } from "@/components/common/RoomAvatar";
@@ -48,8 +49,10 @@ const ChatRoomListItem: React.FC<ChatRoomListItemProps> = ({
   const isDirect = room.roomType === RoomType.DIRECT_MESSAGE;
   const isPending = room.state === "REQUESTED";
   const unread = room.unreadCount ?? 0;
+  const hideRoom = useChatRoomsStore((state) => state.hideRoom);
   // Actions follow the caller's participant role, never `createdBy` (SPEC-009 AC-009-25).
-  const mayDelete = canDeleteRoom(room.myRole);
+  // A DM is never deleted, only hidden for the caller (SPEC-009 AC-009-21/22).
+  const mayDelete = !isDirect && canDeleteRoom(room.myRole);
   const activityAt = room.lastActivityAt || room.createdAt;
 
   useEffect(() => {
@@ -208,6 +211,20 @@ const ChatRoomListItem: React.FC<ChatRoomListItemProps> = ({
                     >
                       <UserMinus size={16} className="mr-2" aria-hidden="true" />
                       Leave
+                    </button>
+                  )}
+
+                  {isDirect && (
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        void runConfirmed(() => hideRoom(room.id));
+                      }}
+                      disabled={isLoading}
+                      className="w-full flex items-center px-4 py-2 text-sm text-foreground hover:bg-accent disabled:opacity-50"
+                    >
+                      <EyeOff size={16} className="mr-2" aria-hidden="true" />
+                      Hide
                     </button>
                   )}
 

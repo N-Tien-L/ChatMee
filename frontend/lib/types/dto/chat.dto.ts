@@ -58,6 +58,8 @@ export interface ChatRoomResponse {
     myRole?: ParticipantRole | null;
     /** Absent until CM-072; a missing value means ACTIVE. REQUESTED = a DM request not yet accepted. */
     state?: "ACTIVE" | "REQUESTED";
+    /** DIRECT_MESSAGE rooms: true when the caller blocked the other member; never sent to the blocked user (AC-009-19). */
+    blocked?: boolean;
 }
 
 /** One row of GET /api/v1/rooms/{roomId}/members (CM-062): members only, with their role. */

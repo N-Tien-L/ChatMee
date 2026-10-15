@@ -2,7 +2,7 @@
 
 import { Message, MessageType } from "@/lib/types";
 import React, { useCallback, useLayoutEffect, useRef, useState } from "react";
-import { AlertCircle, ArrowDown, MessageSquare, RotateCw } from "lucide-react";
+import { AlertCircle, ArrowDown, Flag, MessageSquare, RotateCw } from "lucide-react";
 import { Skeleton } from "../ui/skeleton";
 import { Button } from "../ui/button";
 import { UserAvatar } from "../common/UserAvatar";
@@ -38,6 +38,8 @@ interface MessageListProps {
   onLoadOlder?: () => void;
   /** Direct message with this person: no sender names or avatars on their messages, and a person intro on top. */
   directWith?: { name: string; avatarUrl?: string | null } | null;
+  /** Report another member's message (SPEC-009 AC-009-20); shown on hover or keyboard focus. */
+  onReport?: (message: Message) => void;
 }
 
 const isNearBottom = (el: HTMLElement) =>
@@ -173,6 +175,7 @@ const MessageListContent: React.FC<MessageListContentProps> = ({
   olderError = null,
   onLoadOlder,
   directWith = null,
+  onReport,
   showLoadOlder,
 }) => {
   if (loading && messages.length === 0) {
@@ -419,6 +422,17 @@ const MessageListContent: React.FC<MessageListContentProps> = ({
                         >
                           {formatTime(messageDate)}
                         </time>
+                      )}
+                      {onReport && message.id && (
+                        <button
+                          type="button"
+                          onClick={() => onReport(message)}
+                          aria-label={`Report message from ${message.senderName || "this member"}`}
+                          title="Report message"
+                          className="mb-0.5 rounded-md p-1 text-muted-foreground opacity-0 transition-opacity hover:bg-accent hover:text-destructive focus-visible:opacity-100 group-hover:opacity-100 group-focus-within:opacity-100 pointer-coarse:opacity-100"
+                        >
+                          <Flag className="h-3.5 w-3.5" aria-hidden="true" />
+                        </button>
                       )}
                     </div>
                   </div>

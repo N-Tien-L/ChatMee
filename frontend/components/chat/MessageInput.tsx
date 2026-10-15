@@ -15,6 +15,8 @@ interface MessageInputProps {
   inputRef: React.RefObject<HTMLTextAreaElement | null>;
   /** Shown above the field while sending is paused, for example during a reconnect (G3). */
   pausedHint?: string | null;
+  /** Locks the text field itself, for example after the one message of a pending DM request (SPEC-009 AC-009-10). */
+  inputDisabled?: boolean;
 }
 
 const MESSAGE_INPUT_ID = "chat-message-input";
@@ -26,6 +28,7 @@ const MessageInput: React.FC<MessageInputProps> = ({
   disabled,
   inputRef,
   pausedHint = null,
+  inputDisabled = false,
 }) => {
   // Enter sends, Shift+Enter inserts a newline; Enter while an IME is composing is left alone.
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
@@ -56,8 +59,9 @@ const MessageInput: React.FC<MessageInputProps> = ({
             value={value}
             onChange={onChange}
             onKeyDown={handleKeyDown}
+            disabled={inputDisabled}
             aria-describedby={`${MESSAGE_INPUT_ID}-hint`}
-            className="block w-full resize-none field-sizing-content min-h-9 max-h-32 overflow-y-auto bg-transparent py-1.5 text-sm sm:text-base outline-none placeholder:text-muted-foreground focus-visible:outline-none"
+            className="block w-full resize-none field-sizing-content min-h-9 max-h-32 overflow-y-auto bg-transparent py-1.5 text-sm sm:text-base outline-none placeholder:text-muted-foreground focus-visible:outline-none disabled:cursor-not-allowed"
           />
           <span id={`${MESSAGE_INPUT_ID}-hint`} className="sr-only">
             Press Enter to send, Shift+Enter for a new line.
