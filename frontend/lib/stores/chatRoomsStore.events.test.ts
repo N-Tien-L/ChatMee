@@ -59,6 +59,14 @@ describe('chatRoomsStore user events', () => {
         expect(find('r1')?.roomName).toBe('New');
     });
 
+    it('addRoom_roomAlreadyAddedByEvent_keepsOneRow', () => {
+        const { upsertRoom, addRoom } = useChatRoomsStore.getState();
+        upsertRoom(room('r1'));
+        addRoom(room('r1'));
+        expect(ids()).toEqual(['r1']);
+        expect(useChatRoomsStore.getState().filteredRooms.map(r => r.id)).toEqual(['r1']);
+    });
+
     it('upsertRoom_directRoom_usesCounterpartNameAsDisplayName', () => {
         useChatRoomsStore.getState().upsertRoom(room('d1', {
             roomType: RoomType.DIRECT_MESSAGE,

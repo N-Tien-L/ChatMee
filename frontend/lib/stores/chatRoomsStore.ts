@@ -43,7 +43,8 @@ interface chatRoomState {
     leaveRoom: (roomId: string) => Promise<boolean>;
     deleteRoomById: (roomId: string) => Promise<boolean>;
     applyFilters: () => void;
-    createRoom: (request: CreateChatRoomRequest) => Promise<boolean>;
+    /** Resolves to the created room, or null when creation failed. */
+    createRoom: (request: CreateChatRoomRequest) => Promise<ChatRoom | null>;
     getDirectMessageDisplayName: (room: ChatRoom) => Promise<string>;
     openCreateRoomModal: (mode?: "room" | "direct") => void;
     closeCreateRoomModal: () => void;
@@ -182,8 +183,11 @@ export const useChatRoomsStore = create<chatRoomState>((set, get) => ({
     },
 
     addRoom: (room) => {
+        // The ROOM_ADDED event can beat the create response, so the room may already be listed.
         set((state) => ({
-            rooms: [...state.rooms, room],
+            rooms: state.rooms.some((r) => r.id === room.id)
+                ? state.rooms.map((r) => (r.id === room.id ? { ...r, ...room } : r))
+                : [...state.rooms, room],
         }));
         get().applyFilters();
     },
@@ -246,23 +250,22 @@ export const useChatRoomsStore = create<chatRoomState>((set, get) => ({
             const response = await chatRoomApi.createChatRoom(request);
             if (response.success) {
                 // For Direct Message rooms, compute the display name before adding
-                if (response.data.roomType === RoomType.DIRECT_MESSAGE) {
-                    const displayName = await get().getDirectMessageDisplayName(response.data);
-                    get().addRoom({ ...response.data, displayName });
-                } else {
-                    get().addRoom(response.data);
-                }
+                const room =
+                    response.data.roomType === RoomType.DIRECT_MESSAGE
+                        ? { ...response.data, displayName: await get().getDirectMessageDisplayName(response.data) }
+                        : response.data;
+                get().addRoom(room);
                 toast.success(
                     response.data.roomType === RoomType.DIRECT_MESSAGE ? "Message request sent" : "Room created successfully!"
                 );
-                return true;
+                return room;
             } else {
                 toast.error(response.message || "Failed to create room");
-                return false;
+                return null;
             }
         } catch {
             toast.error("Failed to create room");
-            return false;
+            return null;
         }
     },
 

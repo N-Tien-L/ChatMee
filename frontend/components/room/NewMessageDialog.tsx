@@ -48,7 +48,6 @@ export function NewMessageDialog({ isOpen, onClose }: NewMessageDialogProps) {
     const created = await createRoom({
       roomType: RoomType.DIRECT_MESSAGE,
       participantId: person.id,
-      roomName: `${currentUser?.name ?? "Me"} & ${person.name}`,
       maxUsers: 2,
     });
     setStarting(null);

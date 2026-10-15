@@ -127,14 +127,14 @@ describe('chatRoomsStore', () => {
     it('joinRoom, leaveRoom, deleteRoomById, createRoom return true/false and update state as implemented', async () => {
         // createRoom success
         vi.mocked(chatRoomApi.createChatRoom).mockResolvedValueOnce({ success: true, data: mockRoom });
-        let result = await useChatRoomsStore.getState().createRoom({ roomName: 'General', roomType: RoomType.PUBLIC, maxUsers: 10 });
-        expect(result).toBe(true);
+        let result: unknown = await useChatRoomsStore.getState().createRoom({ roomName: 'General', roomType: RoomType.PUBLIC, maxUsers: 10 });
+        expect(result).toMatchObject({ id: mockRoom.id });
         expect(useChatRoomsStore.getState().rooms).toHaveLength(1);
         
         // createRoom failure
         vi.mocked(chatRoomApi.createChatRoom).mockResolvedValueOnce({ success: false, message: 'error', data: mockRoom });
-        result = await useChatRoomsStore.getState().createRoom({ roomName: 'General', roomType: RoomType.PUBLIC, maxUsers: 10 });
-        expect(result).toBe(false);
+        const failed = await useChatRoomsStore.getState().createRoom({ roomName: 'General', roomType: RoomType.PUBLIC, maxUsers: 10 });
+        expect(failed).toBeNull();
         
         // joinRoom success
         vi.mocked(chatRoomApi.joinChatRoom).mockResolvedValueOnce(undefined);

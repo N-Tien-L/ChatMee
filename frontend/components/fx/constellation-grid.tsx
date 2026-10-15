@@ -45,6 +45,13 @@ const MAX_CELL = 64;
 const POINTER_RATIO = 4;
 const LINK_RATIO = 1.36;
 const RING_RATIO = 1.64;
+/** Adaptive quality: average frame interval (ms) above which the mesh is degraded, and how much coarser a degraded cell is. */
+const SLOW_FRAME_MS = 28;
+const DEGRADED_CELL_SCALE = 1.6;
+/** Radians per millisecond of the virtual pointer on touch devices (a full horizontal sweep takes about 16 s). */
+const AMBIENT_SPEED = 0.0004;
+/** Number of alpha levels links are quantised to so they can be stroked in batches. */
+const LINK_ALPHA_STEPS = 12;
 /** Neighbour offsets (in grid cells) checked for links: right, down and both diagonals; each pair is visited once. */
 const NEIGHBOURS: [number, number][] = [
   [1, 0],
@@ -82,9 +89,19 @@ export default function ConstellationGrid({
     let ringDistance = cell * RING_RATIO;
     let lastTime = performance.now();
     let visible = true;
+    /**
+     * Adaptive quality for browsers without canvas acceleration (software rendering). 0 = full, 1 = coarser mesh at 1x
+     * pixel density, 2 = frozen still frame. Escalates when frames stay slow; never goes back down in a session.
+     */
+    let degrade = 0;
+    let frozen = false;
+    let prevFrameAt = 0;
+    let slowEma = 16;
+    let framesSinceChange = 0;
 
     const initNodes = () => {
       cell = spacing ?? Math.min(MAX_CELL, Math.max(MIN_CELL, Math.round(width / COLUMNS)));
+      if (degrade >= 1) cell = Math.round(cell * DEGRADED_CELL_SCALE);
       pointerRadius = cell * POINTER_RATIO;
       linkDistance = cell * LINK_RATIO;
       ringDistance = cell * RING_RATIO;
@@ -111,7 +128,7 @@ export default function ConstellationGrid({
     };
 
     const resize = () => {
-      const dpr = Math.min(window.devicePixelRatio || 1, 2);
+      const dpr = degrade >= 1 ? 1 : Math.min(window.devicePixelRatio || 1, 2);
       bounds = canvas.getBoundingClientRect();
       width = bounds.width;
       height = bounds.height;
@@ -122,13 +139,31 @@ export default function ConstellationGrid({
       if (reduceMotion.matches) draw(0);
     };
 
-    const step = (dt: number) => {
-      const vx = (pointer.x - pointer.prevX) / (dt * 1000 || 1);
-      const vy = (pointer.y - pointer.prevY) / (dt * 1000 || 1);
+    /**
+     * The spring is integrated with explicit Euler, which is only stable for small steps. Running it with the real frame
+     * time made a slow frame (dt up to 50 ms) blow the mesh up, so the grid jittered wildly exactly when the browser was
+     * struggling. It now advances in fixed 1/60 s steps (at most MAX_SUBSTEPS per frame): identical at 60 fps, slower
+     * but stable when frames drop.
+     */
+    const FIXED_STEP = 1 / 60;
+    const MAX_SUBSTEPS = 3;
+    let accumulator = 0;
+
+    const step = (frameDt: number) => {
+      const vx = (pointer.x - pointer.prevX) / (frameDt * 1000 || 1);
+      const vy = (pointer.y - pointer.prevY) / (frameDt * 1000 || 1);
       pointer.prevX = pointer.x;
       pointer.prevY = pointer.y;
       const speed = Math.min(Math.hypot(vx, vy), 20);
 
+      accumulator = Math.min(accumulator + frameDt, FIXED_STEP * MAX_SUBSTEPS);
+      while (accumulator >= FIXED_STEP) {
+        integrate(FIXED_STEP, speed);
+        accumulator -= FIXED_STEP;
+      }
+    };
+
+    const integrate = (dt: number, speed: number) => {
       for (const n of nodes) {
         n.pulse += dt * 3;
         const dx = pointer.x - n.x;
@@ -152,7 +187,10 @@ export default function ConstellationGrid({
     const draw = (time: number) => {
       ctx.clearRect(0, 0, width, height);
 
+      // Links are batched into a few alpha buckets: one path and one stroke per bucket instead of one per link.
       ctx.lineWidth = 0.7;
+      const buckets: Path2D[] = Array.from({ length: LINK_ALPHA_STEPS }, () => new Path2D());
+      const used: boolean[] = new Array(LINK_ALPHA_STEPS).fill(false);
       for (let i = 0; i < cols; i++) {
         for (let j = 0; j < rows; j++) {
           const n = nodes[i * rows + j];
@@ -163,13 +201,17 @@ export default function ConstellationGrid({
             const m = nodes[ni * rows + nj];
             const d = Math.hypot(n.x - m.x, n.y - m.y);
             if (d >= linkDistance) continue;
-            ctx.strokeStyle = `rgba(${nodeColor}, ${(1 - d / linkDistance) * 0.18})`;
-            ctx.beginPath();
-            ctx.moveTo(n.x, n.y);
-            ctx.lineTo(m.x, m.y);
-            ctx.stroke();
+            const bucket = Math.min(LINK_ALPHA_STEPS - 1, Math.floor((1 - d / linkDistance) * LINK_ALPHA_STEPS));
+            buckets[bucket].moveTo(n.x, n.y);
+            buckets[bucket].lineTo(m.x, m.y);
+            used[bucket] = true;
           }
         }
+      }
+      for (let b = 0; b < LINK_ALPHA_STEPS; b++) {
+        if (!used[b]) continue;
+        ctx.strokeStyle = `rgba(${nodeColor}, ${((b + 0.5) / LINK_ALPHA_STEPS) * 0.18})`;
+        ctx.stroke(buckets[b]);
       }
 
       ctx.font = "8px ui-monospace, SFMono-Regular, Consolas, monospace";
@@ -198,17 +240,54 @@ export default function ConstellationGrid({
       }
     };
 
+    /**
+     * Touch devices have no hover, so the mesh would sit still. There a virtual pointer drifts along a slow looping
+     * path and drives the same push, rings and readouts. Real touches are ignored (they are scrolls, not hovers).
+     */
+    const ambient = window.matchMedia("(hover: none)");
+    const driftPointer = (now: number) => {
+      pointer.x = width * (0.5 + 0.38 * Math.sin(now * AMBIENT_SPEED));
+      pointer.y = height * (0.45 + 0.3 * Math.sin(now * AMBIENT_SPEED * 0.73 + 1.3));
+      if (pointer.prevX === -1000) {
+        pointer.prevX = pointer.x;
+        pointer.prevY = pointer.y;
+      }
+    };
+
     const loop = (now: number) => {
       frameId = 0;
       const dt = Math.min((now - lastTime) / 1000, 0.05);
       lastTime = now;
+      if (ambient.matches) driftPointer(now);
       step(dt);
       draw(now);
+      watchFrameTime(now);
       schedule();
     };
 
+    /** Escalates quality degradation when the real frame interval stays well above 60 fps for about a second. */
+    const watchFrameTime = (now: number) => {
+      const interval = prevFrameAt ? now - prevFrameAt : 16;
+      prevFrameAt = now;
+      slowEma = slowEma * 0.9 + Math.min(interval, 200) * 0.1;
+      framesSinceChange += 1;
+      if (framesSinceChange < 45 || slowEma < SLOW_FRAME_MS || degrade >= 2) return;
+      degrade += 1;
+      framesSinceChange = 0;
+      slowEma = 16;
+      prevFrameAt = 0;
+      onPointerLeave();
+      if (degrade >= 2) {
+        frozen = true;
+        stop();
+      }
+      resize();
+      if (frozen) draw(0);
+    };
+
     const schedule = () => {
-      if (frameId || !visible || document.hidden || reduceMotion.matches) return;
+      if (frameId || frozen || !visible || document.hidden || reduceMotion.matches) return;
+      prevFrameAt = 0;
       lastTime = performance.now();
       frameId = requestAnimationFrame(loop);
     };
@@ -219,7 +298,7 @@ export default function ConstellationGrid({
     };
 
     const onPointerMove = (event: PointerEvent) => {
-      if (reduceMotion.matches) return;
+      if (reduceMotion.matches || ambient.matches) return;
       pointer.x = event.clientX - bounds.left;
       pointer.y = event.clientY - bounds.top;
     };

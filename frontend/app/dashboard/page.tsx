@@ -39,7 +39,7 @@ const DashboardContent = () => {
     <div className="h-full flex flex-row overflow-hidden bg-background">
       <aside
         aria-label="Chat rooms"
-        className={`${roomId ? "hidden" : "block"} md:block w-full md:w-80 flex-shrink-0 border-r bg-sidebar`}
+        className={`${roomId ? "hidden" : "block"} md:block w-full md:w-72 lg:w-80 flex-shrink-0 border-r bg-sidebar`}
       >
         <ChatRoomsList />
       </aside>

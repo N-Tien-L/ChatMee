@@ -132,6 +132,9 @@ npm run lint && npx tsc --noEmit && npm test && npm run build
 
 ### Run Locally
 
+For Windows/PowerShell commands, OAuth callback setup, health checks and troubleshooting,
+see [Backend local development](backend/README.md#local-development).
+
 1. Start MongoDB and Redis:
 
    ```bash
