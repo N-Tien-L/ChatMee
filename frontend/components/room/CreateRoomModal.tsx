@@ -34,7 +34,7 @@ const MAX_USERS = 1000;
 const MIN_NAME = 3;
 
 const field =
-  "h-12 w-full rounded-xl border border-border bg-muted/50 px-4 text-[15px] transition-colors placeholder:text-muted-foreground focus:border-ring focus:bg-card focus:ring-[3px] focus:ring-ring/20 focus:outline-none";
+  "h-11 w-full rounded-xl border border-border bg-muted/50 px-4 text-[15px] transition-colors placeholder:text-muted-foreground focus:border-ring focus:bg-card focus:ring-[3px] focus:ring-ring/20 focus:outline-none";
 
 /**
  * "New room" in two steps (D-16): details with a live preview, then invite people (private rooms only, skippable).
@@ -109,7 +109,7 @@ export const CreateRoomModal = ({ isOpen, onClose }: CreateRoomModalProps) => {
   };
 
   const preview = (
-    <aside aria-label="Preview" className="relative flex flex-col gap-4 border-t border-border bg-muted/40 p-6 md:border-t-0 md:border-l">
+    <aside aria-label="Preview" className="relative flex flex-col gap-4 border-t border-border bg-muted/40 p-5 md:border-t-0 md:border-l">
       <p className="text-[11px] font-medium uppercase tracking-[0.1em] text-muted-foreground">How it will look</p>
       <div className="overflow-hidden rounded-2xl bg-card shadow-[0_24px_50px_-28px_rgb(0_0_0/0.6)] ring-1 ring-border">
         <RoomCover name={name || "your-room"} className="h-24" />
@@ -157,10 +157,10 @@ export const CreateRoomModal = ({ isOpen, onClose }: CreateRoomModalProps) => {
         else onClose();
       }}
     >
-      <DialogContent className="max-h-[92dvh] gap-0 overflow-y-auto rounded-2xl p-0 sm:max-w-[860px] [&>*]:min-w-0 focus-visible:outline-none">
-        <div className="grid md:grid-cols-[minmax(0,1fr)_320px]">
-          <div className="p-6 sm:p-7">
-            <ol aria-label="Steps" className="mb-5 flex items-center gap-2 text-xs font-medium">
+      <DialogContent className="max-h-[92dvh] gap-0 overflow-y-auto rounded-2xl p-0 sm:max-w-[780px] [&>*]:min-w-0 focus-visible:outline-none">
+        <div className="grid md:grid-cols-[minmax(0,1fr)_280px]">
+          <div className="p-5 sm:p-6">
+            <ol aria-label="Steps" className="mb-4 flex items-center gap-2 text-xs font-medium">
               {[
                 { key: "details", label: "Details" },
                 { key: "invite", label: "Invite people" },
@@ -195,18 +195,18 @@ export const CreateRoomModal = ({ isOpen, onClose }: CreateRoomModalProps) => {
                   animate={{ opacity: 1, x: 0 }}
                   exit={{ opacity: 0, x: -16 }}
                   transition={{ duration: 0.2 }}
-                  className="space-y-6"
+                  className="space-y-5"
                 >
                   <div>
-                    <DialogTitle className="font-display text-3xl font-semibold tracking-[-0.02em]">New room</DialogTitle>
+                    <DialogTitle className="font-display text-2xl font-semibold tracking-[-0.02em]">New room</DialogTitle>
                     <DialogDescription className="mt-1">
                       A place for a group. For one person, use <span className="font-medium text-foreground">Message</span>{" "}
                       instead.
                     </DialogDescription>
                   </div>
 
-                  <div className="space-y-2">
-                    <Label htmlFor="room-name">Room name</Label>
+                  <div className="space-y-2.5">
+                    <Label htmlFor="room-name" className="block leading-5">Room name</Label>
                     <input
                       id="room-name"
                       autoFocus
@@ -223,7 +223,7 @@ export const CreateRoomModal = ({ isOpen, onClose }: CreateRoomModalProps) => {
                   </div>
 
                   <fieldset>
-                    <legend className="mb-2 text-sm font-medium">Who can join</legend>
+                    <legend className="mb-2.5 text-sm font-medium leading-5">Who can join</legend>
                     <div className="grid gap-3 sm:grid-cols-2">
                       {TYPES.map(({ value, icon: Icon, title, body }) => {
                         const selected = roomType === value;
@@ -263,8 +263,43 @@ export const CreateRoomModal = ({ isOpen, onClose }: CreateRoomModalProps) => {
                     </div>
                   </fieldset>
 
-                  <div className="space-y-2">
-                    <Label htmlFor="description">
+                  {!isPrivate && (
+                    <div className="flex items-center justify-between gap-4 rounded-xl border border-border px-4 py-2.5">
+                      <Label htmlFor="maxUser" className="leading-5">Maximum members</Label>
+                      <div className="flex items-center rounded-full border border-border">
+                        <button
+                          type="button"
+                          aria-label="Decrease maximum members"
+                          onClick={() => setMaxUser((v) => clamp(v - 5))}
+                          disabled={maxUser <= MIN_USERS}
+                          className="grid h-8 w-8 place-items-center rounded-full hover:bg-accent disabled:opacity-40"
+                        >
+                          <Minus className="h-3.5 w-3.5" aria-hidden="true" />
+                        </button>
+                        <input
+                          id="maxUser"
+                          type="number"
+                          min={MIN_USERS}
+                          max={MAX_USERS}
+                          value={maxUser}
+                          onChange={(e) => setMaxUser(clamp(Number(e.target.value) || MIN_USERS))}
+                          className="w-14 bg-transparent text-center font-mono text-sm tabular outline-none [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none"
+                        />
+                        <button
+                          type="button"
+                          aria-label="Increase maximum members"
+                          onClick={() => setMaxUser((v) => clamp(v + 5))}
+                          disabled={maxUser >= MAX_USERS}
+                          className="grid h-8 w-8 place-items-center rounded-full hover:bg-accent disabled:opacity-40"
+                        >
+                          <Plus className="h-3.5 w-3.5" aria-hidden="true" />
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="space-y-2.5">
+                    <Label htmlFor="description" className="block leading-5">
                       Description <span className="font-normal text-muted-foreground">(optional)</span>
                     </Label>
                     <textarea
@@ -274,7 +309,7 @@ export const CreateRoomModal = ({ isOpen, onClose }: CreateRoomModalProps) => {
                       placeholder="What is this room for?"
                       maxLength={200}
                       rows={2}
-                      className={cn(field, "h-auto resize-none py-3")}
+                      className={cn(field, "h-auto resize-none py-2.5")}
                     />
                   </div>
 
@@ -287,46 +322,14 @@ export const CreateRoomModal = ({ isOpen, onClose }: CreateRoomModalProps) => {
                       className="flex w-full items-center justify-between rounded-2xl px-4 py-3 text-sm font-medium hover:bg-accent/50"
                     >
                       <span>
-                        More options <span className="font-normal text-muted-foreground">· up to {maxUser} members</span>
+                        More options
                       </span>
                       <ChevronDown className={cn("h-4 w-4 transition-transform", moreOpen && "rotate-180")} aria-hidden="true" />
                     </button>
                     {moreOpen && (
                       <div id="room-more-options" className="space-y-4 border-t border-border px-4 py-4">
-                        <div className="flex items-center justify-between gap-4">
-                          <Label htmlFor="maxUser">Maximum members</Label>
-                          <div className="flex items-center rounded-full border border-border">
-                            <button
-                              type="button"
-                              aria-label="Decrease maximum members"
-                              onClick={() => setMaxUser((v) => clamp(v - 5))}
-                              disabled={maxUser <= MIN_USERS}
-                              className="grid h-8 w-8 place-items-center rounded-full hover:bg-accent disabled:opacity-40"
-                            >
-                              <Minus className="h-3.5 w-3.5" aria-hidden="true" />
-                            </button>
-                            <input
-                              id="maxUser"
-                              type="number"
-                              min={MIN_USERS}
-                              max={MAX_USERS}
-                              value={maxUser}
-                              onChange={(e) => setMaxUser(clamp(Number(e.target.value) || MIN_USERS))}
-                              className="w-14 bg-transparent text-center font-mono text-sm tabular outline-none [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none"
-                            />
-                            <button
-                              type="button"
-                              aria-label="Increase maximum members"
-                              onClick={() => setMaxUser((v) => clamp(v + 5))}
-                              disabled={maxUser >= MAX_USERS}
-                              className="grid h-8 w-8 place-items-center rounded-full hover:bg-accent disabled:opacity-40"
-                            >
-                              <Plus className="h-3.5 w-3.5" aria-hidden="true" />
-                            </button>
-                          </div>
-                        </div>
-                        <div className="space-y-2">
-                          <Label htmlFor="welcomeMessage">Welcome message</Label>
+                        <div className="space-y-2.5">
+                          <Label htmlFor="welcomeMessage" className="block leading-5">Welcome message</Label>
                           <input
                             id="welcomeMessage"
                             value={welcomeMessage}
@@ -354,14 +357,14 @@ export const CreateRoomModal = ({ isOpen, onClose }: CreateRoomModalProps) => {
                     <button
                       type="button"
                       onClick={onClose}
-                      className="h-12 rounded-xl border border-border px-5 text-sm font-medium hover:bg-accent"
+                      className="h-11 rounded-xl border border-border px-5 text-sm font-medium hover:bg-accent"
                     >
                       Cancel
                     </button>
                     <button
                       type="submit"
                       disabled={!valid || submitting}
-                      className="h-12 flex-1 rounded-xl bg-gradient-to-br from-bubble-own-from to-bubble-own-to text-sm font-semibold text-primary-foreground shadow-[0_8px_20px_-8px_rgb(11_107_93/0.7)] transition-transform hover:brightness-110 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50 disabled:shadow-none"
+                      className="h-11 flex-1 rounded-xl bg-gradient-to-br from-bubble-own-from to-bubble-own-to text-sm font-semibold text-primary-foreground shadow-[0_8px_20px_-8px_rgb(11_107_93/0.7)] transition-transform hover:brightness-110 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50 disabled:shadow-none"
                     >
                       {submitting ? "Creating…" : isPrivate ? "Create and invite people" : "Create room"}
                     </button>
@@ -374,10 +377,10 @@ export const CreateRoomModal = ({ isOpen, onClose }: CreateRoomModalProps) => {
                   animate={{ opacity: 1, x: 0 }}
                   exit={{ opacity: 0, x: 16 }}
                   transition={{ duration: 0.2 }}
-                  className="space-y-6"
+                  className="space-y-5"
                 >
                   <div>
-                    <DialogTitle className="font-display text-3xl font-semibold tracking-[-0.02em]">Invite people</DialogTitle>
+                    <DialogTitle className="font-display text-2xl font-semibold tracking-[-0.02em]">Invite people</DialogTitle>
                     <DialogDescription className="mt-1">
                       <span className="font-medium text-foreground">{name}</span> is ready. Invite people now or later from the
                       room&apos;s info.
