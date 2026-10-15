@@ -197,7 +197,9 @@ Paths are relative to `/api/v1`.
 - **Application destinations** (client sends to):
     - `/app/chat.sendMessage`: send a message `{roomId, content, messageType: "TEXT", tempId?}`.
     - `/app/rooms/{roomId}/typing`: send typing status.
-    - `/app/presence`: presence heartbeat.
+    - `/app/presence`: heartbeat that refreshes the presence of the sender's own, already known session. The payload
+      (`online`, legacy `userId`) is ignored, so `online: false` does not mark anyone offline; presence ends when the
+      user's last STOMP session closes (see [`websocket-protocol.md`](../docs/design/websocket-protocol.md)).
 
 ## Error Handling
 - REST errors are `ProblemDetail` (`application/problem+json`) with a `code` field (an `ErrorCode` name such as
