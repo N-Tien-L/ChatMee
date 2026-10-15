@@ -10,6 +10,14 @@ import toast from "react-hot-toast";
 import Fuse from "fuse.js";
 import { CreateChatRoomRequest } from "@/lib/types";
 
+/** `ROOM_REMOVED` reasons (docs/design/websocket-protocol.md, "User events"). */
+export type RoomEndReason = "LEFT" | "REMOVED" | "DELETED" | "HIDDEN" | "DECLINED" | "EXPIRED";
+
+const END_REASONS: readonly RoomEndReason[] = ["LEFT", "REMOVED", "DELETED", "HIDDEN", "DECLINED", "EXPIRED"];
+
+const isEndReason = (value: unknown): value is RoomEndReason =>
+    typeof value === "string" && (END_REASONS as readonly string[]).includes(value);
+
 interface chatRoomState {
     rooms: ChatRoom[];
     filteredRooms: ChatRoom[];
@@ -24,10 +32,15 @@ interface chatRoomState {
     createRoomModalMode: "room" | "direct";
     /** The room open in the conversation pane, or null. Drives the unread rules. */
     activeRoomId: string | null;
+    /**
+     * Why a room left the list, by room id, from the `ROOM_REMOVED` user event. The open conversation reads it to show the
+     * right ended state without waiting for a room-topic frame. Cleared when the room comes back.
+     */
+    endedRooms: Record<string, RoomEndReason>;
 
     setActiveRoom: (roomId: string | null) => void;
     upsertRoom: (room: ChatRoom) => void;
-    removeRoom: (roomId: string) => void;
+    removeRoom: (roomId: string, reason?: RoomEndReason) => void;
     applyActivity: (roomId: string, lastMessage: LastMessageSummary) => void;
     markRoomRead: (roomId: string) => Promise<void>;
     handleUserEvent: (event: unknown) => Promise<void>;
@@ -72,6 +85,14 @@ const withDisplayName = (room: ChatRoom): ChatRoom =>
         ? { ...room, displayName: room.counterpart.name }
         : room;
 
+/** Drops ended reasons for rooms that are listed again; returns the same object when nothing changes. */
+const withoutEnded = (ended: Record<string, RoomEndReason>, ids: string[]): Record<string, RoomEndReason> => {
+    if (!ids.some((id) => id in ended)) return ended;
+    const next = { ...ended };
+    for (const id of ids) delete next[id];
+    return next;
+};
+
 const tabIsVisible = () => typeof document === "undefined" || document.visibilityState === "visible";
 
 export const useChatRoomsStore = create<chatRoomState>((set, get) => ({
@@ -86,6 +107,7 @@ export const useChatRoomsStore = create<chatRoomState>((set, get) => ({
     isCreateRoomModalOpen: false,
     createRoomModalMode: "room",
     activeRoomId: null,
+    endedRooms: {},
 
     // Actions
     setActiveRoom: (roomId) => set({ activeRoomId: roomId }),
@@ -96,14 +118,16 @@ export const useChatRoomsStore = create<chatRoomState>((set, get) => ({
             rooms: state.rooms.some((r) => r.id === next.id)
                 ? state.rooms.map((r) => (r.id === next.id ? { ...r, ...next } : r))
                 : [...state.rooms, next],
+            endedRooms: withoutEnded(state.endedRooms, [next.id]),
         }));
         get().applyFilters();
     },
 
-    removeRoom: (roomId) => {
+    removeRoom: (roomId, reason) => {
         set((state) => ({
             rooms: state.rooms.filter((room) => room.id !== roomId),
             activeRoomId: state.activeRoomId === roomId ? null : state.activeRoomId,
+            endedRooms: reason ? { ...state.endedRooms, [roomId]: reason } : state.endedRooms,
         }));
         get().applyFilters();
     },
@@ -158,9 +182,21 @@ export const useChatRoomsStore = create<chatRoomState>((set, get) => ({
             case "ROOM_UPDATED":
                 if (isRoom(payload.room)) get().upsertRoom(payload.room);
                 break;
-            case "ROOM_REMOVED":
-                if (typeof payload.roomId === "string") get().removeRoom(payload.roomId);
+            case "ROOM_REMOVED": {
+                const roomId = payload.roomId;
+                if (typeof roomId !== "string") break;
+                const reason = isEndReason(payload.reason) ? payload.reason : undefined;
+                // DM request outcomes for the sender (SPEC-009 AC-009-12/13): tell them even when the DM is not open.
+                if (reason === "DECLINED" || reason === "EXPIRED") {
+                    const name = get().rooms.find((r) => r.id === roomId)?.displayName;
+                    const to = name ? ` to ${name}` : "";
+                    toast(reason === "DECLINED" ? `Your message request${to} was declined` : `Your message request${to} expired`, {
+                        id: `dm-request-${roomId}`,
+                    });
+                }
+                get().removeRoom(roomId, reason);
                 break;
+            }
             case "ROOM_ACTIVITY": {
                 const roomId = payload.roomId;
                 if (typeof roomId !== "string" || !isLastMessage(payload.lastMessage)) break;
@@ -178,7 +214,7 @@ export const useChatRoomsStore = create<chatRoomState>((set, get) => ({
 
     getUnreadTotal: () => get().rooms.reduce((sum, room) => sum + (room.unreadCount ?? 0), 0),
     setRooms: (rooms) => {
-        set({ rooms });
+        set((state) => ({ rooms, endedRooms: withoutEnded(state.endedRooms, rooms.map((room) => room.id)) }));
         get().applyFilters();
     },
 
@@ -188,6 +224,7 @@ export const useChatRoomsStore = create<chatRoomState>((set, get) => ({
             rooms: state.rooms.some((r) => r.id === room.id)
                 ? state.rooms.map((r) => (r.id === room.id ? { ...r, ...room } : r))
                 : [...state.rooms, room],
+            endedRooms: withoutEnded(state.endedRooms, [room.id]),
         }));
         get().applyFilters();
     },

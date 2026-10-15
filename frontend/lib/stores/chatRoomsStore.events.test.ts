@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { useChatRoomsStore } from './chatRoomsStore';
 import { chatRoomApi } from '../api/chatRoomApi';
 import { RoomType, RoomSettings, ChatRoomResponse } from '@/lib/types';
+import toast from 'react-hot-toast';
 
 vi.mock('../api/chatRoomApi', () => ({
     chatRoomApi: {
@@ -14,7 +15,7 @@ vi.mock('../api/userApi', () => ({ userApi: { getUserById: vi.fn() } }));
 vi.mock('./authStore', () => ({
     useAuthStore: { getState: vi.fn(() => ({ user: { id: 'me' } })) },
 }));
-vi.mock('react-hot-toast', () => ({ default: { success: vi.fn(), error: vi.fn() } }));
+vi.mock('react-hot-toast', () => ({ default: Object.assign(vi.fn(), { success: vi.fn(), error: vi.fn() }) }));
 
 const room = (id: string, extra: Partial<ChatRoomResponse> = {}): ChatRoomResponse => ({
     id,
@@ -46,7 +47,7 @@ describe('chatRoomsStore user events', () => {
         setVisibility('visible');
         useChatRoomsStore.setState({
             rooms: [], filteredRooms: [], searchQuery: '', roomTypeFilter: 'ALL',
-            loading: false, error: null, activeRoomId: null,
+            loading: false, error: null, activeRoomId: null, endedRooms: {},
         });
     });
     afterEach(() => setVisibility('visible'));
@@ -146,7 +147,48 @@ describe('chatRoomsStore user events', () => {
                 type: 'ROOM_REMOVED', payload: { roomId: 'r1', reason }, occurredAt: '',
             });
             expect(ids()).toEqual([]);
+            expect(useChatRoomsStore.getState().endedRooms).toEqual({ r1: reason });
         });
+
+    it.each([
+        ['DECLINED', 'Your message request to Bob was declined'],
+        ['EXPIRED', 'Your message request to Bob expired'],
+    ])('handleUserEvent_roomRemoved%s_toastsRequestOutcome', async (reason, message) => {
+        useChatRoomsStore.setState({ rooms: [{ ...room('dm1', { roomType: RoomType.DIRECT_MESSAGE }), displayName: 'Bob' }] });
+        await useChatRoomsStore.getState().handleUserEvent({
+            type: 'ROOM_REMOVED', payload: { roomId: 'dm1', reason }, occurredAt: '',
+        });
+        expect(toast).toHaveBeenCalledWith(message, { id: 'dm-request-dm1' });
+    });
+
+    it.each(['LEFT', 'REMOVED', 'DELETED', 'HIDDEN'])('handleUserEvent_roomRemoved%s_noRequestToast', async reason => {
+        useChatRoomsStore.setState({ rooms: [room('r1')] });
+        await useChatRoomsStore.getState().handleUserEvent({
+            type: 'ROOM_REMOVED', payload: { roomId: 'r1', reason }, occurredAt: '',
+        });
+        expect(toast).not.toHaveBeenCalled();
+    });
+
+    it('handleUserEvent_roomRemovedUnknownReason_removesRoomWithoutReason', async () => {
+        useChatRoomsStore.setState({ rooms: [room('r1')] });
+        await useChatRoomsStore.getState().handleUserEvent({
+            type: 'ROOM_REMOVED', payload: { roomId: 'r1', reason: 'BOGUS' }, occurredAt: '',
+        });
+        expect(ids()).toEqual([]);
+        expect(useChatRoomsStore.getState().endedRooms).toEqual({});
+    });
+
+    it('upsertRoom_afterRemoval_clearsEndedReason', async () => {
+        useChatRoomsStore.setState({ rooms: [room('r1')] });
+        await useChatRoomsStore.getState().handleUserEvent({
+            type: 'ROOM_REMOVED', payload: { roomId: 'r1', reason: 'LEFT' }, occurredAt: '',
+        });
+        await useChatRoomsStore.getState().handleUserEvent({
+            type: 'ROOM_ADDED', payload: { room: room('r1') }, occurredAt: '',
+        });
+        expect(ids()).toEqual(['r1']);
+        expect(useChatRoomsStore.getState().endedRooms).toEqual({});
+    });
 
     it('handleUserEvent_roomUpdated_replacesRoomWithoutDuplicate', async () => {
         useChatRoomsStore.getState().setRooms([room('r1', { roomName: 'Old', unreadCount: 2 })]);

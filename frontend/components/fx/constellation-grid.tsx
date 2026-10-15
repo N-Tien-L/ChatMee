@@ -262,7 +262,7 @@ export default function ConstellationGrid({
       step(dt);
       draw(now);
       watchFrameTime(now);
-      schedule();
+      schedule(false);
     };
 
     /** Escalates quality degradation when the real frame interval stays well above 60 fps for about a second. */
@@ -285,10 +285,17 @@ export default function ConstellationGrid({
       if (frozen) draw(0);
     };
 
-    const schedule = () => {
+    /**
+     * Queues the next frame. The loop passes resume=false so the frame watcher keeps measuring the real interval.
+     * Every other caller starts the loop after a pause (first start, back on screen or in the foreground, reduced motion
+     * turned off), so the clocks restart there and the pause gap is never counted as a slow frame.
+     */
+    const schedule = (resume = true) => {
       if (frameId || frozen || !visible || document.hidden || reduceMotion.matches) return;
-      prevFrameAt = 0;
-      lastTime = performance.now();
+      if (resume) {
+        prevFrameAt = 0;
+        lastTime = performance.now();
+      }
       frameId = requestAnimationFrame(loop);
     };
 

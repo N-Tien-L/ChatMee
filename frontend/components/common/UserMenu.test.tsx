@@ -37,6 +37,75 @@ describe('UserMenu', () => {
         expect(trigger).toHaveFocus();
     });
 
+    it.each(['Enter', ' ', 'ArrowDown'])('keyDown%s_onTrigger_opensMenuAndFocusesFirstItem', key => {
+        render(<UserMenu user={user} onSignOut={vi.fn()} />);
+        const trigger = screen.getByRole('button', { name: 'Account menu' });
+        trigger.focus();
+        fireEvent.keyDown(trigger, { key });
+        expect(trigger).toHaveAttribute('aria-expanded', 'true');
+        expect(screen.getByRole('menuitem', { name: 'Profile' })).toHaveFocus();
+    });
+
+    it('keyDownArrowUp_onTrigger_opensMenuAndFocusesLastItem', () => {
+        render(<UserMenu user={user} onSignOut={vi.fn()} />);
+        const trigger = screen.getByRole('button', { name: 'Account menu' });
+        fireEvent.keyDown(trigger, { key: 'ArrowUp' });
+        expect(screen.getByRole('menuitem', { name: 'Sign out' })).toHaveFocus();
+    });
+
+    it('keyDownEnter_onTrigger_preventsNativeClickToggle', () => {
+        render(<UserMenu user={user} onSignOut={vi.fn()} />);
+        const trigger = screen.getByRole('button', { name: 'Account menu' });
+        const notCancelled = fireEvent.keyDown(trigger, { key: 'Enter' });
+        expect(notCancelled).toBe(false);
+    });
+
+    it('keyDownArrows_inMenu_moveFocusAndWrap', () => {
+        render(<UserMenu user={user} onSignOut={vi.fn()} />);
+        fireEvent.keyDown(screen.getByRole('button', { name: 'Account menu' }), { key: 'ArrowDown' });
+        const order = ['Profile', 'System', 'Light', 'Dark', 'Sign out'];
+        const item = (name: string) =>
+            screen.getAllByRole(name === 'Profile' || name === 'Sign out' ? 'menuitem' : 'menuitemradio', { name })[0];
+        for (let i = 1; i < order.length; i++) {
+            fireEvent.keyDown(document.activeElement as Element, { key: 'ArrowDown' });
+            expect(item(order[i])).toHaveFocus();
+        }
+        fireEvent.keyDown(document.activeElement as Element, { key: 'ArrowDown' });
+        expect(item('Profile')).toHaveFocus();
+        fireEvent.keyDown(document.activeElement as Element, { key: 'ArrowUp' });
+        expect(item('Sign out')).toHaveFocus();
+        fireEvent.keyDown(document.activeElement as Element, { key: 'ArrowUp' });
+        expect(item('Dark')).toHaveFocus();
+    });
+
+    it('keyDownHomeEnd_inMenu_focusesFirstAndLastItem', () => {
+        render(<UserMenu user={user} onSignOut={vi.fn()} />);
+        fireEvent.keyDown(screen.getByRole('button', { name: 'Account menu' }), { key: 'ArrowDown' });
+        fireEvent.keyDown(document.activeElement as Element, { key: 'End' });
+        expect(screen.getByRole('menuitem', { name: 'Sign out' })).toHaveFocus();
+        fireEvent.keyDown(document.activeElement as Element, { key: 'Home' });
+        expect(screen.getByRole('menuitem', { name: 'Profile' })).toHaveFocus();
+    });
+
+    it('keyDownEscape_fromMenuItem_closesAndReturnsFocusToTrigger', () => {
+        render(<UserMenu user={user} onSignOut={vi.fn()} />);
+        const trigger = screen.getByRole('button', { name: 'Account menu' });
+        fireEvent.keyDown(trigger, { key: 'ArrowDown' });
+        fireEvent.keyDown(document.activeElement as Element, { key: 'ArrowDown' });
+        fireEvent.keyDown(document.activeElement as Element, { key: 'Escape' });
+        expect(screen.queryByRole('menu')).not.toBeInTheDocument();
+        expect(trigger).toHaveFocus();
+    });
+
+    it('click_trigger_keepsMenuPanelInsideHeaderStackingContext', () => {
+        const { container } = render(<UserMenu user={user} onSignOut={vi.fn()} />);
+        fireEvent.click(screen.getByRole('button', { name: 'Account menu' }));
+        const menu = screen.getByRole('menu');
+        // Not portalled: the panel stays in the header's z-20 context, positioned under the trigger (CM-084 mobile fix).
+        expect(container.contains(menu)).toBe(true);
+        expect(menu).toHaveClass('absolute', 'z-50');
+    });
+
     it('mouseDown_outside_closesMenu', () => {
         render(<UserMenu user={user} onSignOut={vi.fn()} />);
         fireEvent.click(screen.getByRole('button', { name: 'Account menu' }));

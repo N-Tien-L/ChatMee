@@ -2,7 +2,7 @@
 
 import React, { useState, useRef, useEffect, useCallback } from "react";
 import { useShallow } from "zustand/react/shallow";
-import { useChatRoomsStore } from "@/lib/stores/chatRoomsStore";
+import { useChatRoomsStore, RoomEndReason } from "@/lib/stores/chatRoomsStore";
 import { useRoomMessages, useRoomMemberNames } from "@/hooks/useRoomMessage";
 import { useChatStore } from "@/lib/stores/chatStore";
 import { useWebSocket } from "@/hooks/useWebSocket";
@@ -22,11 +22,21 @@ const SELF_TYPING_IDLE_MS = 2000;
 /** Minimum gap between "typing: true" frames. The server allows 10 typing frames per 5 s per user (CM-056). */
 const TYPING_SEND_INTERVAL_MS = 1000;
 
-type EndedReason = "removed" | "deleted";
 interface EndedState {
   roomId: string;
-  reason: EndedReason;
+  /** Known locally (the room topic announced the deletion); otherwise the user event's reason is used. */
+  reason: RoomEndReason | null;
 }
+
+/** Ended-view copy per `ROOM_REMOVED` reason (SPEC-008 AC-008-4, SPEC-009 AC-009-12/13). */
+const ENDED_COPY: Record<RoomEndReason, string> = {
+  DELETED: "This room was deleted",
+  REMOVED: "You are no longer a member",
+  LEFT: "You left this room",
+  HIDDEN: "You hid this conversation",
+  DECLINED: "Your message request was declined",
+  EXPIRED: "Your message request expired without an answer",
+};
 
 interface ChatInterfaceProps {
   roomId: string;
@@ -38,6 +48,7 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ roomId }) => {
   const roomExists = useChatRoomsStore((state) =>
     state.rooms.some((room) => room.id === roomId)
   );
+  const eventReason = useChatRoomsStore((state) => state.endedRooms[roomId]);
   const [ended, setEnded] = useState<EndedState | null>(null);
   // The room this view has shown; a room that disappears after being shown has ended (UX-17).
   const shownRoomRef = useRef<string | null>(null);
@@ -49,12 +60,13 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ roomId }) => {
     }
     if (shownRoomRef.current === roomId) {
       setEnded((previous) =>
-        previous?.roomId === roomId ? previous : { roomId, reason: "removed" }
+        previous?.roomId === roomId ? previous : { roomId, reason: null }
       );
     }
   }, [roomExists, roomId]);
 
-  const endedReason = ended?.roomId === roomId ? ended.reason : null;
+  // Without any reason (e.g. a refetch dropped the room) the user is no longer a member.
+  const endedReason = ended?.roomId === roomId ? ended.reason ?? eventReason ?? "REMOVED" : null;
   if (endedReason) return <RoomEndedView reason={endedReason} />;
 
   if (!roomExists)
@@ -67,15 +79,15 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ roomId }) => {
   return (
     <ChatRoomView
       roomId={roomId}
-      onDeleted={() => setEnded({ roomId, reason: "deleted" })}
+      onDeleted={() => setEnded({ roomId, reason: "DELETED" })}
     />
   );
 };
 
-const RoomEndedView: React.FC<{ reason: EndedReason }> = ({ reason }) => (
+const RoomEndedView: React.FC<{ reason: RoomEndReason }> = ({ reason }) => (
   <div className="flex items-center justify-center h-full p-6">
     <p role="status" className="text-center text-muted-foreground">
-      {reason === "deleted" ? "This room was deleted" : "You are no longer a member"}
+      {ENDED_COPY[reason]}
     </p>
   </div>
 );
