@@ -6,7 +6,7 @@ Status: Implemented (CM-028). Decision record: ADR-0005.
 
 | Collection | Document | Key fields | Indexes |
 |---|---|---|---|
-| `chat_rooms` | `ChatRoom` | `type`, `name`, `createdBy`, `maxParticipants` (`<= 0` = unlimited), `memberCount`, `isActive`, `deletedAt`, `createdAt` (auditing), `lastActivity`, `settings` | `_id` |
+| `chat_rooms` | `ChatRoom` | `type`, `name`, `createdBy`, `maxParticipants` (`<= 0` = unlimited), `memberCount`, `isActive`, `deletedAt`, `createdAt` (auditing), `lastActivity`, `settings` (`allowFileSharing`, `allowGuestUsers`, `moderationRequired`, `welcomeMessage` at most 500 characters; returned as `RoomSettingsResponse`) | `_id` |
 | `participants` | `Participant` | `chatRoomId`, `userId`, `role` (OWNER, ADMIN, MEMBER), `joinedAt` / `updatedAt` (auditing) | unique `(chatRoomId, userId)`, `userId` |
 | `messages` | `Message` | `chatRoomId`, `senderId`, `createdAt`, `isDeleted` | `_id`; `messages_room_created_id`: `(chatRoomId ASC, createdAt DESC, _id DESC)` (CM-044) |
 
