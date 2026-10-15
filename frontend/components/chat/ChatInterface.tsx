@@ -6,12 +6,16 @@ import { useChatRoomsStore } from "@/lib/stores/chatRoomsStore";
 import { useRoomMessages, useRoomMemberNames } from "@/hooks/useRoomMessage";
 import { useChatStore } from "@/lib/stores/chatStore";
 import { useWebSocket } from "@/hooks/useWebSocket";
+import { useAuthStore } from "@/lib/stores/authStore";
 import { useUsersStore } from "@/lib/stores/usersStore";
 import { RoomInfoDialog } from "@/components/room/RoomInfoDialog";
+import { RoomSettingsDialog } from "@/components/room/RoomSettingsDialog";
+import { ParticipantRole } from "@/lib/types";
 import ChatHeader from "./ChatHeader";
 import MessageList from "./MessageList";
 import TypingIndicator from "./TypingIndicator";
 import MessageInput from "./MessageInput";
+import { RoomType } from "@/lib/types";
 
 /** Typing indicator: how long a typing user is shown after the last event, in ms (SPEC-005 AC-005-5). */
 const SELF_TYPING_IDLE_MS = 2000;
@@ -54,7 +58,7 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ roomId }) => {
   if (!roomExists)
     return (
       <div className="flex items-center justify-center h-full">
-        <div className="text-center text-gray-500">Room not found</div>
+        <div className="text-center text-muted-foreground">Room not found</div>
       </div>
     );
 
@@ -68,7 +72,7 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ roomId }) => {
 
 const RoomEndedView: React.FC<{ reason: EndedReason }> = ({ reason }) => (
   <div className="flex items-center justify-center h-full p-6">
-    <p role="status" className="text-center text-gray-500">
+    <p role="status" className="text-center text-muted-foreground">
       {reason === "deleted" ? "This room was deleted" : "You are no longer a member"}
     </p>
   </div>
@@ -99,6 +103,8 @@ const ChatRoomView: React.FC<{ roomId: string; onDeleted: () => void }> = ({
   } = useRoomMessages(roomId, { onRoomDeleted: handleRoomDeleted });
   const [newMessage, setNewMessage] = useState("");
   const [showInfo, setShowInfo] = useState(false);
+  const [showSettings, setShowSettings] = useState(false);
+  const updateRoom = useChatRoomsStore((state) => state.updateRoom);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
@@ -113,6 +119,11 @@ const ChatRoomView: React.FC<{ roomId: string; onDeleted: () => void }> = ({
   const currentRoom = useChatRoomsStore((state) =>
     state.rooms.find((room) => room.id === roomId)
   );
+  const currentUserId = useAuthStore((state) => state.user?.id);
+  // myRole comes with the room; creator is the fallback for payloads that predate it.
+  const isOwner = currentRoom?.myRole
+    ? currentRoom.myRole === ParticipantRole.OWNER
+    : currentRoom?.createdBy === currentUserId;
   const memberCount = currentRoom?.participants?.length ?? 0;
   const memberNames = useRoomMemberNames(roomId, memberCount);
 
@@ -206,7 +217,7 @@ const ChatRoomView: React.FC<{ roomId: string; onDeleted: () => void }> = ({
   if (!currentRoom)
     return (
       <div className="flex items-center justify-center h-full">
-        <div className="text-center text-gray-500">Room not found</div>
+        <div className="text-center text-muted-foreground">Room not found</div>
       </div>
     );
 
@@ -217,7 +228,7 @@ const ChatRoomView: React.FC<{ roomId: string; onDeleted: () => void }> = ({
     : false;
 
   return (
-    <div className="flex flex-col h-full w-full bg-white overflow-hidden">
+    <div className="flex flex-col h-full w-full bg-background overflow-hidden">
       <ChatHeader
         room={currentRoom}
         memberCount={memberCount}
@@ -225,8 +236,24 @@ const ChatRoomView: React.FC<{ roomId: string; onDeleted: () => void }> = ({
         presenceKnown={presenceLoaded}
         counterpartOnline={counterpartOnline}
         onOpenInfo={() => setShowInfo(true)}
+        onlineMembers={(currentRoom.participants ?? [])
+          .filter((id) => onlineUsers.has(id))
+          .map((id) => ({ id, name: memberNames[id] ?? getUserFromCache(id)?.name ?? "Member", avatarUrl: getUserFromCache(id)?.avatarUrl }))}
       />
-      <RoomInfoDialog roomId={roomId} isOpen={showInfo} onClose={() => setShowInfo(false)} />
+      <RoomInfoDialog
+        roomId={roomId}
+        isOpen={showInfo}
+        onClose={() => setShowInfo(false)}
+        onOpenSettings={() => setShowSettings(true)}
+      />
+      {isOwner && (
+        <RoomSettingsDialog
+          roomId={roomId}
+          isOpen={showSettings}
+          onClose={() => setShowSettings(false)}
+          onSaved={(updatedRoom) => updateRoom(roomId, updatedRoom)}
+        />
+      )}
 
       {/* MessageList owns the scroll container (load older on scroll to top, CM-044). */}
       <div className="flex-1 min-h-0">
@@ -247,6 +274,11 @@ const ChatRoomView: React.FC<{ roomId: string; onDeleted: () => void }> = ({
           loadingOlder={loadingOlder}
           olderError={olderError}
           onLoadOlder={loadOlder}
+          directWith={
+            currentRoom.roomType === RoomType.DIRECT_MESSAGE && currentRoom.counterpart
+              ? { name: currentRoom.counterpart.name, avatarUrl: currentRoom.counterpart.avatarUrl }
+              : null
+          }
         />
       </div>
 
@@ -261,6 +293,11 @@ const ChatRoomView: React.FC<{ roomId: string; onDeleted: () => void }> = ({
         onSubmit={handleSendMessage}
         disabled={!newMessage.trim() || !connected}
         inputRef={inputRef}
+        pausedHint={
+          !connected && !loading
+            ? "Reconnecting. Keep typing; sending resumes when the connection is back."
+            : null
+        }
       />
     </div>
   );

@@ -1,6 +1,8 @@
 import type { Metadata, Viewport } from "next";
-import { Borel, Geist, Geist_Mono } from "next/font/google";
+import { Borel, Bricolage_Grotesque, Geist, Geist_Mono } from "next/font/google";
 import { Toaster } from "react-hot-toast";
+import { MotionProvider } from "@/components/fx/motion-provider";
+import { THEME_BOOT_SCRIPT } from "@/lib/theme/theme";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -20,9 +22,15 @@ const borel = Borel({
   weight: "400",
 });
 
+// Display font: headlines on public pages and room titles (D-14).
+const bricolage = Bricolage_Grotesque({
+  variable: "--font-bricolage",
+  subsets: ["latin"],
+});
+
 export const metadata: Metadata = {
-  title: "ChatMee - Real-time Chat Application",
-  description: "Connect and chat with friends in real-time",
+  title: "ChatMee",
+  description: "Real-time chat with rooms, direct messages, presence and typing.",
 };
 
 export const viewport: Viewport = {
@@ -38,33 +46,25 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className="h-full">
+    <html lang="en" className="h-full" suppressHydrationWarning>
+      <head>
+        {/* Applies the saved or system theme before first paint (D-15). */}
+        <script dangerouslySetInnerHTML={{ __html: THEME_BOOT_SCRIPT }} />
+      </head>
       <body
-        className={`${geistSans.variable} ${geistMono.variable} ${borel.variable} antialiased h-full`}
+        className={`${geistSans.variable} ${geistMono.variable} ${borel.variable} ${bricolage.variable} antialiased h-full`}
         suppressHydrationWarning={true}
       >
-        {children}
+        <MotionProvider>{children}</MotionProvider>
         <Toaster
           position="top-right"
           toastOptions={{
             duration: 4000,
             style: {
-              background: "rgba(0, 0, 0, 0.8)",
-              color: "#fff",
-              backdropFilter: "blur(10px)",
-              border: "1px solid rgba(255, 255, 255, 0.1)",
-            },
-            error: {
-              style: {
-                // background: 'rgba(239, 68, 68, 0.9)',
-                color: "#fff",
-              },
-            },
-            success: {
-              style: {
-                // background: 'rgba(34, 197, 94, 0.9)',
-                color: "#fff",
-              },
+              background: "var(--foreground)",
+              color: "var(--background)",
+              borderRadius: "6px",
+              fontSize: "14px",
             },
           }}
         />

@@ -1,6 +1,4 @@
-"use client";
-
-import LoginBackGround from "@/components/background/LoginBackGround";
+import { HeroLight } from "@/components/landing/HeroLight";
 
 export default function LoginLayout({
   children,
@@ -8,16 +6,9 @@ export default function LoginLayout({
   children: React.ReactNode;
 }) {
   return (
-    <div className="relative w-full min-h-screen h-screen overflow-hidden">
-      {/* Background layer */}
-      <div className="absolute inset-0 z-0">
-        <LoginBackGround />
-      </div>
-
-      {/* Content layer with safe area padding for mobile */}
-      <div className="absolute inset-0 z-10 flex items-center justify-center p-safe">
-        {children}
-      </div>
+    <div className="theme-public relative isolate flex min-h-dvh w-full items-center justify-center overflow-hidden bg-background p-safe px-4 py-10 text-foreground">
+      <HeroLight />
+      <div className="relative z-10 flex w-full justify-center">{children}</div>
     </div>
   );
 }

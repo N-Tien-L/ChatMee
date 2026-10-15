@@ -14,11 +14,14 @@ interface chatRoomState {
     rooms: ChatRoom[];
     filteredRooms: ChatRoom[];
     searchQuery: string;
-    roomTypeFilter: RoomType | "ALL";
+    /** "ROOMS" = public and private group rooms (no direct messages). */
+    roomTypeFilter: RoomType | "ALL" | "ROOMS";
     loading: boolean;
     error: string | null;
     usersCache: Map<string, UserSummaryResponse>;
     isCreateRoomModalOpen: boolean;
+    /** Which create flow is open: a group room, or a direct message to one person (D-14). */
+    createRoomModalMode: "room" | "direct";
     /** The room open in the conversation pane, or null. Drives the unread rules. */
     activeRoomId: string | null;
 
@@ -34,7 +37,7 @@ interface chatRoomState {
     updateRoom: (id: string, updates: Partial<ChatRoom>) => void;
     deleteRoom: (id: string) => void;
     setSearchQuery: (query: string) => void;
-    setRoomTypeFilter: (filter: RoomType | "ALL") => void;
+    setRoomTypeFilter: (filter: RoomType | "ALL" | "ROOMS") => void;
     fetchRooms: () => Promise<void>;
     joinRoom: (roomId: string) => Promise<boolean>;
     leaveRoom: (roomId: string) => Promise<boolean>;
@@ -42,7 +45,7 @@ interface chatRoomState {
     applyFilters: () => void;
     createRoom: (request: CreateChatRoomRequest) => Promise<boolean>;
     getDirectMessageDisplayName: (room: ChatRoom) => Promise<string>;
-    openCreateRoomModal: () => void;
+    openCreateRoomModal: (mode?: "room" | "direct") => void;
     closeCreateRoomModal: () => void;
 }
 
@@ -80,6 +83,7 @@ export const useChatRoomsStore = create<chatRoomState>((set, get) => ({
     error: null,
     usersCache: new Map(),
     isCreateRoomModalOpen: false,
+    createRoomModalMode: "room",
     activeRoomId: null,
 
     // Actions
@@ -248,7 +252,9 @@ export const useChatRoomsStore = create<chatRoomState>((set, get) => ({
                 } else {
                     get().addRoom(response.data);
                 }
-                toast.success("Room created successfully!");
+                toast.success(
+                    response.data.roomType === RoomType.DIRECT_MESSAGE ? "Message request sent" : "Room created successfully!"
+                );
                 return true;
             } else {
                 toast.error(response.message || "Failed to create room");
@@ -315,7 +321,9 @@ export const useChatRoomsStore = create<chatRoomState>((set, get) => ({
         let filtered = [...rooms].sort((a, b) => activityTime(b) - activityTime(a));
 
         // Apply room type filter
-        if (roomTypeFilter !== "ALL") {
+        if (roomTypeFilter === "ROOMS") {
+            filtered = filtered.filter((room) => room.roomType !== RoomType.DIRECT_MESSAGE);
+        } else if (roomTypeFilter !== "ALL") {
             filtered = filtered.filter((room) => room.roomType === roomTypeFilter);
         }
 
@@ -384,6 +392,6 @@ export const useChatRoomsStore = create<chatRoomState>((set, get) => ({
     },
 
     // Actions on create room modal
-    openCreateRoomModal: () => set({ isCreateRoomModalOpen: true }),
+    openCreateRoomModal: (mode = "room") => set({ isCreateRoomModalOpen: true, createRoomModalMode: mode }),
     closeCreateRoomModal: () => set({ isCreateRoomModalOpen: false }),
 }));

@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { AxiosError } from 'axios';
 import toast from 'react-hot-toast';
 import { useAuthStore } from './authStore';
 import { useChatRoomsStore } from './chatRoomsStore';
@@ -65,5 +66,32 @@ describe('authStore persistence', () => {
         useAuthStore.setState({ isAuthenticated: false, user: null });
         await useAuthStore.persist.rehydrate();
         expect(useAuthStore.getState().isAuthenticated).toBe(false);
+    });
+});
+
+describe('authStore.checkAuthStatus (CM-084 G1)', () => {
+    const axiosFailure = (status?: number) =>
+        new Error('Request failed', {
+            cause: new AxiosError('Request failed', 'ERR', undefined, undefined,
+                status === undefined ? undefined : { status, statusText: '', data: {}, headers: {}, config: {} as never }),
+        });
+
+    it('checkAuthStatus_networkError_marksServerUnreachable', async () => {
+        vi.mocked(authApi.getCurrentUser).mockRejectedValue(axiosFailure());
+        await useAuthStore.getState().checkAuthStatus();
+        expect(useAuthStore.getState()).toMatchObject({ isAuthenticated: false, user: null, unreachable: true });
+    });
+
+    it('checkAuthStatus_proxyBadGateway_marksServerUnreachable', async () => {
+        vi.mocked(authApi.getCurrentUser).mockRejectedValue(axiosFailure(502));
+        await useAuthStore.getState().checkAuthStatus();
+        expect(useAuthStore.getState().unreachable).toBe(true);
+    });
+
+    it('checkAuthStatus_noSession401_isSignedOutAndReachable', async () => {
+        useAuthStore.setState({ unreachable: true });
+        vi.mocked(authApi.getCurrentUser).mockRejectedValue(axiosFailure(401));
+        await useAuthStore.getState().checkAuthStatus();
+        expect(useAuthStore.getState()).toMatchObject({ isAuthenticated: false, unreachable: false });
     });
 });

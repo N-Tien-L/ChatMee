@@ -1,3 +1,4 @@
+import axios from 'axios'
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 import { authApi } from '../api/authApi'
@@ -14,12 +15,21 @@ interface AuthState {
     /** True only after GET /auth/me answered 200 in this page load; never restored from storage. */
     isAuthenticated: boolean
     loading: boolean
+    /** True when the last session check could not reach the backend (network error or 5xx from the proxy). */
+    unreachable: boolean
 
     login: (provider?: string) => void
     /** Resolves true when the server ended the session; false (state untouched) when it did not. */
     logout: () => Promise<boolean>
     checkAuthStatus: (showToast?: boolean) => Promise<void>
     setLoading: (loading: boolean) => void
+}
+
+/** No answer, or a 5xx from the /api rewrite (backend down or waking up), is not the same as "no session". */
+function isServerUnreachable(error: unknown): boolean {
+    const cause = error instanceof Error ? error.cause : undefined
+    if (!axios.isAxiosError(cause)) return false
+    return !cause.response || cause.response.status >= 500
 }
 
 /** Drops everything the previous account could still see. */
@@ -41,6 +51,7 @@ export const useAuthStore = create<AuthState>()(
             user: null,
             isAuthenticated: false,
             loading: false,
+            unreachable: false,
 
             // Actions
             login: (provider = "google") => {
@@ -67,6 +78,7 @@ export const useAuthStore = create<AuthState>()(
 
                     if (response.success && response.data.authenticated) {
                         set({
+                            unreachable: false,
                             isAuthenticated: true,
                             user: response.data.user || null
                         })
@@ -77,11 +89,11 @@ export const useAuthStore = create<AuthState>()(
                             })
                         }
                     } else {
-                        set({ isAuthenticated: false, user: null })
+                        set({ isAuthenticated: false, user: null, unreachable: false })
                     }
-                } catch {
-                    // 401 (no session) and network errors both mean "not signed in" here.
-                    set({ isAuthenticated: false, user: null })
+                } catch (error) {
+                    // Both mean "not signed in"; only an unreachable server is reported as such (CM-084 G1).
+                    set({ isAuthenticated: false, user: null, unreachable: isServerUnreachable(error) })
                 } finally {
                     set({ loading: false })
                 }

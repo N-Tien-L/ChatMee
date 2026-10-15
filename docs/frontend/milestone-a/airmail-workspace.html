@@ -1,0 +1,86 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>Airmail: workspace sketch</title>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500&family=Borel&display=swap" rel="stylesheet">
+<style>
+:root{--ground:#f4f6fb;--card:#fff;--cobalt:#2140a0;--cobalt-2:#16307c;--red:#d7263d;--text:#121a33;--muted:#5d6785;--rule:#dfe3ef;--fail:#b42318}
+*{box-sizing:border-box;margin:0}
+body{width:1440px;height:900px;overflow:hidden;font:14px/1.45 Geist,system-ui,sans-serif;color:var(--text);background:var(--ground);display:grid;grid-template-rows:6px 52px 1fr}
+.mono{font-family:"Geist Mono",monospace;font-variant-numeric:tabular-nums}
+.chev{background:repeating-linear-gradient(-45deg,var(--red) 0 14px,#fff 14px 20px,var(--cobalt) 20px 34px,#fff 34px 40px)}
+header{background:var(--card);border-bottom:1px solid var(--rule);display:flex;align-items:center;gap:14px;padding:0 20px}
+.word{font-family:Borel,cursive;font-size:22px;line-height:1;padding-top:8px;color:var(--cobalt)}
+.nav{display:flex;gap:4px;margin-left:24px}
+.nav span{padding:6px 12px;border-radius:6px;font-weight:500;color:var(--muted)}
+.nav .on{background:#e8ecf8;color:var(--cobalt)}
+.me{margin-left:auto;display:flex;align-items:center;gap:10px;font-size:13px}
+.av{width:30px;height:30px;border-radius:50%;background:#dfe5f7;color:var(--cobalt-2);display:grid;place-items:center;font-weight:600;font-size:12px}
+main{display:grid;grid-template-columns:340px 1fr 260px;min-height:0}
+aside{background:var(--card);border-right:1px solid var(--rule);min-height:0}
+.search{margin:14px 16px 8px;height:36px;border:1px solid var(--rule);border-radius:8px;padding:0 12px;display:flex;align-items:center;color:var(--muted)}
+.tabs{display:flex;gap:16px;padding:4px 18px 8px;font-size:12px;font-weight:600;color:var(--muted);border-bottom:1px solid var(--rule)}
+.tabs .on{color:var(--cobalt);box-shadow:inset 0 -2px var(--cobalt);padding-bottom:6px}
+.row{display:grid;grid-template-columns:38px 1fr auto;gap:10px;padding:11px 18px;align-items:center;border-bottom:1px solid #f0f2f8}
+.row.on{background:#eef1fb}
+.ra{width:38px;height:38px;border-radius:10px;background:#e8ecf8;color:var(--cobalt);display:grid;place-items:center;font-weight:700}
+.row>div{min-width:0}
+.rn{font-weight:600}.rp{color:var(--muted);font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:200px}
+.rt{font-size:11px;color:var(--muted);text-align:right}
+.badge{display:inline-block;margin-top:4px;min-width:20px;padding:0 6px;border-radius:10px;background:var(--red);color:#fff;font-size:11px;font-weight:600;text-align:center}
+section{display:grid;grid-template-rows:auto 1fr auto;min-height:0}
+.head{display:flex;align-items:center;gap:12px;padding:14px 26px;background:var(--card);border-bottom:1px solid var(--rule)}
+.head h1{font-size:18px;font-weight:650}
+.head .sub{color:var(--muted);font-size:13px}
+.log{padding:16px 26px;display:flex;flex-direction:column;gap:8px;overflow:hidden}
+.pm{align-self:center;width:86px;height:86px;border-radius:50%;border:2px solid var(--cobalt);color:var(--cobalt);display:grid;place-items:center;text-align:center;font:500 10px/1.3 "Geist Mono";letter-spacing:.08em;transform:rotate(-8deg);margin:2px 0 6px;opacity:.85}
+.sys{align-self:center;font-size:12px;color:var(--muted)}
+.m{display:grid;grid-template-columns:34px 1fr;gap:10px;max-width:700px}
+.who{font-weight:600;font-size:13px}.who .mono{color:var(--muted);font-weight:400;font-size:11px;margin-left:8px}
+.b{background:var(--card);border:1px solid var(--rule);border-radius:4px 12px 12px 12px;padding:8px 12px;margin-top:3px;width:fit-content;max-width:540px}
+.mine{align-self:flex-end;text-align:right;max-width:540px}
+.mine .b{background:var(--cobalt);color:#fff;border-color:var(--cobalt);border-radius:12px 4px 12px 12px;margin-left:auto}
+.st{font:500 10.5px "Geist Mono";color:var(--muted);margin-top:3px;letter-spacing:.04em}
+.st.ok{color:var(--cobalt)}
+.st.bad{color:var(--fail)} .st.bad u{margin-left:8px;font-weight:600}
+.comp{margin:0 26px 18px;background:var(--card);border:1px solid var(--rule);border-radius:12px;padding:10px;display:flex;gap:10px;align-items:center}
+.comp .in{flex:1;color:var(--muted);padding-left:6px}
+.send{height:36px;padding:0 18px;border-radius:8px;background:var(--red);color:#fff;border:0;font-weight:600}
+.side{background:var(--card);border-left:1px solid var(--rule);padding:18px}
+.side h3{font-size:12px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin:14px 0 8px}
+.mem{display:flex;align-items:center;gap:8px;padding:5px 0;font-size:13px}
+.on-dot{width:8px;height:8px;border-radius:50%;background:#1f9d55;margin-left:auto}
+</style></head>
+<body>
+<div class="chev" aria-hidden="true"></div>
+<header><span class="word">ChatMee</span><nav class="nav"><span class="on">Chats</span><span>Discover</span></nav>
+<span class="me"><span>Lan Nguyen</span><span class="av">LN</span></span></header>
+<main>
+<aside>
+ <div class="search">Search conversations</div>
+ <div class="tabs"><span class="on">All</span><span>Rooms</span><span>Direct</span></div>
+ <div class="row on"><span class="ra">SB</span><div><div class="rn">spring-boot-help</div><div class="rp">Minh: the cursor query uses the index</div></div><div class="rt mono">14:02</div></div>
+ <div class="row"><span class="ra">FE</span><div><div class="rn">frontend-guild</div><div class="rp">Hà: shipped the new composer</div></div><div class="rt mono">13:47<br><span class="badge">3</span></div></div>
+ <div class="row"><span class="ra" style="border-radius:50%">TQ</span><div><div class="rn">Tuấn Quang</div><div class="rp">see you at the review</div></div><div class="rt mono">12:10</div></div>
+ <div class="row"><span class="ra">KT</span><div><div class="rn">kotlin-vs-java</div><div class="rp">An joined</div></div><div class="rt mono">Mon<br><span class="badge">12</span></div></div>
+ <div class="row"><span class="ra">RD</span><div><div class="rn">redis-presence</div><div class="rp">You: grace period is 10 s</div></div><div class="rt mono">Sun</div></div>
+</aside>
+<section>
+ <div class="head"><span class="ra">SB</span><div><h1>spring-boot-help</h1><div class="sub">Public · 12 of 50 members · 4 online</div></div></div>
+ <div class="log">
+  <div class="pm">CHATMEE<br>14 OCT<br>2026</div>
+  <span class="sys">An joined the room</span>
+  <div class="m"><span class="av">MT</span><div><div class="who">Minh Tran<span class="mono">13:58</span></div><div class="b">The cursor query uses the compound index now, 50 rows in 4 ms.</div></div></div>
+  <div class="mine"><div class="b">Great. Does the resync merge by clientMessageId?</div><div class="st ok">POSTMARKED 14:01:12</div></div>
+  <div class="m"><span class="av">MT</span><div><div class="who">Minh Tran<span class="mono">14:02</span></div><div class="b">Yes, no duplicates after a lost echo.</div></div></div>
+  <div class="mine"><div class="b" style="opacity:.7">Then I'll test the two-tab case tonight.</div><div class="st">POSTED…</div></div>
+  <div class="mine"><div class="b" style="background:#fff;color:var(--text);border-color:var(--fail)">Link to the protocol doc?</div><div class="st bad">RETURNED TO SENDER<u>Resend</u><u>Discard</u></div></div>
+ </div>
+ <div class="comp"><span class="in">Write to spring-boot-help</span><button class="send">Send</button></div>
+</section>
+<div class="side"><h3>About</h3><p style="font-size:13px">Questions about Spring Boot 4, Security 7 and STOMP.</p>
+ <h3>Members · 12</h3>
+ <div class="mem"><span class="av">MT</span>Minh Tran<span class="on-dot"></span></div>
+ <div class="mem"><span class="av">HA</span>Hà An<span class="on-dot"></span></div>
+ <div class="mem"><span class="av">LN</span>Lan Nguyen (you)<span class="on-dot"></span></div>
+ <div class="mem"><span class="av">TQ</span>Tuấn Quang</div></div>
+</main>
+</body></html>

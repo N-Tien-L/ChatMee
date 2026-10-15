@@ -8,14 +8,17 @@ import React from "react";
 import ChatRoomsList from "@/components/room/ChatRoomsList";
 import ChatInterface from "@/components/chat/ChatInterface";
 import { CreateRoomModal } from "@/components/room/CreateRoomModal";
-import { EmptyState } from "@/components/common/EmptyState";
-import { ArrowLeft, MessageSquare } from "lucide-react";
+import { NewMessageDialog } from "@/components/room/NewMessageDialog";
+import { WelcomePanel } from "@/components/room/WelcomePanel";
+import { QuickSwitcher, openQuickSwitcher } from "@/components/room/QuickSwitcher";
+import { ArrowLeft } from "lucide-react";
 
 const DashboardContent = () => {
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
   const isCreateRoomModalOpen = useChatRoomsStore(
     (state) => state.isCreateRoomModalOpen
   );
+  const createMode = useChatRoomsStore((state) => state.createRoomModalMode);
   const fetchRooms = useChatRoomsStore((state) => state.fetchRooms);
   const closeCreateRoomModal = useChatRoomsStore(
     (state) => state.closeCreateRoomModal
@@ -36,17 +39,17 @@ const DashboardContent = () => {
     <div className="h-full flex flex-row overflow-hidden bg-background">
       <aside
         aria-label="Chat rooms"
-        className={`${roomId ? "hidden" : "block"} md:block w-full md:w-80 lg:w-96 flex-shrink-0 border-r bg-sidebar`}
+        className={`${roomId ? "hidden" : "block"} md:block w-full md:w-80 flex-shrink-0 border-r bg-sidebar`}
       >
         <ChatRoomsList />
       </aside>
 
       <main
-        className={`${roomId ? "flex" : "hidden"} md:flex flex-1 min-w-0 flex-col overflow-hidden bg-muted/40`}
+        className={`${roomId ? "flex" : "hidden"} md:flex flex-1 min-w-0 flex-col overflow-hidden bg-background`}
       >
         {roomId ? (
           <>
-            <div className="md:hidden flex flex-shrink-0 items-center border-b bg-background px-2 py-1">
+            <div className="md:hidden flex flex-shrink-0 items-center border-b bg-card px-2 py-1">
               <button
                 type="button"
                 onClick={() => router.push("/dashboard")}
@@ -60,17 +63,17 @@ const DashboardContent = () => {
             <ChatInterface key={roomId} roomId={roomId} />
           </>
         ) : (
-          <EmptyState
-            className="flex-1"
-            icon={<MessageSquare className="h-12 w-12" />}
-            title="Select a chat room"
-            description="Choose a chat room from the sidebar to start messaging"
-          />
+          <WelcomePanel onOpenSwitcher={openQuickSwitcher} />
         )}
       </main>
 
       <CreateRoomModal
-        isOpen={isCreateRoomModalOpen}
+        isOpen={isCreateRoomModalOpen && createMode === "room"}
+        onClose={() => closeCreateRoomModal()}
+      />
+      <QuickSwitcher />
+      <NewMessageDialog
+        isOpen={isCreateRoomModalOpen && createMode === "direct"}
         onClose={() => closeCreateRoomModal()}
       />
     </div>

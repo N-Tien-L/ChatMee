@@ -60,7 +60,7 @@ export const DiscoverRoomsDialog: React.FC = () => {
 
         <div className="relative">
           <Search
-            className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4"
+            className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground w-4 h-4"
             aria-hidden="true"
           />
           <input
@@ -69,13 +69,13 @@ export const DiscoverRoomsDialog: React.FC = () => {
             placeholder="Search public rooms..."
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            className="w-full pl-9 pr-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            className="w-full pl-9 pr-3 py-2 text-sm border border-border rounded-lg focus:ring-2 focus:ring-ring focus:border-transparent"
           />
         </div>
 
         {joinError && (
           <div
-            className="p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700"
+            className="p-3 bg-danger-surface border border-destructive/30 rounded-lg text-sm text-destructive"
             role="alert"
           >
             {joinError}
@@ -104,20 +104,20 @@ export const DiscoverRoomsDialog: React.FC = () => {
 
           {!loading && error && (
             <div
-              className="p-4 bg-red-50 border border-red-200 rounded-lg"
+              className="p-4 bg-danger-surface border border-destructive/30 rounded-lg"
               role="alert"
             >
               <div className="flex items-start gap-2">
                 <AlertCircle
-                  className="w-4 h-4 text-red-600 mt-0.5 flex-shrink-0"
+                  className="w-4 h-4 text-destructive mt-0.5 flex-shrink-0"
                   aria-hidden="true"
                 />
-                <p className="text-red-700 text-sm">{error}</p>
+                <p className="text-destructive text-sm">{error}</p>
               </div>
               <button
                 type="button"
                 onClick={() => (results.length > 0 ? loadMore() : search())}
-                className="mt-3 inline-flex items-center px-3 py-1.5 text-sm font-medium text-red-700 bg-white border border-red-200 rounded-lg hover:bg-red-100"
+                className="mt-3 inline-flex items-center px-3 py-1.5 text-sm font-medium text-destructive bg-card border border-destructive/30 rounded-lg hover:bg-danger-surface"
               >
                 <RotateCw className="w-4 h-4 mr-1.5" aria-hidden="true" />
                 Retry
@@ -127,11 +127,11 @@ export const DiscoverRoomsDialog: React.FC = () => {
 
           {!loading && !error && results.length === 0 && (
             <div className="flex flex-col items-center py-8 text-center">
-              <Globe className="w-10 h-10 text-gray-400 mb-3" aria-hidden="true" />
-              <p className="text-sm font-medium text-gray-900">
+              <Globe className="w-10 h-10 text-muted-foreground mb-3" aria-hidden="true" />
+              <p className="text-sm font-medium text-foreground">
                 No public rooms found
               </p>
-              <p className="text-xs text-gray-500 mt-1">
+              <p className="text-xs text-muted-foreground mt-1">
                 {query.trim()
                   ? "Try adjusting your search terms"
                   : "There are no public rooms to join right now"}
@@ -140,19 +140,19 @@ export const DiscoverRoomsDialog: React.FC = () => {
           )}
 
           {!loading && results.length > 0 && (
-            <ul className="divide-y divide-gray-100">
+            <ul className="divide-y divide-border/60">
               {results.map((room) => (
                 <li key={room.id} className="flex items-center gap-3 py-3">
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium text-gray-900 truncate">
+                    <p className="text-sm font-medium text-foreground truncate">
                       {room.name}
                     </p>
                     {room.description && (
-                      <p className="text-xs text-gray-500 truncate">
+                      <p className="text-xs text-muted-foreground truncate">
                         {room.description}
                       </p>
                     )}
-                    <p className="flex items-center text-xs text-gray-500 mt-0.5">
+                    <p className="flex items-center text-xs text-muted-foreground mt-0.5">
                       <Users className="w-3 h-3 mr-1" aria-hidden="true" />
                       {room.maxMembers > 0
                         ? `${room.memberCount} / ${room.maxMembers} members`

@@ -22,7 +22,8 @@ apiClient.interceptors.response.use(
         if (axios.isAxiosError<{ detail?: unknown }>(error)) {
             if (error.response?.status === 401 && typeof window !== "undefined"
                 && window.location.pathname !== "/login") {
-                window.location.href = "/login";
+                // The session ended while the app was open; /login says so (CM-084 G2).
+                window.location.href = "/login?reason=expired";
             }
             const detail = error.response?.data?.detail;
             return Promise.reject(new Error(typeof detail === "string" && detail ? detail : error.message, { cause: error }));

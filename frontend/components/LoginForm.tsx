@@ -13,6 +13,7 @@ import { Github, Google } from "./ui/icon/OAuthIcons";
 import { useAuthStore } from "@/lib/stores";
 import { useSearchParams } from "next/navigation";
 import { useEffect } from "react";
+import { BorderBeam } from "@/components/fx/border-beam";
 import toast from "react-hot-toast";
 
 export function LoginForm({
@@ -38,22 +39,32 @@ export function LoginForm({
 
   return (
     <div
-      className={cn("w-full max-w-md mx-auto px-4 sm:px-0", className)}
+      className={cn("w-full", className)}
       {...props}
     >
-      <Card className="backdrop-blur-sm bg-white/10 border-white/20 shadow-2xl rounded-2xl">
-        <CardHeader className="text-center space-y-2 p-4 sm:p-6">
-          <CardTitle className="text-xl font-semibold text-white">
+      <Card className="relative gap-0 overflow-hidden rounded-2xl border-white/10 bg-[#0a1715]/80 py-0 text-foreground shadow-[0_40px_120px_-30px_rgb(46_230_193/0.35)] backdrop-blur-xl">
+        <CardHeader className="space-y-1.5 border-b border-white/10 p-6">
+          <CardTitle className="font-display text-2xl font-semibold tracking-[-0.02em] text-foreground">
             Sign in to ChatMee
           </CardTitle>
-          <CardDescription className="text-white/80 text-sm sm:text-base">
-            Continue with your Google or GitHub account
+          <CardDescription className="text-sm text-muted-foreground">
+            With your GitHub or Google account. No passwords.
           </CardDescription>
         </CardHeader>
-        <CardContent className="space-y-3 sm:space-y-4 p-4 sm:p-6">
+        <CardContent className="space-y-3 p-6">
+          <Button
+            className="h-12 w-full rounded-xl text-sm font-semibold shadow-[0_0_30px_-8px_rgb(46_230_193/0.7)]"
+            onClick={() => login("github")}
+            disabled={loading}
+          >
+            <Github className="w-5 h-5 mr-2 [&_g]:fill-current" />
+            <span className="truncate">
+              {loading ? "Redirecting..." : "Continue with GitHub"}
+            </span>
+          </Button>
           <Button
             variant="outline"
-            className="w-full h-12 text-sm sm:text-base bg-white/10 border-white/20 text-white hover:bg-white/20 hover:text-white"
+            className="h-12 w-full rounded-xl border-white/15 bg-white/5 text-sm text-foreground hover:bg-white/10 hover:text-foreground"
             onClick={() => login("google")}
             disabled={loading}
           >
@@ -62,18 +73,8 @@ export function LoginForm({
               {loading ? "Redirecting..." : "Continue with Google"}
             </span>
           </Button>
-          <Button
-            variant="outline"
-            className="w-full h-12 text-sm sm:text-base bg-white/10 border-white/20 text-white hover:bg-white/20 hover:text-white"
-            onClick={() => login("github")}
-            disabled={loading}
-          >
-            <Github className="w-5 h-5 mr-2" />
-            <span className="truncate">
-              {loading ? "Redirecting..." : "Continue with GitHub"}
-            </span>
-          </Button>
         </CardContent>
+        <BorderBeam size={110} duration={8} colorFrom="#2ee6c1" colorTo="#ff6a3d" />
       </Card>
     </div>
   );
