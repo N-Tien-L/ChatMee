@@ -7,6 +7,7 @@ import { useRoomMessages, useRoomMemberNames } from "@/hooks/useRoomMessage";
 import { useChatStore } from "@/lib/stores/chatStore";
 import { useWebSocket } from "@/hooks/useWebSocket";
 import { useUsersStore } from "@/lib/stores/usersStore";
+import { useAuthStore } from "@/lib/stores/authStore";
 import { RoomPanel } from "@/components/room/RoomPanel";
 import { ReportDialog, ReportTarget } from "@/components/safety/ReportDialog";
 import { Button } from "@/components/ui/button";
@@ -14,7 +15,7 @@ import ChatHeader from "./ChatHeader";
 import MessageList from "./MessageList";
 import TypingIndicator from "./TypingIndicator";
 import MessageInput from "./MessageInput";
-import { RoomType } from "@/lib/types";
+import { MessageType, RoomType } from "@/lib/types";
 
 /** Typing indicator: how long a typing user is shown after the last event, in ms (SPEC-005 AC-005-5). */
 const SELF_TYPING_IDLE_MS = 2000;
@@ -146,9 +147,16 @@ const ChatRoomView: React.FC<{ roomId: string; onDeleted: () => void }> = ({
   const currentRoom = useChatRoomsStore((state) =>
     state.rooms.find((room) => room.id === roomId)
   );
+  const currentUserId = useAuthStore((state) => state.user?.id);
   const memberCount = currentRoom?.participants?.length ?? 0;
   // The blocker's DM is read-only while the block exists (SPEC-009 AC-009-19); the blocked user gets the generic send error.
   const blocked = currentRoom?.roomType === RoomType.DIRECT_MESSAGE && currentRoom.blocked === true;
+  // A pending DM request allows the sender one message (SPEC-009 AC-009-10). It counts as used once the room has a
+  // lastMessage or this view holds an own message that did not fail; ROOM_UPDATED {state: ACTIVE} lifts the lock.
+  const requestUsed =
+    currentRoom?.state === "REQUESTED" &&
+    (!!currentRoom.lastMessage ||
+      messages.some((m) => m.senderId === currentUserId && m.type !== MessageType.SYSTEM && m.status !== "failed"));
   const memberNames = useRoomMemberNames(roomId, memberCount);
 
   // Get user cache for names
@@ -215,7 +223,7 @@ const ChatRoomView: React.FC<{ roomId: string; onDeleted: () => void }> = ({
   const handleSendMessage = (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (!newMessage.trim() || !connected || blocked) return;
+    if (!newMessage.trim() || !connected || requestUsed || blocked) return;
 
     // Stop typing indicator when sending message
     handleTyping(false);
@@ -287,7 +295,7 @@ const ChatRoomView: React.FC<{ roomId: string; onDeleted: () => void }> = ({
           onRetryLoad={reload}
           onResend={resendMessage}
           onDiscard={discardMessage}
-          canResend={connected}
+          canResend={connected && !requestUsed && !blocked}
           hasMore={hasMoreMessages}
           loadingOlder={loadingOlder}
           olderError={olderError}
@@ -318,13 +326,18 @@ const ChatRoomView: React.FC<{ roomId: string; onDeleted: () => void }> = ({
         value={newMessage}
         onChange={handleInputChange}
         onSubmit={handleSendMessage}
-        disabled={!newMessage.trim() || !connected || blocked}
-        inputDisabled={blocked}
+        disabled={!newMessage.trim() || !connected || requestUsed || blocked}
+        inputDisabled={requestUsed || blocked}
         inputRef={inputRef}
+        // When blocked, the BlockedDmBanner above is the hint; the request hint would be misleading next to it.
         pausedHint={
-          !connected && !loading
-            ? "Reconnecting. Keep typing; sending resumes when the connection is back."
-            : null
+          blocked
+            ? null
+            : requestUsed
+              ? `Request sent. You can send more messages once ${currentRoom.counterpart?.name || currentRoom.displayName || "they"} accepts.`
+              : !connected && !loading
+                ? "Reconnecting. Keep typing; sending resumes when the connection is back."
+                : null
         }
       />
     </div>

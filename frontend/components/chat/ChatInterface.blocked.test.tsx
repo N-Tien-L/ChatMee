@@ -27,7 +27,7 @@ vi.mock('./MessageList', () => ({ default: () => null }));
 vi.mock('./TypingIndicator', () => ({ default: () => null }));
 vi.mock('@/components/room/RoomPanel', () => ({ RoomPanel: () => null }));
 
-const dm = (blocked: boolean): ChatRoom => ({
+const dm = (blocked: boolean, state?: ChatRoom['state']): ChatRoom => ({
     id: 'dm1',
     roomName: '',
     roomType: RoomType.DIRECT_MESSAGE,
@@ -39,6 +39,7 @@ const dm = (blocked: boolean): ChatRoom => ({
     counterpart: { id: 'bob', name: 'Bob', avatarUrl: '' },
     unreadCount: 0,
     blocked,
+    state,
 });
 
 beforeEach(() => {
@@ -72,6 +73,20 @@ describe('ChatInterface blocked DM', () => {
         expect(field()).not.toBeDisabled();
         expect(useChatRoomsStore.getState().rooms[0].blocked).toBe(false);
         expect(useUsersStore.getState().blockedUsers).toEqual([]);
+    });
+
+    // CM-067 integration of CM-079 (request lock) and CM-080 (block lock): the block wins in either DM state.
+    it.each(['REQUESTED', 'ACTIVE'] as const)('render_blockedDmIn%sState_keepsComposerDisabled', (state) => {
+        useChatRoomsStore.setState({ rooms: [dm(true, state)], filteredRooms: [], endedRooms: {} });
+        render(<ChatInterface roomId="dm1" />);
+
+        fireEvent.change(field(), { target: { value: 'Hi Bob' } });
+        expect(field()).toBeDisabled();
+        expect(screen.getByRole('button', { name: 'Send message' })).toBeDisabled();
+        expect(screen.getByText('You blocked Bob. Unblock them to send messages.')).toBeInTheDocument();
+        expect(screen.queryByText(/Request sent/)).toBeNull();
+        fireEvent.submit(field().closest('form') as HTMLFormElement);
+        expect(sendMessage).not.toHaveBeenCalled();
     });
 
     it('render_notBlocked_composerEnabledWithoutBanner', () => {

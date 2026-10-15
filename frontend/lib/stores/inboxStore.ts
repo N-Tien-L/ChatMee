@@ -86,6 +86,8 @@ export const useInboxStore = create<InboxState>((set, get) => {
                     return invitation?.room.id ?? null;
                 } catch (error) {
                     toast.error(messageOf(error, "Could not accept the invitation"));
+                    // The item may be stale (expired, revoked, answered in another tab): resync with the server.
+                    void get().fetchInbox();
                     return null;
                 }
             }),
@@ -97,6 +99,8 @@ export const useInboxStore = create<InboxState>((set, get) => {
                     set((state) => ({ invitations: state.invitations.filter((i) => i.id !== id) }));
                 } catch (error) {
                     toast.error(messageOf(error, "Could not decline the invitation"));
+                    // The item may be stale (expired, revoked, answered in another tab): resync with the server.
+                    void get().fetchInbox();
                 }
             }),
 
@@ -109,6 +113,8 @@ export const useInboxStore = create<InboxState>((set, get) => {
                     return roomId;
                 } catch (error) {
                     toast.error(messageOf(error, "Could not accept the request"));
+                    // The item may be stale (expired, revoked, answered in another tab): resync with the server.
+                    void get().fetchInbox();
                     return null;
                 }
             }),
@@ -120,10 +126,12 @@ export const useInboxStore = create<InboxState>((set, get) => {
                     set((state) => ({ requests: state.requests.filter((r) => r.roomId !== roomId) }));
                 } catch (error) {
                     toast.error(messageOf(error, "Could not decline the request"));
+                    // The item may be stale (expired, revoked, answered in another tab): resync with the server.
+                    void get().fetchInbox();
                 }
             }),
 
-        // INVITATION_RECEIVED / INVITATION_CHANGED / DM_REQUEST_RECEIVED / ROOM_REMOVED on /user/queue/events.
+        // INVITATION_RECEIVED / INVITATION_CHANGED / DM_REQUEST_RECEIVED / ROOM_ADDED / ROOM_REMOVED on /user/queue/events.
         handleUserEvent: (event) => {
             if (!isRecord(event) || typeof event.type !== "string" || !isRecord(event.payload)) return;
             const payload = event.payload;
@@ -145,6 +153,13 @@ export const useInboxStore = create<InboxState>((set, get) => {
                     if (isDmRequest(payload.request)) {
                         const request = payload.request;
                         set((state) => ({ requests: [request, ...state.requests.filter((r) => r.roomId !== request.roomId)] }));
+                    }
+                    break;
+                case "ROOM_ADDED":
+                    // The DM request was accepted in another session (or by starting the same DM): it is no longer waiting.
+                    if (isRecord(payload.room) && typeof payload.room.id === "string") {
+                        const roomId = payload.room.id;
+                        set((state) => ({ requests: state.requests.filter((r) => r.roomId !== roomId) }));
                     }
                     break;
                 case "ROOM_REMOVED":
