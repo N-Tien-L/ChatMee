@@ -198,6 +198,11 @@ public class MessageService {
         }
 
         if(!participantService.isUserParticipant(roomId, userId)) {
+            // SPEC-002 §5: a non-member of a live room gets 404 so the room is not revealed (CM-085, A-07).
+            // SPEC-004 D-13: history of a soft-deleted room keeps answering 403 in v0.
+            if (chatRoomRepository.findByIdAndIsActiveTrue(roomId).isPresent()) {
+                throw new ChatRoomNotFoundException("Chat room not found: " + roomId);
+            }
             throw new ForbiddenActionException("You are not a participant of this room");
         }
 

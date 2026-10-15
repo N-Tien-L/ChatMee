@@ -19,7 +19,7 @@ public abstract class GroupRoomPolicy implements RoomTypePolicy {
     }
     @Override
     public ChatRoom create(CreateChatRoomRequest request, String creatorId, Predicate<String> userExists) {
-        ChatRoom.RoomSettings settings = request.getSettings() != null ? request.getSettings()
+        ChatRoom.RoomSettings settings = request.getSettings() != null ? request.getSettings().toRoomSettings()
             : ChatRoom.RoomSettings.builder().allowFileSharing(false).allowGuestUsers(false)
                 .moderationRequired(false).welcomeMessage("").build();
         return ChatRoom.builder().name(request.getRoomName()).description(request.getDescription())

@@ -5,7 +5,7 @@ import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.Size;
 
 import com.lnt.chatmee.dto.validation.RoomName;
-import com.lnt.chatmee.model.ChatRoom.RoomSettings;
+import jakarta.validation.Valid;
 
 import lombok.Data;
 
@@ -21,5 +21,6 @@ public class UpdateChatRoomRequest {
     @Max(value = 1000, message = "Maximum users cannot exceed 1000")
     private Integer maxUsers;
     
-    private RoomSettings settings;
+    @Valid
+    private RoomSettingsRequest settings;
 }
