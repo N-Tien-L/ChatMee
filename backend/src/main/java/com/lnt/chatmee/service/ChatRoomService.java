@@ -338,7 +338,7 @@ public class ChatRoomService {
             : room.getName();
         String description = request.getDescription() != null ? request.getDescription().trim() : room.getDescription();
         int maxParticipants = request.getMaxUsers() != null ? request.getMaxUsers() : room.getMaxParticipants();
-        ChatRoom.RoomSettings settings = request.getSettings() != null ? request.getSettings() : room.getSettings();
+        ChatRoom.RoomSettings settings = request.getSettings() != null ? request.getSettings().toRoomSettings() : room.getSettings();
 
         // A targeted $set keeps concurrent joins/leaves intact and re-checks capacity against the live counter
         long updated = chatRoomRepository.updateEditableFields(roomId, name, description, maxParticipants,

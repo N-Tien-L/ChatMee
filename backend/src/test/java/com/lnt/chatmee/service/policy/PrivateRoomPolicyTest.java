@@ -39,8 +39,9 @@ class PrivateRoomPolicyTest {
     }
     @Test void create_customSettingsAndCapacity_preservesRequest() {
         var request = new CreateChatRoomRequest(); request.setMaxUsers(8);
-        var settings = ChatRoom.RoomSettings.builder().allowFileSharing(true).build(); request.setSettings(settings);
+        request.setSettings(new com.lnt.chatmee.dto.request.RoomSettingsRequest(true, false, false, "Hi"));
         var room = policy.create(request, "owner", id -> true);
-        assertEquals(8, room.getMaxParticipants()); assertSame(settings, room.getSettings());
+        assertEquals(8, room.getMaxParticipants()); assertTrue(room.getSettings().isAllowFileSharing());
+        assertFalse(room.getSettings().isAllowGuestUsers()); assertEquals("Hi", room.getSettings().getWelcomeMessage());
     }
 }

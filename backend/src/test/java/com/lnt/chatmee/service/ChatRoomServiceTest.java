@@ -206,7 +206,7 @@ class ChatRoomServiceTest {
         request.setRoomName("Private Room");
         request.setDescription("Desc");
         request.setMaxUsers(5);
-        request.setSettings(ChatRoom.RoomSettings.builder().allowGuestUsers(true).build());
+        request.setSettings(new com.lnt.chatmee.dto.request.RoomSettingsRequest(false, true, false, null));
 
         ChatRoom savedRoom = ChatRoom.builder()
                 .id("room2")
@@ -359,15 +359,15 @@ class ChatRoomServiceTest {
                 .thenReturn(Optional.of(room), Optional.of(updatedRoom));
         when(participantService.isUserParticipant("room1", "user1")).thenReturn(true);
         when(participantService.findMembership("room1", "user1")).thenReturn(Optional.of(member(Role.OWNER)));
-        ChatRoom.RoomSettings settings = ChatRoom.RoomSettings.builder().build();
         when(chatRoomRepository.updateEditableFields(eq("room1"), eq("New Name"), eq("New Desc"), eq(10),
-                eq(settings), any())).thenReturn(1L);
+                argThat(settings -> settings != null && settings.isAllowFileSharing()
+                        && "Welcome".equals(settings.getWelcomeMessage())), any())).thenReturn(1L);
 
         UpdateChatRoomRequest request = new UpdateChatRoomRequest();
         request.setRoomName(" New Name ");
         request.setDescription("New Desc");
         request.setMaxUsers(10);
-        request.setSettings(settings);
+        request.setSettings(new com.lnt.chatmee.dto.request.RoomSettingsRequest(true, false, false, "Welcome"));
 
         when(participantService.getParticipantUserIds("room1")).thenReturn(Set.of("user1", "user2"));
         when(participantService.getParticipantUserIds(List.of("room1"))).thenReturn(Map.of("room1", Set.of("user1", "user2")));

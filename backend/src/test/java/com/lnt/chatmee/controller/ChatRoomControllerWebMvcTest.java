@@ -104,7 +104,7 @@ class ChatRoomControllerWebMvcTest extends SecuredWebMvcTestSupport {
 
         var request = org.mockito.ArgumentCaptor.forClass(com.lnt.chatmee.dto.request.CreateChatRoomRequest.class);
         org.mockito.Mockito.verify(chatRoomService).createRoom(request.capture(), eq("u1"));
-        ChatRoom.RoomSettings settings = request.getValue().getSettings();
+        ChatRoom.RoomSettings settings = request.getValue().getSettings().toRoomSettings();
         org.assertj.core.api.Assertions.assertThat(settings.isAllowFileSharing()).isFalse();
         org.assertj.core.api.Assertions.assertThat(settings.isAllowGuestUsers()).isFalse();
         org.assertj.core.api.Assertions.assertThat(settings.isModerationRequired()).isFalse();
@@ -182,10 +182,53 @@ class ChatRoomControllerWebMvcTest extends SecuredWebMvcTestSupport {
 
         var request = org.mockito.ArgumentCaptor.forClass(com.lnt.chatmee.dto.request.UpdateChatRoomRequest.class);
         org.mockito.Mockito.verify(chatRoomService).updateChatRoomById(eq("u1"), eq("room-1"), request.capture());
-        ChatRoom.RoomSettings settings = request.getValue().getSettings();
+        ChatRoom.RoomSettings settings = request.getValue().getSettings().toRoomSettings();
         org.assertj.core.api.Assertions.assertThat(settings.isAllowFileSharing()).isFalse();
         org.assertj.core.api.Assertions.assertThat(settings.isAllowGuestUsers()).isFalse();
         org.assertj.core.api.Assertions.assertThat(settings.isModerationRequired()).isFalse();
+    }
+
+    @Test
+    void createRoom_welcomeMessageOf501Characters_returns400ValidationProblem() throws Exception {
+        expectProblem(mvc.perform(post(CREATE).with(oauth2Login().oauth2User(com.lnt.chatmee.support.TestUsers.principal("u1"))).with(csrf().asHeader())
+                .contentType(MediaType.APPLICATION_JSON).content("{\"roomType\":\"PUBLIC\",\"roomName\":\"General\","
+                        + "\"settings\":{\"welcomeMessage\":\"" + "x".repeat(501) + "\"}}")), 400, "VALIDATION_FAILED")
+                .andExpect(jsonPath("$.errors[?(@.field == 'settings.welcomeMessage')]").isNotEmpty());
+        verifyNoInteractions(chatRoomService);
+    }
+
+    @Test
+    void createRoom_welcomeMessageOf500Characters_returnsCreated() throws Exception {
+        when(chatRoomService.createRoom(any(), eq("u1"))).thenReturn(ChatRoomResponse.builder().id("room-1").build());
+
+        mvc.perform(post(CREATE).with(oauth2Login().oauth2User(com.lnt.chatmee.support.TestUsers.principal("u1"))).with(csrf().asHeader())
+                        .contentType(MediaType.APPLICATION_JSON).content("{\"roomType\":\"PUBLIC\",\"roomName\":\"General\","
+                                + "\"settings\":{\"welcomeMessage\":\"" + "x".repeat(500) + "\"}}"))
+                .andExpect(status().isCreated());
+
+        var request = org.mockito.ArgumentCaptor.forClass(com.lnt.chatmee.dto.request.CreateChatRoomRequest.class);
+        org.mockito.Mockito.verify(chatRoomService).createRoom(request.capture(), eq("u1"));
+        org.assertj.core.api.Assertions.assertThat(request.getValue().getSettings().welcomeMessage()).hasSize(500);
+    }
+
+    @Test
+    void updateRoom_welcomeMessageOf501Characters_returns400ValidationProblem() throws Exception {
+        expectProblem(mvc.perform(put("/api/v1/rooms/room-1").with(oauth2Login().oauth2User(com.lnt.chatmee.support.TestUsers.principal("u1"))).with(csrf().asHeader())
+                .contentType(MediaType.APPLICATION_JSON).content("{\"settings\":{\"welcomeMessage\":\"" + "x".repeat(501) + "\"}}")),
+                400, "VALIDATION_FAILED")
+                .andExpect(jsonPath("$.errors[?(@.field == 'settings.welcomeMessage')]").isNotEmpty());
+        verifyNoInteractions(chatRoomService);
+    }
+
+    @Test
+    void updateRoom_welcomeMessageOf500Characters_returnsOk() throws Exception {
+        mvc.perform(put("/api/v1/rooms/room-1").with(oauth2Login().oauth2User(com.lnt.chatmee.support.TestUsers.principal("u1"))).with(csrf().asHeader())
+                        .contentType(MediaType.APPLICATION_JSON).content("{\"settings\":{\"welcomeMessage\":\"" + "x".repeat(500) + "\"}}"))
+                .andExpect(status().isOk());
+
+        var request = org.mockito.ArgumentCaptor.forClass(com.lnt.chatmee.dto.request.UpdateChatRoomRequest.class);
+        org.mockito.Mockito.verify(chatRoomService).updateChatRoomById(eq("u1"), eq("room-1"), request.capture());
+        org.assertj.core.api.Assertions.assertThat(request.getValue().getSettings().welcomeMessage()).hasSize(500);
     }
 
     @Test
