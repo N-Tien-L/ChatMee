@@ -14,6 +14,8 @@ interface UserSearchListProps {
   placeHolder?: string;
   /** Verb shown on each result, for example "Message". */
   actionLabel?: string;
+  /** Shows a Block action on each result. */
+  onUserBlock?: (user: UserSummaryResponse) => void;
 }
 
 // Stable default: a new [] on every render would re-run the excludeUserIds effect forever.
@@ -24,6 +26,7 @@ const UserSearchList = ({
   excludeUserIds = NO_EXCLUDED_USERS,
   placeHolder = "Search user by name...",
   actionLabel,
+  onUserBlock,
 }: UserSearchListProps) => {
   const { users, loading, error, searchQuery, filteredUsers, setSearchQuery } =
     useUsersStore(
@@ -170,6 +173,7 @@ const UserSearchList = ({
               onAdd={() => handleAddUser(user)}
               isAdded={addedUserIds.has(user.id)}
               actionLabel={actionLabel}
+              onBlock={onUserBlock ? () => onUserBlock(user) : undefined}
             />
           ))
         )}

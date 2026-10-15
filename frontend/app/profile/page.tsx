@@ -7,6 +7,7 @@ import { AuthGate } from "@/components/common/AuthGate";
 import { UserAvatar } from "@/components/common/UserAvatar";
 import { RoomCover } from "@/components/common/RoomCover";
 import { Button } from "@/components/ui/button";
+import { BlockedUsersList } from "@/components/safety/BlockedUsersList";
 
 const PROVIDER_LABELS: Record<string, string> = { google: "Google", github: "GitHub" };
 
@@ -52,6 +53,10 @@ function ProfileContent() {
                     <p className="mt-3 text-xs text-muted-foreground">
                         Your name and photo come from your sign-in provider and update when you sign in again.
                     </p>
+
+                    <div className="mt-6">
+                        <BlockedUsersList />
+                    </div>
 
                     <div className="mt-6 border-t border-border pt-5">
                         <Button variant="outline" onClick={() => void logout()}>

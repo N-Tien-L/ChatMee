@@ -7,11 +7,15 @@ import toast from "react-hot-toast";
 import {
   AlertCircle,
   ArrowLeft,
+  Ban,
   Calendar,
+  EyeOff,
+  Flag,
   Globe,
   Lock,
   LogOut,
   MessageCircle,
+  MoreHorizontal,
   RotateCw,
   Save,
   Settings,
@@ -28,6 +32,8 @@ import { useIsMobile } from "@/hooks/use-mobile";
 import { chatRoomApi } from "@/lib/api/chatRoomApi";
 import { useAuthStore } from "@/lib/stores/authStore";
 import { useChatRoomsStore } from "@/lib/stores/chatRoomsStore";
+import { useUsersStore } from "@/lib/stores/usersStore";
+import { ReportDialog, ReportTarget } from "@/components/safety/ReportDialog";
 import { ChatRoom, MemberResponse, ParticipantRole, RoomType, UpdateChatRoomRequest } from "@/lib/types";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -81,6 +87,12 @@ export const RoomPanel: React.FC<RoomPanelProps> = ({ roomId, isOpen, onClose, r
   const router = useRouter();
   const user = useAuthStore((state) => state.user);
   const liveRole = useChatRoomsStore((state) => state.rooms.find((r) => r.id === roomId)?.myRole);
+  const liveBlocked = useChatRoomsStore((state) => state.rooms.find((r) => r.id === roomId)?.blocked);
+  const hideRoom = useChatRoomsStore((state) => state.hideRoom);
+  const blockedUsers = useUsersStore((state) => state.blockedUsers);
+  const fetchBlocks = useUsersStore((state) => state.fetchBlocks);
+  const blockUser = useUsersStore((state) => state.blockUser);
+  const unblockUser = useUsersStore((state) => state.unblockUser);
   const updateRoom = useChatRoomsStore((state) => state.updateRoom);
   const leaveRoom = useChatRoomsStore((state) => state.leaveRoom);
   const deleteRoomById = useChatRoomsStore((state) => state.deleteRoomById);
@@ -96,6 +108,8 @@ export const RoomPanel: React.FC<RoomPanelProps> = ({ roomId, isOpen, onClose, r
   const [pending, setPending] = useState<Pending>(null);
   const [form, setForm] = useState({ roomName: "", description: "", maxUsers: 0 });
   const [isDirty, setIsDirty] = useState(false);
+  const [report, setReport] = useState<ReportTarget | null>(null);
+  const [expandedId, setExpandedId] = useState<string | null>(null);
 
   const loadMembers = useCallback(async () => {
     try {
@@ -132,10 +146,18 @@ export const RoomPanel: React.FC<RoomPanelProps> = ({ roomId, isOpen, onClose, r
 
   useEffect(() => {
     if (isOpen && roomId) {
-      setView("info");
       void load();
+      // Block state of member rows (AC-009-15); a DM uses the room's own `blocked` flag instead.
+      void fetchBlocks();
     }
-  }, [isOpen, roomId, load]);
+  }, [isOpen, roomId, load, fetchBlocks]);
+
+  // Every close goes through here, so the next open starts on the info view.
+  const close = () => {
+    setView("info");
+    setExpandedId(null);
+    onClose();
+  };
 
   const me = members?.find((member) => member.id === user?.id);
   // The live role (refreshed by ROOM_UPDATED) wins over the fetched one; the member row is the last fallback.
@@ -145,6 +167,9 @@ export const RoomPanel: React.FC<RoomPanelProps> = ({ roomId, isOpen, onClose, r
   const title = room ? room.displayName || room.roomName || "Direct message" : "";
   const mayEdit = !isDM && canEditRoom(myRole);
   const mayDelete = !isDM && canDeleteRoom(myRole);
+  // Only the blocker gets `blocked: true` (AC-009-19); the live list value follows block/unblock at once.
+  const dmBlocked = Boolean(liveBlocked ?? room?.blocked);
+  const isBlocked = (userId: string) => blockedUsers?.some((blocked) => blocked.id === userId) ?? false;
 
   const run = async (action: () => Promise<void>) => {
     setBusy(true);
@@ -169,12 +194,12 @@ export const RoomPanel: React.FC<RoomPanelProps> = ({ roomId, isOpen, onClose, r
 
   const handleLeave = () =>
     run(async () => {
-      if (await leaveRoom(roomId)) onClose();
+      if (await leaveRoom(roomId)) close();
     });
 
   const handleDelete = () =>
     run(async () => {
-      if (await deleteRoomById(roomId)) onClose();
+      if (await deleteRoomById(roomId)) close();
     });
 
   const handleRemove = (member: MemberResponse) =>
@@ -204,8 +229,19 @@ export const RoomPanel: React.FC<RoomPanelProps> = ({ roomId, isOpen, onClose, r
     run(async () => {
       const dm = await startDirectMessage(member.id);
       if (!dm) return;
-      onClose();
+      close();
       router.push(`/dashboard?roomId=${dm.id}`, { scroll: false });
+    });
+
+  const handleHide = () =>
+    run(async () => {
+      if (await hideRoom(roomId)) close();
+    });
+
+  const toggleBlock = (person: { id: string; name: string; avatarUrl?: string | null }, blocked: boolean) =>
+    run(async () => {
+      if (blocked) await unblockUser(person);
+      else await blockUser({ id: person.id, name: person.name, avatarUrl: person.avatarUrl ?? "" });
     });
 
   const handleSave = () =>
@@ -250,8 +286,11 @@ export const RoomPanel: React.FC<RoomPanelProps> = ({ roomId, isOpen, onClose, r
     const deleted = isDeletedUser(name);
     const isSelf = member.id === user?.id;
     const promote = member.role === ParticipantRole.MEMBER;
+    const blocked = isBlocked(member.id);
+    const expanded = expandedId === member.id;
     return (
-      <li key={member.id} className="flex items-center gap-3 rounded-lg px-2 py-1.5 hover:bg-accent/60">
+      <li key={member.id} className="rounded-lg px-2 py-1.5 hover:bg-accent/60">
+        <div className="flex items-center gap-3">
         <UserAvatar name={name} avatarUrl={member.avatarUrl} variant={deleted ? "neutral" : "default"} />
         <p className="min-w-0 flex-1 truncate text-sm font-medium">
           {name}
@@ -312,6 +351,32 @@ export const RoomPanel: React.FC<RoomPanelProps> = ({ roomId, isOpen, onClose, r
                 <UserMinus className="h-4 w-4" aria-hidden="true" />
               </Button>
             )}
+            {!deleted && (
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8"
+                onClick={() => setExpandedId(expanded ? null : member.id)}
+                aria-label={`More actions for ${name}`}
+                aria-expanded={expanded}
+                title="More"
+              >
+                <MoreHorizontal className="h-4 w-4" aria-hidden="true" />
+              </Button>
+            )}
+          </div>
+        )}
+        </div>
+        {expanded && (
+          <div className="mt-1 flex flex-wrap justify-end gap-2 pl-11">
+            <Button variant="outline" size="sm" disabled={busy} onClick={() => void toggleBlock({ ...member, name }, blocked)}>
+              <Ban className="mr-1.5 h-3.5 w-3.5" aria-hidden="true" />
+              {blocked ? `Unblock ${name}` : `Block ${name}`}
+            </Button>
+            <Button variant="outline" size="sm" onClick={() => setReport({ type: "USER", id: member.id, label: name })}>
+              <Flag className="mr-1.5 h-3.5 w-3.5" aria-hidden="true" />
+              {`Report ${name}`}
+            </Button>
           </div>
         )}
       </li>
@@ -421,6 +486,47 @@ export const RoomPanel: React.FC<RoomPanelProps> = ({ roomId, isOpen, onClose, r
           <Button onClick={() => setView("settings")} variant="outline" className="w-full">
             <Settings className="mr-2 h-4 w-4" aria-hidden="true" />
             Room settings
+          </Button>
+        )}
+        {isMember && isDM && room.counterpart && (
+          <>
+            <Button onClick={() => void handleHide()} disabled={busy} variant="outline" className="w-full">
+              <EyeOff className="mr-2 h-4 w-4" aria-hidden="true" />
+              Hide conversation
+            </Button>
+            {!isDeletedUser(room.counterpart.name) && (
+              <>
+                <Button
+                  onClick={() => room.counterpart && void toggleBlock(room.counterpart, dmBlocked)}
+                  disabled={busy}
+                  variant="outline"
+                  className="w-full"
+                >
+                  <Ban className="mr-2 h-4 w-4" aria-hidden="true" />
+                  {dmBlocked ? `Unblock ${room.counterpart.name}` : `Block ${room.counterpart.name}`}
+                </Button>
+                <Button
+                  onClick={() =>
+                    room.counterpart && setReport({ type: "USER", id: room.counterpart.id, label: room.counterpart.name })
+                  }
+                  variant="ghost"
+                  className="w-full text-destructive hover:bg-destructive/10 hover:text-destructive"
+                >
+                  <Flag className="mr-2 h-4 w-4" aria-hidden="true" />
+                  {`Report ${room.counterpart.name}`}
+                </Button>
+              </>
+            )}
+          </>
+        )}
+        {isMember && !isDM && (
+          <Button
+            onClick={() => setReport({ type: "ROOM", id: room.id, label: title })}
+            variant="ghost"
+            className="w-full"
+          >
+            <Flag className="mr-2 h-4 w-4" aria-hidden="true" />
+            Report room
           </Button>
         )}
         {isMember && !isDM && (
@@ -537,6 +643,7 @@ export const RoomPanel: React.FC<RoomPanelProps> = ({ roomId, isOpen, onClose, r
 
       {room && (
         <>
+          <ReportDialog target={report} onClose={() => setReport(null)} />
           <LeaveRoomConfirm
             open={pending?.kind === "leave"}
             onOpenChange={(open) => !open && setPending(null)}
@@ -577,7 +684,7 @@ export const RoomPanel: React.FC<RoomPanelProps> = ({ roomId, isOpen, onClose, r
 
   if (isMobile) {
     return (
-      <Sheet open={isOpen} onOpenChange={(open) => !open && onClose()}>
+      <Sheet open={isOpen} onOpenChange={(open) => !open && close()}>
         <SheetContent side="bottom" className="max-h-[90vh] overflow-y-auto" onCloseAutoFocus={handleCloseAutoFocus}>
           <SheetHeader className="sr-only">
             <SheetTitle>{heading}</SheetTitle>
@@ -589,7 +696,7 @@ export const RoomPanel: React.FC<RoomPanelProps> = ({ roomId, isOpen, onClose, r
   }
 
   return (
-    <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
+    <Dialog open={isOpen} onOpenChange={(open) => !open && close()}>
       <DialogContent
         className="max-h-[88dvh] max-w-md gap-4 overflow-y-auto rounded-2xl"
         onCloseAutoFocus={handleCloseAutoFocus}

@@ -109,6 +109,11 @@ export const chatRoomApi = {
         return response.data;
     },
 
+    // hide a direct message for the caller (204; it comes back with the next message, AC-009-21)
+    hideRoom: async (roomId: string): Promise<void> => {
+        await apiClient.post(`/api/v1/rooms/${roomId}/hide`)
+    },
+
     // remove a member (204; OWNER removes anyone but self, ADMIN removes MEMBERs; SPEC-008 AC-008-6)
     removeMember: async (roomId: string, userId: string): Promise<void> => {
         await apiClient.delete(`/api/v1/rooms/${roomId}/members/${userId}`)

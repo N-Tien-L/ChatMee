@@ -8,6 +8,7 @@ import { UserAvatar } from "@/components/common/UserAvatar";
 import UserSearchList from "@/components/user/UserSearchList";
 import { useAuthStore } from "@/lib/stores/authStore";
 import { useChatRoomsStore } from "@/lib/stores/chatRoomsStore";
+import { useUsersStore } from "@/lib/stores/usersStore";
 import { ChatRoom, RoomType, UserSummaryResponse } from "@/lib/types";
 
 interface NewMessageDialogProps {
@@ -27,6 +28,7 @@ export function NewMessageDialog({ isOpen, onClose }: NewMessageDialogProps) {
   const rooms = useChatRoomsStore((state) => state.rooms);
   const startDirectMessage = useChatRoomsStore((state) => state.startDirectMessage);
   const [starting, setStarting] = useState<string | null>(null);
+  const blockUser = useUsersStore((state) => state.blockUser);
 
   const directRooms = useMemo(
     () => rooms.filter((room) => room.roomType === RoomType.DIRECT_MESSAGE && room.counterpart),
@@ -93,6 +95,7 @@ export function NewMessageDialog({ isOpen, onClose }: NewMessageDialogProps) {
               excludeUserIds={excluded}
               placeHolder="Search people by name…"
               actionLabel="Message"
+              onUserBlock={(person) => void blockUser(person)}
             />
           </section>
         </div>

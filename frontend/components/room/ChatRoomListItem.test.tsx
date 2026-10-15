@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { useChatRoomsStore } from '@/lib/stores/chatRoomsStore';
 import ChatRoomListItem from './ChatRoomListItem';
 import { useAuthStore } from '@/lib/stores/authStore';
 import { ChatRoom, ParticipantRole, RoomSettings, RoomType } from '@/lib/types';
@@ -86,5 +87,22 @@ describe('ChatRoomListItem', () => {
         openMenu();
         expect(screen.getByRole('button', { name: 'Leave' })).toBeTruthy();
         expect(screen.queryByRole('button', { name: 'Delete' })).toBeNull();
+    });
+
+    it('menu_directMessageOwnedByCaller_offersHideAndNeverDelete', () => {
+        renderRow({ roomType: RoomType.DIRECT_MESSAGE, myRole: ParticipantRole.OWNER, displayName: 'General' });
+        openMenu();
+        expect(screen.getByRole('button', { name: 'Hide' })).toBeTruthy();
+        expect(screen.queryByRole('button', { name: 'Delete' })).toBeNull();
+        expect(screen.queryByRole('button', { name: 'Leave' })).toBeNull();
+    });
+
+    it('hide_directMessage_callsStoreHide', async () => {
+        const hideRoom = vi.fn().mockResolvedValue(true);
+        useChatRoomsStore.setState({ hideRoom } as never);
+        renderRow({ roomType: RoomType.DIRECT_MESSAGE, myRole: ParticipantRole.MEMBER, displayName: 'General' });
+        openMenu();
+        fireEvent.click(screen.getByRole('button', { name: 'Hide' }));
+        await waitFor(() => expect(hideRoom).toHaveBeenCalledWith('r1'));
     });
 });

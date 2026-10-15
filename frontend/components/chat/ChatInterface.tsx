@@ -8,6 +8,8 @@ import { useChatStore } from "@/lib/stores/chatStore";
 import { useWebSocket } from "@/hooks/useWebSocket";
 import { useUsersStore } from "@/lib/stores/usersStore";
 import { RoomPanel } from "@/components/room/RoomPanel";
+import { ReportDialog, ReportTarget } from "@/components/safety/ReportDialog";
+import { Button } from "@/components/ui/button";
 import ChatHeader from "./ChatHeader";
 import MessageList from "./MessageList";
 import TypingIndicator from "./TypingIndicator";
@@ -89,6 +91,19 @@ const RoomEndedView: React.FC<{ reason: RoomEndReason }> = ({ reason }) => (
   </div>
 );
 
+/** Read-only notice for the blocker of a DM, with the way back (SPEC-009 AC-009-19). */
+const BlockedDmBanner: React.FC<{ name: string; onUnblock: () => void }> = ({ name, onUnblock }) => (
+  <div
+    role="status"
+    className="mx-3 mb-2 flex items-center justify-between gap-3 rounded-xl bg-muted px-4 py-2.5 text-sm sm:mx-7"
+  >
+    <span className="text-muted-foreground">You blocked {name}. Unblock them to send messages.</span>
+    <Button size="sm" variant="outline" onClick={onUnblock}>
+      Unblock
+    </Button>
+  </div>
+);
+
 const ChatRoomView: React.FC<{ roomId: string; onDeleted: () => void }> = ({
   roomId,
   onDeleted,
@@ -114,6 +129,8 @@ const ChatRoomView: React.FC<{ roomId: string; onDeleted: () => void }> = ({
   } = useRoomMessages(roomId, { onRoomDeleted: handleRoomDeleted });
   const [newMessage, setNewMessage] = useState("");
   const [showInfo, setShowInfo] = useState(false);
+  const [report, setReport] = useState<ReportTarget | null>(null);
+  const unblockUser = useUsersStore((state) => state.unblockUser);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
@@ -130,6 +147,8 @@ const ChatRoomView: React.FC<{ roomId: string; onDeleted: () => void }> = ({
     state.rooms.find((room) => room.id === roomId)
   );
   const memberCount = currentRoom?.participants?.length ?? 0;
+  // The blocker's DM is read-only while the block exists (SPEC-009 AC-009-19); the blocked user gets the generic send error.
+  const blocked = currentRoom?.roomType === RoomType.DIRECT_MESSAGE && currentRoom.blocked === true;
   const memberNames = useRoomMemberNames(roomId, memberCount);
 
   // Get user cache for names
@@ -196,7 +215,7 @@ const ChatRoomView: React.FC<{ roomId: string; onDeleted: () => void }> = ({
   const handleSendMessage = (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (!newMessage.trim() || !connected) return;
+    if (!newMessage.trim() || !connected || blocked) return;
 
     // Stop typing indicator when sending message
     handleTyping(false);
@@ -273,6 +292,7 @@ const ChatRoomView: React.FC<{ roomId: string; onDeleted: () => void }> = ({
           loadingOlder={loadingOlder}
           olderError={olderError}
           onLoadOlder={loadOlder}
+          onReport={(message) => setReport({ type: "MESSAGE", id: message.id, label: `message from ${message.senderName || "this member"}` })}
           directWith={
             currentRoom.roomType === RoomType.DIRECT_MESSAGE && currentRoom.counterpart
               ? { name: currentRoom.counterpart.name, avatarUrl: currentRoom.counterpart.avatarUrl }
@@ -286,11 +306,20 @@ const ChatRoomView: React.FC<{ roomId: string; onDeleted: () => void }> = ({
         typingUsersCount={typingUsersList.length}
       />
 
+      {blocked && currentRoom.counterpart && (
+        <BlockedDmBanner
+          name={currentRoom.counterpart.name}
+          onUnblock={() => currentRoom.counterpart && void unblockUser(currentRoom.counterpart)}
+        />
+      )}
+      <ReportDialog target={report} onClose={() => setReport(null)} />
+
       <MessageInput
         value={newMessage}
         onChange={handleInputChange}
         onSubmit={handleSendMessage}
-        disabled={!newMessage.trim() || !connected}
+        disabled={!newMessage.trim() || !connected || blocked}
+        inputDisabled={blocked}
         inputRef={inputRef}
         pausedHint={
           !connected && !loading

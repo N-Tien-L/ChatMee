@@ -5,6 +5,8 @@ import { RoomPanel } from './RoomPanel';
 import { chatRoomApi } from '@/lib/api/chatRoomApi';
 import { useAuthStore } from '@/lib/stores/authStore';
 import { useChatRoomsStore } from '@/lib/stores/chatRoomsStore';
+import { useUsersStore } from '@/lib/stores/usersStore';
+import { userApi } from '@/lib/api/userApi';
 import { MemberResponse, ParticipantRole, RoomType } from '@/lib/types';
 
 const push = vi.fn();
@@ -22,7 +24,13 @@ vi.mock('@/lib/api/chatRoomApi', () => ({
         joinChatRoom: vi.fn(),
     },
 }));
-vi.mock('@/lib/api/userApi', () => ({ userApi: { getUserById: vi.fn(), searchUsers: vi.fn() } }));
+vi.mock('@/lib/api/userApi', () => ({
+    userApi: { getUserById: vi.fn(), searchUsers: vi.fn(), listBlocks: vi.fn(), blockUser: vi.fn(), unblockUser: vi.fn() },
+}));
+vi.mock('@/components/safety/ReportDialog', () => ({
+    ReportDialog: ({ target }: { target: { type: string; id: string } | null }) =>
+        target ? <div role="dialog" aria-label="report">{`${target.type}:${target.id}`}</div> : null,
+}));
 
 const member = (id: string, name: string, role: ParticipantRole): MemberResponse => ({ id, name, avatarUrl: null, role });
 
@@ -45,6 +53,7 @@ beforeEach(() => {
     vi.clearAllMocks();
     useAuthStore.setState({ user: { id: 'me', name: 'Me' } } as never);
     useChatRoomsStore.setState({ rooms: [] } as never);
+    vi.mocked(userApi.listBlocks).mockResolvedValue({ success: true, data: [] } as never);
 });
 afterEach(cleanup);
 
@@ -222,5 +231,89 @@ describe('RoomPanel actions', () => {
         render(<RoomPanel roomId="r1" isOpen onClose={vi.fn()} />);
         fireEvent.click(await screen.findByRole('button', { name: 'Join room' }));
         await waitFor(() => expect(toast.error).toHaveBeenCalledWith('This room is full.'));
+    });
+});
+
+describe('RoomPanel safety', () => {
+    const openDm = (blocked: boolean) => {
+        vi.mocked(chatRoomApi.getChatRoomById).mockResolvedValue({
+            success: true,
+            data: {
+                id: 'dm1', roomName: '', roomType: RoomType.DIRECT_MESSAGE, createdBy: 'me', createdAt: '2026-10-09T10:00:00Z',
+                maxUsers: 2, participants: ['me', 'bob'], myRole: ParticipantRole.OWNER, blocked,
+                counterpart: { id: 'bob', name: 'Bob', avatarUrl: '' },
+            },
+        } as never);
+        vi.mocked(chatRoomApi.getMembers).mockResolvedValue({
+            success: true, data: [member('me', 'Me', ParticipantRole.OWNER), member('bob', 'Bob', ParticipantRole.MEMBER)],
+        } as never);
+        return render(<RoomPanel roomId="dm1" isOpen onClose={vi.fn()} />);
+    };
+
+    it('render_directMessage_offersHideBlockReportAndNoLeaveOrDelete', async () => {
+        openDm(false);
+        expect(await screen.findByRole('button', { name: 'Hide conversation' })).toBeInTheDocument();
+        expect(screen.getByRole('button', { name: 'Block Bob' })).toBeInTheDocument();
+        expect(screen.getByRole('button', { name: 'Report Bob' })).toBeInTheDocument();
+        expect(screen.queryByRole('button', { name: 'Leave room' })).toBeNull();
+        expect(screen.queryByRole('button', { name: 'Room settings' })).toBeNull();
+    });
+
+    it('block_directMessage_callsBlockAndFlagsTheDm', async () => {
+        vi.mocked(userApi.blockUser).mockResolvedValue(undefined);
+        useChatRoomsStore.setState({
+            rooms: [{ id: 'dm1', roomType: RoomType.DIRECT_MESSAGE, counterpart: { id: 'bob', name: 'Bob', avatarUrl: '' } }],
+        } as never);
+        openDm(false);
+        fireEvent.click(await screen.findByRole('button', { name: 'Block Bob' }));
+        await waitFor(() => expect(userApi.blockUser).toHaveBeenCalledWith('bob'));
+        expect(await screen.findByRole('button', { name: 'Unblock Bob' })).toBeInTheDocument();
+    });
+
+    it('unblock_blockedDirectMessage_callsUnblock', async () => {
+        vi.mocked(userApi.unblockUser).mockResolvedValue(undefined);
+        openDm(true);
+        fireEvent.click(await screen.findByRole('button', { name: 'Unblock Bob' }));
+        await waitFor(() => expect(userApi.unblockUser).toHaveBeenCalledWith('bob'));
+    });
+
+    it('hide_directMessage_callsStoreHideAndCloses', async () => {
+        const hideRoom = vi.fn().mockResolvedValue(true);
+        useChatRoomsStore.setState({ hideRoom } as never);
+        openDm(false);
+        fireEvent.click(await screen.findByRole('button', { name: 'Hide conversation' }));
+        await waitFor(() => expect(hideRoom).toHaveBeenCalledWith('dm1'));
+    });
+
+    it('report_directMessageCounterpart_opensUserReport', async () => {
+        openDm(false);
+        fireEvent.click(await screen.findByRole('button', { name: 'Report Bob' }));
+        expect(screen.getByRole('dialog', { name: 'report' })).toHaveTextContent('USER:bob');
+    });
+
+    it('memberRow_moreActions_blocksAndReportsThatMember', async () => {
+        vi.mocked(userApi.blockUser).mockResolvedValue(undefined);
+        setup(ParticipantRole.MEMBER, team);
+        fireEvent.click(await screen.findByRole('button', { name: 'More actions for Bob' }));
+        fireEvent.click(screen.getByRole('button', { name: 'Block Bob' }));
+        await waitFor(() => expect(userApi.blockUser).toHaveBeenCalledWith('bob'));
+        fireEvent.click(screen.getByRole('button', { name: 'Report Bob' }));
+        expect(screen.getByRole('dialog', { name: 'report' })).toHaveTextContent('USER:bob');
+    });
+
+    it('memberRow_alreadyBlocked_offersUnblock', async () => {
+        vi.mocked(userApi.listBlocks).mockResolvedValue({
+            success: true, data: [{ id: 'bob', name: 'Bob', blockedAt: '2026-10-01T00:00:00Z' }],
+        } as never);
+        setup(ParticipantRole.MEMBER, team);
+        fireEvent.click(await screen.findByRole('button', { name: 'More actions for Bob' }));
+        await waitFor(() => expect(useUsersStore.getState().blockedUsers).toHaveLength(1));
+        expect(screen.getByRole('button', { name: 'Unblock Bob' })).toBeInTheDocument();
+    });
+
+    it('report_groupRoom_opensRoomReport', async () => {
+        setup(ParticipantRole.MEMBER, team);
+        fireEvent.click(await screen.findByRole('button', { name: 'Report room' }));
+        expect(screen.getByRole('dialog', { name: 'report' })).toHaveTextContent('ROOM:r1');
     });
 });

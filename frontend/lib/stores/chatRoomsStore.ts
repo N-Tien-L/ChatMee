@@ -60,6 +60,10 @@ interface chatRoomState {
     createRoom: (request: CreateChatRoomRequest) => Promise<ChatRoom | null>;
     /** The DM with this user: the listed one if it exists (never a duplicate), otherwise a new DM request (AC-008-8). */
     startDirectMessage: (userId: string) => Promise<ChatRoom | null>;
+    /** Hide a DM for the caller only (AC-009-21); the row leaves the list and the open view says so. */
+    hideRoom: (roomId: string) => Promise<boolean>;
+    /** Mirror a block or unblock on the caller's DM with that user (`blocked`, AC-009-19); no event comes for it. */
+    setCounterpartBlocked: (userId: string, blocked: boolean) => void;
     getDirectMessageDisplayName: (room: ChatRoom) => Promise<string>;
     openCreateRoomModal: (mode?: "room" | "direct") => void;
     closeCreateRoomModal: () => void;
@@ -317,6 +321,27 @@ export const useChatRoomsStore = create<chatRoomState>((set, get) => ({
         if (!created) return null;
         // The server returns the existing DM when there is one; the list keeps a single row per id either way.
         return get().rooms.find((room) => room.id === created.id) ?? created;
+    },
+
+    hideRoom: async (roomId: string) => {
+        try {
+            await chatRoomApi.hideRoom(roomId);
+            get().removeRoom(roomId, "HIDDEN");
+            toast.success("Conversation hidden. It comes back with the next message.");
+            return true;
+        } catch (error) {
+            toast.error(error instanceof Error && error.message ? error.message : "Could not hide the conversation");
+            return false;
+        }
+    },
+
+    setCounterpartBlocked: (userId, blocked) => {
+        set((state) => ({
+            rooms: state.rooms.map((room) =>
+                room.roomType === RoomType.DIRECT_MESSAGE && room.counterpart?.id === userId ? { ...room, blocked } : room
+            ),
+        }));
+        get().applyFilters();
     },
 
     joinRoom: async (roomId: string) => {

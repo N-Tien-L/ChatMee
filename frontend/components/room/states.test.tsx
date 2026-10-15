@@ -2,7 +2,6 @@ import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import ChatRoomsList from './ChatRoomsList';
 import { RoomPanel } from './RoomPanel';
-import { userApi } from '@/lib/api/userApi';
 import UserSearchList from '../user/UserSearchList';
 import { useChatRoomsStore } from '@/lib/stores/chatRoomsStore';
 import { useUsersStore } from '@/lib/stores/usersStore';
