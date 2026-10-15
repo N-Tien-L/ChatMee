@@ -66,6 +66,23 @@ class ResponseContractTest {
     }
 
     @Test
+    void chatRoomResponse_withSettings_mapsToSettingsRecordWithSameJson() throws Exception {
+        var settings = ChatRoom.RoomSettings.builder().allowFileSharing(true).allowGuestUsers(false)
+                .moderationRequired(true).welcomeMessage("Welcome").build();
+        var room = ChatRoom.builder().id("room").name("Room").type(ChatRoom.RoomType.PUBLIC).maxParticipants(10)
+                .settings(settings).build();
+
+        var response = ChatRoomResponse.from(room, Set.of("user"));
+
+        assertThat(RoomSettingsResponse.class.isRecord()).isTrue();
+        assertThat(response.settings()).isEqualTo(new RoomSettingsResponse(true, false, true, "Welcome"));
+        assertThat(json.readTree(json.writeValueAsString(response)).get("settings")).isEqualTo(json.readTree("""
+                {"allowFileSharing":true,"allowGuestUsers":false,"moderationRequired":true,"welcomeMessage":"Welcome"}
+                """));
+        assertThat(RoomSettingsResponse.from(null)).isNull();
+    }
+
+    @Test
     void memberResponse_record_serializesOnlyMemberFields() throws Exception {
         assertThat(MemberResponse.class.isRecord()).isTrue();
         tools.jackson.databind.JsonNode member = json.valueToTree(new MemberResponse("user", "Alice", "avatar", com.lnt.chatmee.model.Participant.Role.ADMIN));

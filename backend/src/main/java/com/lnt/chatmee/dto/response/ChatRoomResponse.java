@@ -10,7 +10,6 @@ import com.lnt.chatmee.model.Participant.Role;
 import com.lnt.chatmee.model.RoomState;
 import java.util.Set;
 
-import com.lnt.chatmee.model.ChatRoom.RoomSettings;
 import com.lnt.chatmee.model.ChatRoom.RoomType;
 
 import lombok.Builder;
@@ -25,7 +24,7 @@ public record ChatRoomResponse(
     LocalDateTime createdAt,
     LocalDateTime updatedAt,
     int maxUsers,
-    RoomSettings settings,
+    RoomSettingsResponse settings,
     Set<String> participants,
     /** DIRECT_MESSAGE rooms only: the other member, from the caller's point of view; null otherwise. */
     UserSummaryResponse counterpart,
@@ -61,7 +60,7 @@ public record ChatRoomResponse(
             UserSummaryResponse counterpart, long unreadCount, Role myRole, boolean blocked) {
         return new ChatRoomResponse(room.getId(), room.getName(), room.getType(), room.getDescription(),
                 room.getCreatedBy(), room.getCreatedAt(), room.getLastActivity(), room.getMaxParticipants(),
-                room.getSettings(), participants, counterpart, activityAt(room), room.getLastMessage(), unreadCount, myRole,
+                RoomSettingsResponse.from(room.getSettings()), participants, counterpart, activityAt(room), room.getLastMessage(), unreadCount, myRole,
                 room.getState(), blocked);
     }
 }
