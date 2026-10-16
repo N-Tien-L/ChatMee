@@ -92,4 +92,28 @@ describe('ChatInterface ended state', () => {
         render(<ChatInterface roomId="r1" />);
         expect(screen.getByText('Room not found')).toBeInTheDocument();
     });
+
+    it('roomReappears_afterRemoval_showsLiveView', async () => {
+        render(<ChatInterface roomId="r1" />);
+        await removed('REMOVED');
+        expect(screen.getByRole('status')).toHaveTextContent('You are no longer a member');
+
+        // Re-invited and accepted: the room is back in the store.
+        act(() => useChatRoomsStore.setState({ rooms: [room('r1')] }));
+
+        expect(screen.queryByRole('status')).toBeNull();
+        expect(screen.getByText('conversation header')).toBeInTheDocument();
+    });
+
+    it('switchChat_afterRemoval_doesNotShowEndedForOtherChat', async () => {
+        useChatRoomsStore.setState({ rooms: [room('r1'), room('dm1', RoomType.DIRECT_MESSAGE)] });
+        const { rerender } = render(<ChatInterface roomId="r1" />);
+        await removed('REMOVED');
+        expect(screen.getByRole('status')).toHaveTextContent('You are no longer a member');
+
+        rerender(<ChatInterface roomId="dm1" />);
+
+        expect(screen.queryByRole('status')).toBeNull();
+        expect(screen.getByText('conversation header')).toBeInTheDocument();
+    });
 });
