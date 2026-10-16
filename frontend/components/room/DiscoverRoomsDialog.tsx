@@ -1,6 +1,7 @@
 "use client";
 import React from "react";
 import { AlertCircle, Globe, RotateCw, Search, Users } from "lucide-react";
+import { useRouter } from "next/navigation";
 import { useShallow } from "zustand/react/shallow";
 import { useDiscoverRoomsStore } from "@/lib/stores/discoverRoomsStore";
 import { Button } from "@/components/ui/button";
@@ -14,6 +15,7 @@ import {
 import { Skeleton } from "@/components/ui/skeleton";
 
 export const DiscoverRoomsDialog: React.FC = () => {
+  const router = useRouter();
   const {
     isOpen,
     query,
@@ -47,6 +49,12 @@ export const DiscoverRoomsDialog: React.FC = () => {
       join: state.join,
     }))
   );
+
+  const joinAndOpen = async (roomId: string) => {
+    if (!(await join(roomId))) return;
+    close();
+    router.push(`/dashboard?roomId=${roomId}`, { scroll: false });
+  };
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && close()}>
@@ -164,7 +172,7 @@ export const DiscoverRoomsDialog: React.FC = () => {
                     size="sm"
                     disabled={joiningId !== null}
                     aria-label={`Join ${room.name}`}
-                    onClick={() => join(room.id)}
+                    onClick={() => void joinAndOpen(room.id)}
                   >
                     {joiningId === room.id ? "Joining..." : "Join"}
                   </Button>

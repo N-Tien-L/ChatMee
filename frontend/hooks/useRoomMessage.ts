@@ -3,6 +3,7 @@ import { StompError, useWebSocket } from "./useWebSocket";
 import { messageApi } from "@/lib/api/messageApi";
 import { chatRoomApi } from "@/lib/api/chatRoomApi";
 import { useAuthStore } from "@/lib/stores/authStore";
+import { useChatRoomsStore } from "@/lib/stores/chatRoomsStore";
 import { Message, MessageResponse, MessageType } from "@/lib/types";
 import {
     deduplicateMessages,
@@ -224,6 +225,16 @@ export const useRoomMessages = (roomId: string, options: RoomMessagesOptions = {
             if (isRoomDeletedEvent(message)) {
                 onRoomDeletedRef.current?.();
                 return;
+            }
+            // Joined/left/role system messages change the member list: refresh the room so counts stay right.
+            if (message.type === MessageType.SYSTEM) {
+                chatRoomApi.getChatRoomById(roomId)
+                    .then((res) => {
+                        if (res.success) useChatRoomsStore.getState().upsertRoom(res.data);
+                    })
+                    .catch(() => {
+                        // The next reconnect refetch recovers the room.
+                    });
             }
             // Check if this message confirms one we sent optimistically
             if (message.tempId && message.senderId === user?.id) {

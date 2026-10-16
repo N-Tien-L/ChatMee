@@ -31,7 +31,7 @@ export function NewMessageDialog({ isOpen, onClose }: NewMessageDialogProps) {
   const blockUser = useUsersStore((state) => state.blockUser);
 
   const directRooms = useMemo(
-    () => rooms.filter((room) => room.roomType === RoomType.DIRECT_MESSAGE && room.counterpart),
+    () => rooms.filter((room) => room.roomType === RoomType.DIRECT_MESSAGE && room.counterpart && !room.blocked),
     [rooms]
   );
 
@@ -49,7 +49,11 @@ export function NewMessageDialog({ isOpen, onClose }: NewMessageDialogProps) {
 
   const recent = directRooms.slice(0, MAX_RECENT);
   // Stable array: UserSearchList re-runs an effect whenever this identity changes.
-  const excluded = useMemo(() => (currentUser ? [currentUser.id] : []), [currentUser]);
+  const excluded = useMemo(() => {
+    // People the caller blocked never appear, even from a cached search (AC-009-19).
+    const blockedIds = rooms.flatMap((room) => (room.blocked && room.counterpart ? [room.counterpart.id] : []));
+    return currentUser ? [currentUser.id, ...blockedIds] : blockedIds;
+  }, [currentUser, rooms]);
 
   return (
     <Dialog open={isOpen} onOpenChange={(next) => !next && onClose()}>
