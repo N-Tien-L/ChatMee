@@ -4,6 +4,9 @@ import { useRoomMessages } from './useRoomMessage';
 import { Message, MessageResponse } from '@/lib/types';
 import { MessageType } from '@/lib/types/entities/chat/enums';
 import { messageApi } from '@/lib/api/messageApi';
+import { chatRoomApi } from '@/lib/api/chatRoomApi';
+import { useChatRoomsStore } from '@/lib/stores/chatRoomsStore';
+import { ChatRoom } from '@/lib/types';
 
 const transport = vi.hoisted(() => ({
     connected: true, connecting: false,
@@ -18,6 +21,8 @@ vi.mock('@/lib/stores/authStore', () => ({ useAuthStore: () => ({ user: { id: 'u
 vi.mock('@/lib/api/messageApi', () => ({
     messageApi: { getMessages: vi.fn().mockResolvedValue({ success: true, data: { messages: [], nextCursor: null, hasMore: false } }) },
 }));
+
+vi.mock('@/lib/api/chatRoomApi', () => ({ chatRoomApi: { getChatRoomById: vi.fn(), getMembers: vi.fn() } }));
 
 const base = {
     chatRoomId: 'r1', senderId: 'u1', type: MessageType.TEXT, content: 'hello',
@@ -85,5 +90,27 @@ describe('useRoomMessages client ids (SPEC-008 AC-008-13)', () => {
         expect(second.tempId).not.toBe(first.tempId);
         expect(transport.sendMessage).toHaveBeenNthCalledWith(1, expect.any(String), 'one', first.tempId);
         expect(transport.sendMessage).toHaveBeenNthCalledWith(2, expect.any(String), 'two', second.tempId);
+    });
+});
+
+describe('useRoomMessages membership system messages (CM-090)', () => {
+    beforeEach(() => { vi.clearAllMocks(); });
+
+    it('systemMessage_memberJoined_refreshesRoomParticipants', async () => {
+        const room = { id: 'sys-room', roomName: 'Room', participants: ['u1'] } as unknown as ChatRoom;
+        useChatRoomsStore.setState({ rooms: [room], filteredRooms: [] });
+        vi.mocked(chatRoomApi.getChatRoomById).mockResolvedValue({
+            success: true, message: 'ok', data: { ...room, participants: ['u1', 'u2'] } as never,
+        });
+        renderHook(() => useRoomMessages('sys-room'));
+        await act(async () => {});
+        const onMessage = transport.subscribeRoom.mock.calls.find((call) => call[0] === 'sys-room')![1];
+
+        await act(async () => {
+            onMessage({ ...base, id: 'm1', chatRoomId: 'sys-room', type: MessageType.SYSTEM, senderId: 'u2', content: 'Bob joined' } as Message);
+        });
+
+        expect(chatRoomApi.getChatRoomById).toHaveBeenCalledWith('sys-room');
+        expect(useChatRoomsStore.getState().rooms[0].participants).toEqual(['u1', 'u2']);
     });
 });
