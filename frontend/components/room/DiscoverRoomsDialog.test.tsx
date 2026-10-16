@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest';
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { DiscoverRoomsDialog } from './DiscoverRoomsDialog';
 import { useDiscoverRoomsStore } from '@/lib/stores/discoverRoomsStore';
 
@@ -26,7 +26,33 @@ beforeEach(() => {
 afterEach(cleanup);
 
 describe('DiscoverRoomsDialog', () => {
-    it('render_loading_showsSkeletonStatus', () => {
+    it('search_refresh_keepsExistingRowMountedWithoutFlashingSkeletons', () => {
+        useDiscoverRoomsStore.setState({
+            results: [{ id: 'r1', name: 'General', memberCount: 3, maxMembers: 10 }],
+        });
+        const { container } = render(<DiscoverRoomsDialog />);
+        const row = screen.getByRole('button', { name: 'Join General' });
+
+        act(() => useDiscoverRoomsStore.setState({ query: 'gen', loading: true }));
+
+        expect(screen.getByRole('button', { name: 'Join General' })).toBe(row);
+        expect(row).toBeDisabled();
+        expect(container.querySelector('.animate-pulse')).not.toBeInTheDocument();
+        expect(screen.getByRole('status', { name: 'Loading public rooms' })).toBeInTheDocument();
+
+        act(() => useDiscoverRoomsStore.setState({ loading: false }));
+        expect(screen.getByRole('button', { name: 'Join General' })).toBe(row);
+        expect(row).toBeEnabled();
+    });
+
+    it('search_emptyResults_doesNotFlashSkeletonsDuringEachRequest', () => {
+        useDiscoverRoomsStore.setState({ loading: true });
+        render(<DiscoverRoomsDialog />);
+        expect(screen.getByRole('dialog').querySelector('.animate-pulse')).not.toBeInTheDocument();
+        expect(screen.getByText('No public rooms found')).toBeInTheDocument();
+    });
+
+    it('render_loading_showsSearchStatus', () => {
         useDiscoverRoomsStore.setState({ loading: true });
         render(<DiscoverRoomsDialog />);
         expect(screen.getByRole('status', { name: 'Loading public rooms' })).toBeInTheDocument();
