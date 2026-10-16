@@ -96,6 +96,20 @@ describe('useRoomMessages client ids (SPEC-008 AC-008-13)', () => {
 describe('useRoomMessages membership system messages (CM-090)', () => {
     beforeEach(() => { vi.clearAllMocks(); });
 
+    it('open_roomWithStaleParticipants_refreshesRoomFromServer', async () => {
+        const room = { id: 'open-room', roomName: 'Room', participants: ['u1'] } as unknown as ChatRoom;
+        useChatRoomsStore.setState({ rooms: [room], filteredRooms: [] });
+        vi.mocked(chatRoomApi.getChatRoomById).mockResolvedValue({
+            success: true, message: 'ok', data: { ...room, participants: ['u1', 'u2'] } as never,
+        });
+
+        renderHook(() => useRoomMessages('open-room'));
+        await act(async () => {});
+
+        expect(chatRoomApi.getChatRoomById).toHaveBeenCalledWith('open-room');
+        expect(useChatRoomsStore.getState().rooms[0].participants).toEqual(['u1', 'u2']);
+    });
+
     it('systemMessage_memberJoined_refreshesRoomParticipants', async () => {
         const room = { id: 'sys-room', roomName: 'Room', participants: ['u1'] } as unknown as ChatRoom;
         useChatRoomsStore.setState({ rooms: [room], filteredRooms: [] });

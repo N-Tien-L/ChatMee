@@ -88,6 +88,7 @@ export const RoomPanel: React.FC<RoomPanelProps> = ({ roomId, isOpen, onClose, r
   const user = useAuthStore((state) => state.user);
   const liveRole = useChatRoomsStore((state) => state.rooms.find((r) => r.id === roomId)?.myRole);
   const liveBlocked = useChatRoomsStore((state) => state.rooms.find((r) => r.id === roomId)?.blocked);
+  const liveMemberCount = useChatRoomsStore((state) => state.rooms.find((r) => r.id === roomId)?.participants?.length);
   const hideRoom = useChatRoomsStore((state) => state.hideRoom);
   const blockedUsers = useUsersStore((state) => state.blockedUsers);
   const fetchBlocks = useUsersStore((state) => state.fetchBlocks);
@@ -151,6 +152,14 @@ export const RoomPanel: React.FC<RoomPanelProps> = ({ roomId, isOpen, onClose, r
       void fetchBlocks();
     }
   }, [isOpen, roomId, load, fetchBlocks]);
+
+  // Someone joined or left while the panel is open: the store learned it first, so reload the list.
+  const memberListSize = members?.length;
+  useEffect(() => {
+    if (isOpen && memberListSize !== undefined && liveMemberCount !== undefined && liveMemberCount !== memberListSize) {
+      void loadMembers();
+    }
+  }, [isOpen, liveMemberCount, memberListSize, loadMembers]);
 
   // Every close goes through here, so the next open starts on the info view.
   const close = () => {

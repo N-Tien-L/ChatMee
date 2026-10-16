@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import toast from 'react-hot-toast';
 import { RoomPanel } from './RoomPanel';
 import { chatRoomApi } from '@/lib/api/chatRoomApi';
@@ -63,6 +63,23 @@ const team = [
     member('ana', 'Ana', ParticipantRole.ADMIN),
     member('bob', 'Bob', ParticipantRole.MEMBER),
 ];
+
+describe('RoomPanel live members', () => {
+    it('render_storeParticipantsGrowWhileOpen_reloadsMemberList', async () => {
+        const initial = [member('me', 'Me', ParticipantRole.OWNER), member('ana', 'Ana', ParticipantRole.MEMBER)];
+        useChatRoomsStore.setState({ rooms: [{ id: 'r1', participants: ['me', 'ana'] }] } as never);
+        setup(ParticipantRole.OWNER, initial);
+        await screen.findByText('Ana');
+        expect(screen.queryByText('Bob')).toBeNull();
+
+        vi.mocked(chatRoomApi.getMembers).mockResolvedValue({
+            success: true, data: [...initial, member('bob', 'Bob', ParticipantRole.MEMBER)],
+        } as never);
+        act(() => useChatRoomsStore.setState({ rooms: [{ id: 'r1', participants: ['me', 'ana', 'bob'] }] } as never));
+
+        expect(await screen.findByText('Bob')).toBeInTheDocument();
+    });
+});
 
 describe('RoomPanel roles', () => {
     it('render_ownershipTransferred_ownerBadgeAndSettingsFollowRoleNotCreatedBy', async () => {

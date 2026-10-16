@@ -8,6 +8,9 @@ import { Message, MessageResponse } from '@/lib/types';
 import { MessageType } from '@/lib/types/entities/chat/enums';
 import { messageApi } from '@/lib/api/messageApi';
 
+// The hook refreshes the opened room; keep the real HTTP client (and its timers) out of the timer-count tests.
+vi.mock('@/lib/api/chatRoomApi', () => ({ chatRoomApi: { getChatRoomById: vi.fn(), getMembers: vi.fn() } }));
+
 // Provide a valid base message to reduce boilerplate
 const baseMessage = {
     chatRoomId: 'r1',

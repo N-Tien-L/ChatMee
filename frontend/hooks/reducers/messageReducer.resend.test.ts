@@ -64,6 +64,8 @@ const transport = vi.hoisted(() => ({
 }));
 vi.mock('../useWebSocket', () => ({ useWebSocket: () => transport }));
 vi.mock('@/lib/stores/authStore', () => ({ useAuthStore: () => ({ user: { id: 'u1', name: 'Alice' } }) }));
+// The hook refreshes the opened room; keep the real HTTP client (and its timers) out of the timer-count tests.
+vi.mock('@/lib/api/chatRoomApi', () => ({ chatRoomApi: { getChatRoomById: vi.fn(), getMembers: vi.fn() } }));
 vi.mock('@/lib/api/messageApi', () => ({
     messageApi: { getMessages: vi.fn().mockResolvedValue({ success: true, data: { messages: [], nextCursor: null, hasMore: false } }) },
 }));
