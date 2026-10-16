@@ -89,7 +89,7 @@ SPEC-009 (invitations, DM requests, blocking, reporting, hiding DMs, owner auto-
   `/user/queue/events` (AC-008-1) stays delivered to every session of the user. -> Implemented (CM-068). Test: StompMessagingIT#sendMessage_twoSessionsOfOneUser_privateErrorReachesOnlySendingSession; ChatWebSocketControllerAuthTest#sendMessage_processingFailure_sendsErrorOnlyToPrincipal; ChatWebSocketControllerAuthTest#sendMessage_saveFailure_sendsPrivateErrorWithoutBroadcast; UserEventsIT#sendMessage_unopenedRoom_deliversActivityToAllMemberSessionsButNotNonMember
 - AC-008-16: Inbound frames of one session are processed in order, so a SUBSCRIBE sent right before a SEND is registered first;
   a CONNECT while Redis is unavailable is rejected with an ERROR frame that does not contain the token. -> Test: planned (CM-068, WS-A09/A14)
-  Draft amendment (owner approval pending): the in-order processing half is a v0 known gap, deferred to v1 (owner decision WS-A14:
+  Amendment (owner-approved 2026-10-16): the in-order processing half is a v0 known gap, deferred to v1 (owner decision WS-A14:
   Spring 7.0.9's preserve-receive-order flag swallows rejection errors). See §10.
 
 ### Release
@@ -128,7 +128,7 @@ docs/design/websocket-protocol.md (to be extended by CM-060), docs/design/data-m
 ## 10. Amendments
 - 2026-10-12: SPEC-009 (consent and safety) joins v0 with a reduced scope; AC-008-1, -7, -8, -9, -12, -13, §2 and §5 updated accordingly.
   Decisions D-01..D-23 are recorded in docs/plan/MVP_V0_PLAN.md.
-- 2026-10-16 (draft, owner approval pending, CM-067): AC-008-16 in-order processing of one session's inbound frames is a v0 known gap,
+- 2026-10-16 (owner-approved, CM-067): AC-008-16 in-order processing of one session's inbound frames is a v0 known gap,
   deferred to v1 (WS-A14: the Spring 7.0.9 receive-order flag swallows rejection errors). Other v0 known gaps, deferred to v1:
   a recipient's DM decline is not broadcast to the recipient's other tabs; a block sends no realtime event to the blocker's other tabs
   (they update on the next `GET /rooms`); `GET /rooms/{id}/members` has no `joinedAt` or order, so the client's next-owner name in the
