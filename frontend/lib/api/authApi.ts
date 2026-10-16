@@ -1,6 +1,12 @@
 import { ApiResponse, AuthResponse } from "@/lib/types";
 import { apiClient } from "./apiClient";
 
+/** Only Google honours prompt=select_account; GitHub rejects or ignores it. */
+export function oauthLoginUrl(provider: string): string {
+    const base = `/oauth2/authorization/${provider}`;
+    return provider === 'google' ? `${base}?prompt=select_account` : base;
+}
+
 // Auth API endpoints
 export const authApi = {
     getWsToken: async (): Promise<string> => {
@@ -11,39 +17,24 @@ export const authApi = {
         return response.data.token;
     },
 
-    // get current authenticated user
+    // get current authenticated user; a 401 rejects and means "no session"
     getCurrentUser: async (): Promise<ApiResponse<AuthResponse>> => {
-        try {
-            const response = await apiClient.get<ApiResponse<AuthResponse>>('/api/v1/auth/me')
-            return response.data
-        } catch (error) {
-            console.error("Error getting current user: ", error)
-            throw error
-        }
+        const response = await apiClient.get<ApiResponse<AuthResponse>>('/api/v1/auth/me')
+        return response.data
     },
 
     // login with OAuth2 - using same domain via Vercel proxy
     login: (provider = 'google') => {
-        // Direct redirect - no popup needed since we're on same domain now
-        window.location.href = `/oauth2/authorization/${provider}?prompt=select_account`;
+        window.location.href = oauthLoginUrl(provider);
     },
 
-    // logout
-    logout: async () => {
-        try {
-            // Logout from application
-            await apiClient.post("/logout")
-            window.location.href = "/login"
-        } catch (error) {
-            console.error("Error during logout: ", error)
-            throw error
-        }
+    // Ends the server session; rejects when the server did not agree (CSRF 403, network error).
+    logout: async (): Promise<void> => {
+        await apiClient.post("/logout")
     },
 
-    // Force logout from Google and then login again
-    loginWithAccountSelection: (provider = 'google') => {
-        // First logout from Google, then redirect to login
-        const currentDomain = window.location.origin;
-        window.location.href = `https://accounts.google.com/logout?continue=${encodeURIComponent(`${currentDomain}/oauth2/authorization/${provider}?prompt=select_account`)}`
-    }
+    // Full navigation so every in-memory module cache is dropped; the flag lets /login confirm it.
+    redirectToLogin: () => {
+        window.location.assign('/login?signedOut=true');
+    },
 }

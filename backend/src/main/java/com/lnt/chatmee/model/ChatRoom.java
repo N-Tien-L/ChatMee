@@ -1,6 +1,8 @@
 package com.lnt.chatmee.model;
 
 import java.time.LocalDateTime;
+import java.time.Instant;
+import com.lnt.chatmee.dto.event.LastMessageSummary;
 
 import org.springframework.data.annotation.CreatedDate;
 import org.springframework.data.annotation.Id;
@@ -36,6 +38,10 @@ public class ChatRoom {
 
     private LocalDateTime lastActivity;
 
+    private Instant lastActivityAt;
+
+    private LastMessageSummary lastMessage;
+
     private RoomType type;
 
     private int maxParticipants; // -1 for unlimited
@@ -56,18 +62,26 @@ public class ChatRoom {
     private boolean isActive;
 
     /**
-     * Only on active DIRECT_MESSAGE rooms: the two member ids, sorted and joined with ':'. The unique sparse
-     * index allows one active DM per pair; soft delete unsets it so the pair can start a new DM later.
+     * Only on active DIRECT_MESSAGE rooms (REQUESTED or ACTIVE): the two user ids, sorted and joined with ':'. The
+     * unique sparse index allows one DM per pair; soft delete, decline and expiry unset it so the pair can start again.
      */
     @Indexed(unique = true, sparse = true)
     private String memberKey;
 
+
+    /** DM consent state (CM-072); isActive stays the soft-delete flag. Read through {@link #getState()}. */
+    private RoomState state;
 
     /** Set when the room is soft-deleted (isActive = false). */
 
     private LocalDateTime deletedAt;
 
     public RoomSettings settings;
+
+    /** A missing state (every room created before CM-072) reads as ACTIVE, so no backfill is needed. */
+    public RoomState getState() {
+        return state == null ? RoomState.ACTIVE : state;
+    }
 
     public enum RoomType {
         PUBLIC, // anyone can join

@@ -1,89 +1,57 @@
 import { UserSummaryResponse } from "@/lib/types";
 import React from "react";
-import { Check, Plus } from "lucide-react";
-import { Card, CardContent } from "../ui/card";
-import { Button } from "../ui/button";
+import { ArrowRight, Ban, Check } from "lucide-react";
+import { UserAvatar } from "@/components/common/UserAvatar";
 
 export interface UserSearchItemProps {
   user: UserSummaryResponse;
   onAdd: () => void;
   isAdded: boolean;
+  /** Verb on the row's action, for example "Message" or "Add". */
+  actionLabel?: string;
+  /** Optional second action: block this person (SPEC-009 AC-009-15). */
+  onBlock?: () => void;
 }
 
-const UserSearchItem = ({ user, onAdd, isAdded }: UserSearchItemProps) => {
-  const getAvatar = () => {
-    if (user.avatarUrl) {
-      return (
-        <img
-          src={user.avatarUrl}
-          alt={`${user.name}'s avatar`}
-          className="w-10 h-10 rounded-full object-cover"
-          onError={(e) => {
-            // Fallback to initials if image fails to load
-            const target = e.target as HTMLImageElement;
-            target.style.display = "none";
-            target.nextElementSibling?.classList.remove("hidden");
-          }}
-        />
-      );
-    }
-
-    const initials = user.name
-      .split(" ")
-      .map((n) => n[0])
-      .join("")
-      .toUpperCase()
-      .slice(0, 2);
-
-    return (
-      <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white font-medium text-sm">
-        {initials}
-      </div>
-    );
-  };
-
+/** One person in a search result: the whole row is the action, with an optional Block button beside it. */
+const UserSearchItem = ({ user, onAdd, isAdded, actionLabel = "Add", onBlock }: UserSearchItemProps) => {
+  const row = (
+  <button
+    type="button"
+    onClick={onAdd}
+    disabled={isAdded}
+    aria-label={`${actionLabel} ${user.name}`}
+    className="group flex w-full items-center gap-3 rounded-xl px-2.5 py-2 text-left transition-colors hover:bg-accent focus-visible:bg-accent disabled:cursor-not-allowed disabled:opacity-70"
+  >
+    <UserAvatar name={user.name} avatarUrl={user.avatarUrl} size="lg" />
+    <span className="min-w-0 flex-1 truncate font-medium text-foreground">{user.name}</span>
+    {isAdded ? (
+      <span className="flex items-center gap-1 text-xs font-medium text-success">
+        <Check className="h-3.5 w-3.5" aria-hidden="true" />
+        Done
+      </span>
+    ) : (
+      <span className="flex items-center gap-1 rounded-full bg-primary/10 px-2.5 py-1 text-xs font-semibold text-primary opacity-80 transition-opacity group-hover:opacity-100">
+        {actionLabel}
+        <ArrowRight className="h-3 w-3 transition-transform group-hover:translate-x-0.5" aria-hidden="true" />
+      </span>
+    )}
+  </button>
+  );
+  if (!onBlock) return row;
   return (
-    <Card className="hover:shadow-md transition-all duration-200 border-gray-200">
-      <CardContent className="p-3">
-        <div className="flex items-center gap-3">
-          {/* Avatar */}
-          <div className="relative">{getAvatar()}</div>
-
-          {/* User Info */}
-          <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-2 mb-1">
-              <h4 className="font-medium text-gray-900 truncate">
-                {user.name}
-              </h4>
-            </div>
-          </div>
-
-          {/* Add Button */}
-          <Button
-            size="sm"
-            onClick={onAdd}
-            disabled={isAdded}
-            className={`h-8 px-3 transition-all duration-200 ${
-              isAdded
-                ? "bg-green-100 text-green-700 hover:bg-green-100 cursor-not-allowed"
-                : "bg-blue-600 hover:bg-blue-700 text-white"
-            }`}
-          >
-            {isAdded ? (
-              <>
-                <Check className="w-3 h-3 mr-1" />
-                Added
-              </>
-            ) : (
-              <>
-                <Plus className="w-3 h-3 mr-1" />
-                Add
-              </>
-            )}
-          </Button>
-        </div>
-      </CardContent>
-    </Card>
+    <div className="flex items-center gap-1">
+      <div className="min-w-0 flex-1">{row}</div>
+      <button
+        type="button"
+        onClick={onBlock}
+        aria-label={`Block ${user.name}`}
+        title="Block"
+        className="flex-shrink-0 rounded-lg p-2 text-muted-foreground transition-colors hover:bg-accent hover:text-destructive"
+      >
+        <Ban className="h-4 w-4" aria-hidden="true" />
+      </button>
+    </div>
   );
 };
 

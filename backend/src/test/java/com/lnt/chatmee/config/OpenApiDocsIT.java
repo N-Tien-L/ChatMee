@@ -39,8 +39,20 @@ class OpenApiDocsIT {
                 "/api/v1/auth/ws-token", "/api/v1/auth/me",
                 "/api/v1/rooms", "/api/v1/rooms/{roomId}",
                 "/api/v1/rooms/{roomId}/members", "/api/v1/rooms/{roomId}/members/me",
+                "/api/v1/rooms/{roomId}/members/me/read",
+                "/api/v1/rooms/{roomId}/members/{userId}",
                 "/api/v1/rooms/{roomId}/messages", "/api/v1/online-users",
-                "/api/v1/users", "/api/v1/users/{userId}");
+                "/api/v1/users", "/api/v1/users/{userId}",
+                "/api/v1/rooms/{roomId}/invitations", "/api/v1/invitations",
+                "/api/v1/invitations/{id}", "/api/v1/invitations/{id}/accept", "/api/v1/invitations/{id}/decline",
+                "/api/v1/dm-requests", "/api/v1/rooms/{roomId}/dm-request/accept",
+                "/api/v1/rooms/{roomId}/dm-request/decline", "/api/v1/rooms/{roomId}/hide",
+                "/api/v1/users/{userId}/block", "/api/v1/users/me/blocks");
+        // AC-009-15: block and unblock share one path.
+        assertThat(paths.path("/api/v1/users/{userId}/block").propertyNames()).contains("put", "delete");
+        // AC-009-5: direct add is removed; the members collection is read-only.
+        assertThat(paths.path("/api/v1/rooms/{roomId}/members").propertyNames()).containsExactly("get");
+        assertThat(paths.path("/api/v1/rooms/{roomId}/invitations").propertyNames()).contains("get", "post");
     }
 
     @Test
@@ -73,4 +85,15 @@ class OpenApiDocsIT {
                 .andReturn().getResponse().getContentAsString();
         return objectMapper.readTree(body);
     }
+
+    @Test
+    void apiDocs_membershipEndpoints_documentsListRemovalAndMemberSchema() throws Exception {
+        var docs = apiDocs();
+        assertThat(docs.at("/paths/~1api~1v1~1rooms~1{roomId}~1members/get").isMissingNode()).isFalse();
+        assertThat(docs.at("/paths/~1api~1v1~1rooms~1{roomId}~1members~1{userId}/delete/responses/204").isMissingNode()).isFalse();
+        var schema = docs.at("/components/schemas/MemberResponse/properties");
+        assertThat(schema.propertyNames()).containsExactlyInAnyOrder("id", "name", "avatarUrl", "role");
+        assertThat(schema.path("role").path("enum")).isEqualTo(objectMapper.valueToTree(List.of("OWNER", "ADMIN", "MEMBER")));
+    }
+
 }

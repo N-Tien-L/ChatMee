@@ -3,6 +3,7 @@ package com.lnt.chatmee.security;
 import java.security.Principal;
 import java.util.Set;
 
+import org.springframework.dao.DataAccessException;
 import org.springframework.messaging.Message;
 import org.springframework.messaging.MessageChannel;
 import org.springframework.messaging.simp.stomp.StompCommand;
@@ -10,6 +11,7 @@ import org.springframework.messaging.simp.stomp.StompHeaderAccessor;
 import org.springframework.messaging.support.ChannelInterceptor;
 import org.springframework.messaging.support.MessageHeaderAccessor;
 import org.springframework.security.access.AccessDeniedException;
+import org.springframework.security.authentication.AuthenticationServiceException;
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.stereotype.Component;
 import org.springframework.util.AntPathMatcher;
@@ -42,7 +44,7 @@ public class AuthChannelInterceptor implements ChannelInterceptor {
             if (token == null || token.isBlank()) {
                 throw new BadCredentialsException("WebSocket authentication required");
             }
-            String userId = wsTokenService.consumeToken(token);
+            String userId = consumeToken(token);
             if (userId == null || userId.isBlank()) {
                 throw new BadCredentialsException("Invalid or expired WebSocket token");
             }
@@ -65,13 +67,26 @@ public class AuthChannelInterceptor implements ChannelInterceptor {
         return message;
     }
 
+    /**
+     * A Redis outage at CONNECT fails closed with a fixed message. The Redis exception is not chained, so
+     * neither its text nor the token can reach the ERROR frame or the log (SPEC-008 AC-008-16).
+     */
+    private String consumeToken(String token) {
+        try {
+            return wsTokenService.consumeToken(token);
+        } catch (DataAccessException ex) {
+            throw new AuthenticationServiceException("WebSocket authentication unavailable");
+        }
+    }
+
     private static boolean isSendAllowed(String destination) {
         return destination != null
                 && (SEND_DESTINATIONS.contains(destination) || PATH_MATCHER.match(TYPING_DESTINATION_PATTERN, destination));
     }
 
     private void authorizeSubscription(String destination, String userId) {
-        if ("/topic/presence".equals(destination) || "/user/queue/errors".equals(destination)) {
+        if ("/topic/presence".equals(destination) || "/user/queue/errors".equals(destination)
+                || "/user/queue/events".equals(destination)) {
             return;
         }
         if (destination != null && destination.startsWith(ROOM_TOPIC_PREFIX)) {

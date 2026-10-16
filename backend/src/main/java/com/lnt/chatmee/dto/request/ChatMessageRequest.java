@@ -24,6 +24,8 @@ public class ChatMessageRequest {
     @NotNull(message = "Message type is required")
     private MessageType messageType = MessageType.TEXT; // default to TEXT
 
+    /** Client idempotency key (clients send UUIDs); bounded because it is stored, indexed and echoed (CM-085). */
+    @Size(max = 64, message = "Temp ID must not exceed 64 characters")
     private String tempId;
 
     /** SYSTEM (and future media) messages are created by the server only; clients send TEXT. */

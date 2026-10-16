@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>QSL: landing sketch</title>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700;800&family=Geist+Mono:wght@400;500&family=Borel&display=swap" rel="stylesheet">
+<style>
+:root{--ground:#0b1f21;--card:#f6f8f7;--ink:#0e4f55;--teal:#5fb8b0;--text:#e8f1f0;--muted:#93a9a7;--spot:#e5482d;--rule:rgba(255,255,255,.12)}
+*{box-sizing:border-box;margin:0}
+body{width:1440px;height:900px;overflow:hidden;background:var(--ground);color:var(--text);font:16px/1.5 Geist,system-ui,sans-serif}
+.mono{font-family:"Geist Mono",monospace}
+header{display:flex;align-items:center;padding:22px 64px}
+.word{font-family:Borel,cursive;font-size:28px;line-height:1;padding-top:10px}
+header nav{margin-left:auto;display:flex;gap:28px;color:var(--muted);font-size:14px;align-items:center}
+.cta{background:var(--spot);color:#fff;border-radius:6px;padding:9px 16px;font-weight:600;font-size:14px}
+main{display:grid;grid-template-columns:520px 1fr;gap:56px;padding:40px 64px}
+h1{font-size:60px;line-height:1.02;letter-spacing:-.035em;font-weight:750}
+h1 em{font-style:normal;color:var(--teal)}
+.lede{margin-top:20px;color:var(--muted);font-size:18px;max-width:460px}
+.act{margin-top:32px;display:flex;gap:14px;align-items:center}
+.act .cta{padding:13px 20px;font-size:15px}
+.act span{color:var(--muted);font-size:13px}
+.stack{margin-top:56px;font-size:12px;color:var(--muted);letter-spacing:.06em}
+.stack b{color:var(--text);font-weight:500}
+/* the QSL card for ChatMee itself */
+.qsl{align-self:start;background:var(--card);color:#14201f;border-radius:6px;padding:26px 30px;transform:rotate(-1.2deg);box-shadow:0 30px 60px rgba(0,0,0,.45);position:relative}
+.qsl .top{display:flex;align-items:flex-end;gap:18px;border-bottom:2px solid var(--ink);padding-bottom:12px}
+.qsl .call{font-size:54px;font-weight:800;letter-spacing:-.03em;color:var(--ink);line-height:.9}
+.qsl .tag{font:500 11px "Geist Mono";letter-spacing:.12em;color:#5b6b6a}
+.onair{margin-left:auto;display:flex;align-items:center;gap:8px;font:600 11px "Geist Mono";letter-spacing:.12em;color:var(--spot)}
+.onair i{width:9px;height:9px;border-radius:50%;background:var(--spot)}
+table{width:100%;border-collapse:collapse;margin-top:14px;font-size:13px}
+th{font:500 10px "Geist Mono";letter-spacing:.12em;text-transform:uppercase;color:#5b6b6a;text-align:left;padding:6px 8px;border-bottom:1px solid #d6dfdd}
+td{padding:9px 8px;border-bottom:1px solid #e6ecea;font-family:"Geist Mono";font-size:12.5px}
+td.msg{font-family:Geist;font-size:14px}
+.ok{color:var(--ink);border:1.5px solid var(--ink);border-radius:3px;padding:0 5px;font-size:10.5px}
+.pending{color:#5b6b6a;border:1.5px dashed #5b6b6a;border-radius:3px;padding:0 5px;font-size:10.5px}
+.foot{display:flex;justify-content:space-between;margin-top:14px;font:500 11px "Geist Mono";color:#5b6b6a;letter-spacing:.06em}
+.demo{position:absolute;top:-12px;right:22px;background:#14201f;color:#fff;font:500 10px "Geist Mono";padding:3px 8px;border-radius:3px;letter-spacing:.1em}
+.rows{grid-column:1/-1;display:grid;grid-template-columns:repeat(3,1fr);gap:0;margin-top:24px;border-top:1px solid var(--rule)}
+.rows div{padding:18px 24px 0 0}
+.rows b{display:block;font-weight:600;margin-bottom:4px}
+.rows span{color:var(--muted);font-size:14px}
+.rows code{display:block;margin-top:6px;font:12px "Geist Mono";color:var(--teal)}
+</style></head>
+<body>
+<header><span class="word">ChatMee</span><nav><span>How it works</span><span>GitHub</span><span class="cta">Sign in</span></nav></header>
+<main>
+ <div>
+  <h1>Every message, <em>confirmed</em> both ways.</h1>
+  <p class="lede">A real-time chat app with a hand-built realtime layer: rooms, direct messages, presence and typing, on Spring Boot and STOMP.</p>
+  <div class="act"><span class="cta">Sign in with GitHub</span><span>or Google. No passwords.</span></div>
+  <p class="stack">BUILT WITH <b>Spring Boot 4</b> · <b>STOMP / WebSocket</b> · <b>MongoDB</b> · <b>Redis</b> · <b>Next.js 16</b></p>
+ </div>
+ <div class="qsl"><span class="demo">DEMO DATA</span>
+  <div class="top"><div><div class="tag">CONTACT CONFIRMATION</div><div class="call">ChatMee</div></div><span class="onair"><i></i>ON AIR</span></div>
+  <table><tr><th>UTC</th><th>From</th><th>Message</th><th>Frame</th><th>QSL</th></tr>
+   <tr><td>07:01:12</td><td>lan</td><td class="msg">Does resync merge by id?</td><td>SEND /app/chat.sendMessage</td><td><span class="ok">QSL</span></td></tr>
+   <tr><td>07:01:12</td><td>server</td><td class="msg">stored, then broadcast</td><td>MESSAGE /topic/rooms/42</td><td><span class="ok">QSL</span></td></tr>
+   <tr><td>07:01:15</td><td>minh</td><td class="msg">typing…</td><td>MESSAGE /topic/rooms/42/typing</td><td>—</td></tr>
+   <tr><td>07:01:19</td><td>minh</td><td class="msg">Yes, no duplicates.</td><td>SEND /app/chat.sendMessage</td><td><span class="pending">…</span></td></tr></table>
+  <div class="foot"><span>MODE STOMP 1.2</span><span>AUTH OAUTH2 SESSION + WS TOKEN</span><span>PRESENCE REDIS</span></div>
+ </div>
+ <div class="rows">
+  <div><b>Nothing sent twice</b><span>A retry with the same client id returns the stored message.</span><code>(roomId, senderId, clientMessageId)</code></div>
+  <div><b>Back after a drop</b><span>Reconnects with backoff, refetches, merges by id.</span><code>CONNECT · SUBSCRIBE · GET /messages</code></div>
+  <div><b>Only for members</b><span>Every subscription is checked, and revoked when you leave.</span><code>/topic/rooms/{id} · /user/queue/events</code></div>
+ </div>
+</main>
+</body></html>

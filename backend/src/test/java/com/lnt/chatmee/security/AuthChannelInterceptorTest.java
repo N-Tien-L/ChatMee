@@ -31,6 +31,7 @@ import org.springframework.messaging.simp.stomp.StompSession;
 import org.springframework.messaging.simp.stomp.StompSessionHandlerAdapter;
 import org.springframework.messaging.support.ExecutorSubscribableChannel;
 import org.springframework.messaging.support.MessageBuilder;
+import org.springframework.security.authentication.AuthenticationServiceException;
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.test.context.ActiveProfiles;
@@ -79,6 +80,19 @@ class AuthChannelInterceptorTest {
     void preSend_invalidOrExpiredToken_rejectsConnect() {
         when(tokens.consumeToken("bad-token")).thenReturn(null);
         assertThrows(BadCredentialsException.class, () -> interceptor.preSend(connect("bad-token"), channel));
+    }
+
+    @Test
+    void preSend_redisUnavailableAtConnect_rejectsWithoutTokenOrCause() {
+        when(tokens.consumeToken("secret-token"))
+                .thenThrow(new org.springframework.data.redis.RedisConnectionFailureException("Unable to connect to Redis"));
+
+        AuthenticationServiceException error = assertThrows(AuthenticationServiceException.class,
+                () -> interceptor.preSend(connect("secret-token"), channel));
+
+        assertEquals("WebSocket authentication unavailable", error.getMessage());
+        assertNull(error.getCause());
+        assertFalse(error.getMessage().contains("secret-token"));
     }
 
     @Test
@@ -403,4 +417,18 @@ class AuthChannelInterceptorTest {
             return "ws://127.0.0.1:" + port + "/ws";
         }
     }
+
+    @Test
+    void preSend_userEventsSubscription_allowsOwnQueueOnly() {
+        Message<?> message = applicationFrame(StompCommand.SUBSCRIBE, "/user/queue/events", "internal-user");
+        assertSame(message, interceptor.preSend(message, channel));
+        for (String destination : List.of("/user/queue/other", "/user/other/queue/events", "/queue/events", "/user/queue/events/extra")) {
+            assertThrows(AccessDeniedException.class, () -> interceptor.preSend(
+                applicationFrame(StompCommand.SUBSCRIBE, destination, "internal-user"), channel));
+        }
+        assertThrows(BadCredentialsException.class, () -> interceptor.preSend(
+            applicationFrame(StompCommand.SUBSCRIBE, "/user/queue/events", null), channel));
+        verifyNoInteractions(participants, tokens);
+    }
+
 }

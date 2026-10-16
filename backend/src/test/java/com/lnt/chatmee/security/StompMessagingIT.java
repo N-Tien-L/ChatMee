@@ -2,6 +2,7 @@ package com.lnt.chatmee.security;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.Mockito.doThrow;
 
 import java.lang.reflect.Type;
 import java.util.ArrayList;
@@ -29,6 +30,8 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.server.LocalServerPort;
 import org.springframework.context.annotation.Import;
 import org.springframework.data.mongodb.core.MongoTemplate;
+import org.springframework.data.redis.RedisConnectionFailureException;
+import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
 import org.springframework.data.mongodb.core.query.Criteria;
 import org.springframework.data.mongodb.core.query.Query;
 import org.springframework.data.redis.core.StringRedisTemplate;
@@ -50,8 +53,11 @@ class StompMessagingIT {
     @Autowired private MongoTemplate mongo;
     @Autowired private StringRedisTemplate redis;
     @Autowired private WsTokenService tokens;
+    @MockitoSpyBean private WsTokenService tokenService;
     @Autowired private SimpMessagingTemplate messaging;
     @Autowired private ObjectMapper mapper;
+    @Autowired private com.lnt.chatmee.service.BlockService blockService;
+    @Autowired private com.lnt.chatmee.service.MessageService messageService;
     @Value("${app.client.url}") private String clientUrl;
 
     private final List<User> users = new ArrayList<>();
@@ -79,7 +85,10 @@ class StompMessagingIT {
         client.stop();
         mongo.remove(Query.query(Criteria.where("chatRoomId").is(roomId)), Message.class);
         mongo.remove(Query.query(Criteria.where("chatRoomId").is(roomId)), Participant.class);
+        mongo.remove(Query.query(Criteria.where("roomId").is(roomId)), com.lnt.chatmee.model.MembershipRequest.class);
         mongo.remove(Query.query(Criteria.where("id").is(roomId)), ChatRoom.class);
+        List<String> userIds = users.stream().map(User::getId).toList();
+        mongo.remove(Query.query(Criteria.where("blockerId").in(userIds)), com.lnt.chatmee.model.UserBlock.class);
         for (User user : users) mongo.remove(user);
         for (String token : issuedTokens) redis.delete("ws-token:" + token);
     }
@@ -149,6 +158,92 @@ class StompMessagingIT {
     }
 
     @Test
+    void sendMessage_requestedDm_secondSenderMessageGetsDmRequestPendingAndRecipientReplyActivates() throws Exception {
+        User sender = seedUser(true);
+        User recipient = seedUser(false);
+        String pairKey = com.lnt.chatmee.service.policy.DirectRoomPolicy.memberKey(sender.getId(), recipient.getId());
+        mongo.updateFirst(Query.query(Criteria.where("id").is(roomId)), new org.springframework.data.mongodb.core.query.Update()
+                .set("type", ChatRoom.RoomType.DIRECT_MESSAGE).set("state", com.lnt.chatmee.model.RoomState.REQUESTED)
+                .set("maxParticipants", 2).set("memberCount", 1).set("memberKey", pairKey), ChatRoom.class);
+        java.time.Instant now = java.time.Instant.now();
+        mongo.insert(com.lnt.chatmee.model.MembershipRequest.builder()
+                .kind(com.lnt.chatmee.model.MembershipRequestKind.DM_REQUEST).roomId(roomId)
+                .inviterId(sender.getId()).targetUserId(recipient.getId())
+                .status(com.lnt.chatmee.model.MembershipRequestStatus.PENDING).pairKey(pairKey)
+                .createdAt(now).expiresAt(now.plus(java.time.Duration.ofDays(14))).build());
+        StompSession senderSession = connect(issueToken(sender), new ProtocolEvents());
+        BlockingQueue<String> senderErrors = subscribeReady(senderSession, "/user/queue/errors", sender.getId());
+        BlockingQueue<String> roomFrames = subscribeReady(senderSession, "/topic/rooms/" + roomId, null);
+
+        sendJson(senderSession, payload(UUID.randomUUID().toString(), "Hi, can we talk?", sender.getId()));
+        assertThat(mapper.readTree(take(roomFrames)).path("content").asString()).isEqualTo("Hi, can we talk?");
+        String secondTempId = UUID.randomUUID().toString();
+        sendJson(senderSession, payload(secondTempId, "Hello?", sender.getId()));
+
+        JsonNode error = mapper.readTree(take(senderErrors));
+        assertThat(error.path("code").asString()).isEqualTo("DM_REQUEST_PENDING");
+        assertThat(error.path("tempId").asString()).isEqualTo(secondTempId);
+        assertThat(mongo.count(Query.query(Criteria.where("chatRoomId").is(roomId)), Message.class)).isEqualTo(1);
+
+        StompSession recipientSession = connect(issueToken(recipient), new ProtocolEvents());
+        sendJson(recipientSession, payload(UUID.randomUUID().toString(), "Sure", recipient.getId()));
+
+        JsonNode reply = mapper.readTree(take(roomFrames));
+        assertThat(reply.path("senderId").asString()).isEqualTo(recipient.getId());
+        assertThat(reply.path("content").asString()).isEqualTo("Sure");
+        ChatRoom activated = mongo.findById(roomId, ChatRoom.class);
+        assertThat(activated.getState()).isEqualTo(com.lnt.chatmee.model.RoomState.ACTIVE);
+        assertThat(activated.getMemberCount()).isEqualTo(2);
+        assertThat(mongo.exists(Query.query(Criteria.where("chatRoomId").is(roomId).and("userId").is(recipient.getId())),
+                Participant.class)).isTrue();
+        assertThat(senderErrors.poll(1, TimeUnit.SECONDS)).isNull();
+    }
+
+    // CM-073 AC3: a block makes the DM read-only both ways with one generic error; unblock restores sending
+
+    @Test
+    void sendMessage_blockedDm_bothGetForbiddenActionHistoryReadableAndUnblockRestores() throws Exception {
+        User blocker = seedUser(true);
+        User blocked = seedUser(true);
+        mongo.updateFirst(Query.query(Criteria.where("id").is(roomId)), new org.springframework.data.mongodb.core.query.Update()
+                .set("type", ChatRoom.RoomType.DIRECT_MESSAGE).set("maxParticipants", 2).set("memberCount", 2)
+                .set("memberKey", com.lnt.chatmee.service.policy.DirectRoomPolicy.memberKey(blocker.getId(), blocked.getId())),
+                ChatRoom.class);
+        StompSession blockedSession = connect(issueToken(blocked), new ProtocolEvents());
+        StompSession blockerSession = connect(issueToken(blocker), new ProtocolEvents());
+        BlockingQueue<String> blockedErrors = subscribeReady(blockedSession, "/user/queue/errors", blocked.getId());
+        BlockingQueue<String> blockerErrors = subscribeReady(blockerSession, "/user/queue/errors", blocker.getId());
+        BlockingQueue<String> roomFrames = subscribeReady(blockedSession, "/topic/rooms/" + roomId, null);
+        sendJson(blockedSession, payload(UUID.randomUUID().toString(), "Before the block", blocked.getId()));
+        assertThat(mapper.readTree(take(roomFrames)).path("content").asString()).isEqualTo("Before the block");
+
+        blockService.block(blocker.getId(), blocked.getId());
+        String blockedTempId = UUID.randomUUID().toString();
+        sendJson(blockedSession, payload(blockedTempId, "Are you there?", blocked.getId()));
+        String blockerTempId = UUID.randomUUID().toString();
+        sendJson(blockerSession, payload(blockerTempId, "Go away", blocker.getId()));
+
+        JsonNode blockedError = mapper.readTree(take(blockedErrors));
+        JsonNode blockerError = mapper.readTree(take(blockerErrors));
+        assertThat(blockedError.path("code").asString()).isEqualTo("FORBIDDEN_ACTION");
+        assertThat(blockedError.path("message").asString()).isEqualTo("Cannot message this user");
+        assertThat(blockedError.path("tempId").asString()).isEqualTo(blockedTempId);
+        assertThat(blockerError.path("code").asString()).isEqualTo("FORBIDDEN_ACTION");
+        assertThat(blockerError.path("message").asString()).isEqualTo(blockedError.path("message").asString());
+        assertThat(roomFrames.poll(1, TimeUnit.SECONDS)).isNull();
+        assertThat(mongo.count(Query.query(Criteria.where("chatRoomId").is(roomId)), Message.class)).isEqualTo(1);
+        assertThat(messageService.getMessages(roomId, blocked.getId(), null, 50).messages())
+                .extracting(com.lnt.chatmee.dto.response.ChatMessageResponse::content).containsExactly("Before the block");
+        assertThat(messageService.getMessages(roomId, blocker.getId(), null, 50).messages()).hasSize(1);
+
+        blockService.unblock(blocker.getId(), blocked.getId());
+        sendJson(blockedSession, payload(UUID.randomUUID().toString(), "Thanks", blocked.getId()));
+
+        assertThat(mapper.readTree(take(roomFrames)).path("content").asString()).isEqualTo("Thanks");
+        assertThat(blockedErrors.poll(1, TimeUnit.SECONDS)).isNull();
+    }
+
+    @Test
     void subscribe_nonMember_receivesErrorAndCloses() throws Exception {
         seedUser(true);
         ProtocolEvents events = new ProtocolEvents();
@@ -178,6 +273,33 @@ class StompMessagingIT {
         assertThat(mongo.count(Query.query(Criteria.where("chatRoomId").is(roomId)), Message.class)).isZero();
         assertThat(senderSession.isConnected()).isTrue();
         assertThat(observerSession.isConnected()).isTrue();
+    }
+
+    @Test
+    void sendMessage_twoSessionsOfOneUser_privateErrorReachesOnlySendingSession() throws Exception {
+        User sender = seedUser(true);
+        StompSession firstTab = connect(issueToken(sender), new ProtocolEvents());
+        StompSession secondTab = connect(issueToken(sender), new ProtocolEvents());
+        BlockingQueue<String> firstTabErrors = subscribeReady(firstTab, "/user/queue/errors", sender.getId());
+        BlockingQueue<String> secondTabErrors = subscribeReady(secondTab, "/user/queue/errors", sender.getId());
+        String tempId = UUID.randomUUID().toString();
+        sendJson(firstTab, payload(tempId, "x".repeat(5001), sender.getId()));
+        JsonNode error = mapper.readTree(take(firstTabErrors));
+        assertThat(error.path("tempId").asString()).isEqualTo(tempId);
+        assertThat(secondTabErrors.poll(1, TimeUnit.SECONDS)).isNull();
+        assertThat(firstTab.isConnected()).isTrue();
+        assertThat(secondTab.isConnected()).isTrue();
+    }
+
+    @Test
+    void connect_redisUnavailableDuringTokenCheck_receivesErrorWithoutToken() throws Exception {
+        String token = issueToken(seedUser(false));
+        doThrow(new RedisConnectionFailureException("Unable to connect to Redis"))
+                .when(tokenService).consumeToken(token);
+        ProtocolEvents events = new ProtocolEvents();
+        client.connectAsync(url(), new WebSocketHttpHeaders(), headers(token), events);
+        events.assertRejected();
+        assertThat(events.errorHeaders().getFirst("message")).isNotBlank().doesNotContain(token);
     }
 
     private User seedUser(boolean member) {
@@ -277,6 +399,10 @@ class StompMessagingIT {
         void assertRejected() throws Exception {
             assertThat(error.get(10, TimeUnit.SECONDS).getFirst("message")).isNotBlank();
             assertThat(closed.get(10, TimeUnit.SECONDS)).isNotNull();
+        }
+
+        StompHeaders errorHeaders() throws Exception {
+            return error.get(10, TimeUnit.SECONDS);
         }
     }
 }

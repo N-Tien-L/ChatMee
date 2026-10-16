@@ -4,7 +4,7 @@ import org.hibernate.validator.group.GroupSequenceProvider;
 
 import com.lnt.chatmee.dto.validation.CreateChatRoomGroupSequenceProvider;
 import com.lnt.chatmee.dto.validation.RoomName;
-import com.lnt.chatmee.model.ChatRoom.RoomSettings;
+import jakarta.validation.Valid;
 import com.lnt.chatmee.model.ChatRoom.RoomType;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
@@ -46,5 +46,6 @@ public class CreateChatRoomRequest {
     @Max(value = 1000, message = "Maximum users cannot exceed 1000")
     private Integer maxUsers;
     
-    private RoomSettings settings;
+    @Valid
+    private RoomSettingsRequest settings;
 }

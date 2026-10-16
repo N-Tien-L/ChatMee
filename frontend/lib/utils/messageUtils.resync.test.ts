@@ -58,6 +58,23 @@ describe('matchResyncedPending', () => {
         expect(matches.get('t1')?.id).toBe('s1');
     });
 
+    it('matchResyncedPending_sameClientMessageIdAfterLongDisconnect_confirmsPending', () => {
+        const pending: Message = { ...base, id: 'optimistic-t-1', tempId: 't-1', senderId: 'u1', content: 'hello',
+            createdAt: '2026-10-09T10:00:00Z', isOwn: true, isOptimistic: true, status: 'sending' };
+        // Five minutes later: outside PENDING_MATCH_WINDOW_MS, so only the stored client id can confirm it.
+        const saved: MessageResponse = { ...base, id: 's1', clientMessageId: 't-1', senderId: 'u1', content: 'hello',
+            createdAt: '2026-10-09T10:05:00Z' };
+        expect(matchResyncedPending([pending], [saved], 'u1').get('t-1')).toBe(saved);
+    });
+
+    it('matchResyncedPending_identicalTextWithOtherClientMessageId_doesNotConfirmPending', () => {
+        const pending: Message = { ...base, id: 'optimistic-t-1', tempId: 't-1', senderId: 'u1', content: 'hello',
+            createdAt: '2026-10-09T10:00:00Z', isOwn: true, isOptimistic: true, status: 'sending' };
+        const otherSend: MessageResponse = { ...base, id: 's2', clientMessageId: 't-2', senderId: 'u1', content: 'hello',
+            createdAt: '2026-10-09T10:00:01Z' };
+        expect(matchResyncedPending([pending], [otherSend], 'u1').has('t-1')).toBe(false);
+    });
+
     it('matchResyncedPending_failedByServerOrNotSent_neverMatched', () => {
         const current = [
             pending('t1', 'a', '2026-10-09T10:00:00Z', { status: 'failed', errorCode: 'RATE_LIMITED' }),

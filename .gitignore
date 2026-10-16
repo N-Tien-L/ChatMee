@@ -1,0 +1,17 @@
+# Local agent installations, settings, previews and worktrees
+/.claude/
+/.impeccable/
+/frontend/.impeccable/
+/.playwright-mcp/
+/.worktrees/
+/skills-lock.json
+
+# Local scratch files and logs
+/.lab-key.md
+/.smoke-frontend.log
+/debug.log
+
+# Environment files; commit only example configuration
+.env*
+!.env.example
+!.env.*.example

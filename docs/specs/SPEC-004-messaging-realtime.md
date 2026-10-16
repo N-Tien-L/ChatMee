@@ -45,4 +45,6 @@ Identity always comes from the STOMP Principal; SUBSCRIBE and SEND go through al
 docs/design/websocket-protocol.md, docs/design/error-handling.md, OpenAPI at `/v3/api-docs` (dev/local profiles only).
 
 ## 9. Open questions
-- Idempotent sends by `clientMessageId` (needs a unique index on `(roomId, clientMessageId)`).
+- Resolved 2026-10-12 (D-12): idempotent sends are specified in SPEC-008 AC-008-13 and implemented by CM-068. The key is `(chatRoomId, senderId, clientMessageId)`, deduplication uses the client id only (no content window), and Resend reuses the failed message's id. A broadcast failure after a successful save is logged and does not report the send as failed; the message resolves on the next resync.
+- Resolved 2026-10-12 (D-11): ordering by app-side `Instant.now()` is acceptable because v0 runs one backend instance. Ordering across instances and `after=` catch-up are v1, together with cross-instance fan-out.
+- Resolved 2026-10-12 (D-13): history of a soft-deleted room keeps answering 403 in v0.

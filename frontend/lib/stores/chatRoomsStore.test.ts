@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { useChatRoomsStore } from './chatRoomsStore';
 import { chatRoomApi } from '../api/chatRoomApi';
 import { userApi } from '../api/userApi';
+import toast from 'react-hot-toast';
 import { RoomType, RoomSettings } from "@/lib/types";
 import { ChatRoomResponse } from "@/lib/types";
 
@@ -13,6 +14,7 @@ vi.mock('../api/chatRoomApi', () => ({
         joinChatRoom: vi.fn(),
         leaveChatRoom: vi.fn(),
         deleteChatRoom: vi.fn(),
+        hideRoom: vi.fn(),
     }
 }));
 
@@ -127,14 +129,14 @@ describe('chatRoomsStore', () => {
     it('joinRoom, leaveRoom, deleteRoomById, createRoom return true/false and update state as implemented', async () => {
         // createRoom success
         vi.mocked(chatRoomApi.createChatRoom).mockResolvedValueOnce({ success: true, data: mockRoom });
-        let result = await useChatRoomsStore.getState().createRoom({ roomName: 'General', roomType: RoomType.PUBLIC, maxUsers: 10 });
-        expect(result).toBe(true);
+        let result: unknown = await useChatRoomsStore.getState().createRoom({ roomName: 'General', roomType: RoomType.PUBLIC, maxUsers: 10 });
+        expect(result).toMatchObject({ id: mockRoom.id });
         expect(useChatRoomsStore.getState().rooms).toHaveLength(1);
         
         // createRoom failure
         vi.mocked(chatRoomApi.createChatRoom).mockResolvedValueOnce({ success: false, message: 'error', data: mockRoom });
-        result = await useChatRoomsStore.getState().createRoom({ roomName: 'General', roomType: RoomType.PUBLIC, maxUsers: 10 });
-        expect(result).toBe(false);
+        const failed = await useChatRoomsStore.getState().createRoom({ roomName: 'General', roomType: RoomType.PUBLIC, maxUsers: 10 });
+        expect(failed).toBeNull();
         
         // joinRoom success
         vi.mocked(chatRoomApi.joinChatRoom).mockResolvedValueOnce(undefined);
@@ -179,5 +181,82 @@ describe('chatRoomsStore', () => {
 
         expect(name).toBe('Bob');
         expect(userApi.getUserById).not.toHaveBeenCalled();
+    });
+
+    it('startDirectMessage_existingDm_returnsItWithoutCreatingAnother', async () => {
+        const dm = { ...mockRoom, id: 'dm1', roomType: RoomType.DIRECT_MESSAGE, counterpart: { id: 'u2', name: 'Bob', avatarUrl: '' } };
+        useChatRoomsStore.getState().setRooms([dm]);
+
+        const room = await useChatRoomsStore.getState().startDirectMessage('u2');
+
+        expect(room?.id).toBe('dm1');
+        expect(chatRoomApi.createChatRoom).not.toHaveBeenCalled();
+        expect(useChatRoomsStore.getState().rooms).toHaveLength(1);
+    });
+
+    it('startDirectMessage_newPerson_createsDmRequestAndListsItOnce', async () => {
+        const dm = { ...mockRoom, id: 'dm2', roomType: RoomType.DIRECT_MESSAGE, counterpart: { id: 'u3', name: 'Cid', avatarUrl: '' } };
+        vi.mocked(chatRoomApi.createChatRoom).mockResolvedValueOnce({ success: true, data: dm });
+        // The ROOM_ADDED event can list the room before the create response arrives.
+        useChatRoomsStore.getState().setRooms([dm]);
+        useChatRoomsStore.setState({ rooms: [] });
+
+        const room = await useChatRoomsStore.getState().startDirectMessage('u3');
+
+        expect(chatRoomApi.createChatRoom).toHaveBeenCalledWith({ roomType: RoomType.DIRECT_MESSAGE, participantId: 'u3', maxUsers: 2 });
+        expect(room?.id).toBe('dm2');
+        expect(useChatRoomsStore.getState().rooms.filter((r) => r.id === 'dm2')).toHaveLength(1);
+    });
+
+    it('hideRoom_directMessage_removesRowWithHiddenReason', async () => {
+        const dm = { ...mockRoom, id: 'dm1', roomType: RoomType.DIRECT_MESSAGE };
+        useChatRoomsStore.getState().setRooms([dm, mockRoom]);
+        vi.mocked(chatRoomApi.hideRoom).mockResolvedValueOnce(undefined);
+
+        expect(await useChatRoomsStore.getState().hideRoom('dm1')).toBe(true);
+
+        expect(chatRoomApi.hideRoom).toHaveBeenCalledWith('dm1');
+        expect(useChatRoomsStore.getState().rooms.map((r) => r.id)).toEqual(['r1']);
+        expect(useChatRoomsStore.getState().endedRooms.dm1).toBe('HIDDEN');
+    });
+
+    it('hideRoom_serverRejects_keepsRow', async () => {
+        useChatRoomsStore.getState().setRooms([{ ...mockRoom, id: 'dm1', roomType: RoomType.DIRECT_MESSAGE }]);
+        vi.mocked(chatRoomApi.hideRoom).mockRejectedValueOnce(new Error('Forbidden'));
+
+        expect(await useChatRoomsStore.getState().hideRoom('dm1')).toBe(false);
+        expect(useChatRoomsStore.getState().rooms).toHaveLength(1);
+    });
+
+    it('setCounterpartBlocked_dmWithUser_flagsOnlyThatDm', () => {
+        const dm = { ...mockRoom, id: 'dm1', roomType: RoomType.DIRECT_MESSAGE, counterpart: { id: 'u2', name: 'Bob', avatarUrl: '' } };
+        useChatRoomsStore.getState().setRooms([dm, mockRoom]);
+
+        useChatRoomsStore.getState().setCounterpartBlocked('u2', true);
+
+        const rooms = useChatRoomsStore.getState().rooms;
+        expect(rooms.find((r) => r.id === 'dm1')?.blocked).toBe(true);
+        expect(rooms.find((r) => r.id === 'r1')?.blocked).toBeUndefined();
+    });
+
+    it('createRoom_declineCooldownOrBlock_toastsTheServerReason', async () => {
+        vi.mocked(chatRoomApi.createChatRoom).mockRejectedValueOnce(new Error('Cannot message this user'));
+        const created = await useChatRoomsStore.getState().createRoom({ roomType: RoomType.DIRECT_MESSAGE, participantId: 'u2', maxUsers: 2 });
+        expect(created).toBeNull();
+        expect(toast.error).toHaveBeenCalledWith('Cannot message this user');
+    });
+
+    it.each([
+        ['REQUESTED', true],
+        ['ACTIVE', false],
+    ] as const)('createRoom_directMessageReturned%s_requestToastOnlyWhenPending', async (state, toasted) => {
+        const dm: ChatRoomResponse = {
+            ...mockRoom, id: 'dm1', roomName: '', roomType: RoomType.DIRECT_MESSAGE, state,
+            participants: ['currentUser', 'u2'], counterpart: { id: 'u2', name: 'Bob', avatarUrl: '' },
+        };
+        vi.mocked(chatRoomApi.createChatRoom).mockResolvedValueOnce({ success: true, data: dm });
+        expect(await useChatRoomsStore.getState().createRoom({ roomType: RoomType.DIRECT_MESSAGE, participantId: 'u2', maxUsers: 2 })).not.toBeNull();
+        if (toasted) expect(toast.success).toHaveBeenCalledWith('Message request sent');
+        else expect(toast.success).not.toHaveBeenCalled();
     });
 });

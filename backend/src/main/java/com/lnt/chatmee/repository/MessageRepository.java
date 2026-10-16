@@ -2,6 +2,7 @@ package com.lnt.chatmee.repository;
 
 import java.time.Instant;
 import java.util.List;
+import java.util.Optional;
 import org.bson.types.ObjectId;
 
 import org.springframework.data.domain.Pageable;
@@ -31,6 +32,10 @@ public interface MessageRepository extends MongoRepository<Message, String> {
             sort = "{ 'createdAt': -1, '_id': -1 }")
     List<Message> findPageBeforeKey(String roomId, Instant beforeCreatedAt, Object beforeId, Pageable pageable);
     
+    /** Idempotency lookup for a send retried with the same client id (SPEC-008 AC-008-13). */
+    Optional<Message> findFirstByChatRoomIdAndSenderIdAndClientMessageId(String chatRoomId, String senderId,
+            String clientMessageId);
+
     // Retrieve message for a specific chat room, ordered by creation time in descending order
     // use for loading older messages with pagination (e.g.: infinite roll in chat history)
     Page<Message> findByChatRoomIdOrderByCreatedAtDesc(String chatRoomId, Pageable pageable);
@@ -42,6 +47,10 @@ public interface MessageRepository extends MongoRepository<Message, String> {
 
     // Retrieve all message send by a specific user in a given chat room
     List<Message> findBySenderIdAndChatRoomId(String senderId, String chatRoomId);
+
+    @Query(value = "{ 'chatRoomId': ?0, 'senderId': { '$ne': ?1 }, 'createdAt': { '$gt': ?2 },"
+            + " 'type': { '$ne': 'SYSTEM' }, 'isDeleted': false }", count = true)
+    long countUnread(String roomId, String callerId, Instant lastReadAt);
 
     // Count the total number of messages in a specific chat room
     Long countByChatRoomId(String chatRoomId);

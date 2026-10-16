@@ -12,9 +12,13 @@ import com.lnt.chatmee.exception.UserNotFoundException;
 import com.lnt.chatmee.model.ChatRoom;
 import com.lnt.chatmee.model.ChatRoom.RoomType;
 import com.lnt.chatmee.model.Participant.Role;
+import com.lnt.chatmee.model.RoomState;
 
 @Component
 public class DirectRoomPolicy implements RoomTypePolicy {
+    /** DMs are hidden per user instead of being left or deleted (AC-009-21, AC-009-22). */
+    public static final String USE_HIDE_MESSAGE = "Use hide for direct messages";
+
     @Override
     public RoomType type() {
         return RoomType.DIRECT_MESSAGE;
@@ -24,9 +28,18 @@ public class DirectRoomPolicy implements RoomTypePolicy {
         throw new ForbiddenActionException("Only PUBLIC rooms can be joined");
     }
     @Override
-    public void checkAddParticipant() {
-        throw new ForbiddenActionException("Cannot add participants to direct message rooms");
+    public void checkInvite() {
+        throw new ForbiddenActionException("Cannot invite users to direct message rooms");
     }
+    @Override
+    public void checkRoleChange() {
+        throw new ForbiddenActionException("Cannot change roles in direct message rooms");
+    }
+    @Override
+    public void checkRemoveMember(String callerId, Role callerRole, String targetId, Role targetRole) {
+        throw new ForbiddenActionException("Cannot remove members from direct message rooms");
+    }
+
     @Override
     public void checkUpdate(UpdateChatRoomRequest request) {
         if (request.getMaxUsers() != null) {
@@ -35,7 +48,7 @@ public class DirectRoomPolicy implements RoomTypePolicy {
     }
     @Override
     public void checkLeave(ChatRoom room, String userId) {
-        throw new ForbiddenActionException("Cannot leave direct message rooms. Please delete the room instead.");
+        throw new ForbiddenActionException("Cannot leave direct message rooms. " + USE_HIDE_MESSAGE + ".");
     }
     @Override
     public ChatRoom create(CreateChatRoomRequest request, String creatorId, Predicate<String> userExists) {
@@ -45,9 +58,10 @@ public class DirectRoomPolicy implements RoomTypePolicy {
         if (creatorId.equals(request.getParticipantId())) {
             throw new InvalidRequestException("Cannot create direct message with yourself");
         }
+        // AC-009-9: a request until the recipient accepts; their seat is reserved on accept (ADR-0005).
         return ChatRoom.builder().type(type()).createdBy(creatorId).lastActivity(LocalDateTime.now())
-            .memberKey(memberKey(creatorId, request.getParticipantId()))
-            .maxParticipants(2).memberCount(2).isActive(true)
+            .memberKey(memberKey(creatorId, request.getParticipantId())).state(RoomState.REQUESTED)
+            .maxParticipants(2).memberCount(1).isActive(true)
             .settings(ChatRoom.RoomSettings.builder().allowFileSharing(true).allowGuestUsers(false)
                 .moderationRequired(false).build()).build();
     }
@@ -61,7 +75,7 @@ public class DirectRoomPolicy implements RoomTypePolicy {
         return true;
     }
 
-    /** Order-independent key of a user pair: one active DM per pair. */
+    /** Order-independent key of a user pair: one DM per pair; also the DM request's {@code pairKey}. */
     public static String memberKey(String firstUserId, String secondUserId) {
         return firstUserId.compareTo(secondUserId) <= 0
             ? firstUserId + ":" + secondUserId
@@ -70,6 +84,7 @@ public class DirectRoomPolicy implements RoomTypePolicy {
 
     @Override
     public Map<String, Role> initialMembers(CreateChatRoomRequest request, String creatorId) {
-        return Map.of(creatorId, Role.OWNER, request.getParticipantId(), Role.MEMBER);
+        // The recipient becomes a MEMBER only by accepting the request (DirectMessageRequestService).
+        return Map.of(creatorId, Role.OWNER);
     }
 }

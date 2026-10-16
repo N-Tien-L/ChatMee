@@ -93,7 +93,16 @@ class MessageControllerWebMvcTest extends SecuredWebMvcTestSupport {
     }
 
     @Test
-    void getRecentMessages_nonMember_returns403Problem() throws Exception {
+    void getRecentMessages_nonMember_returns404Problem() throws Exception {
+        when(messageService.getMessages("room-1", "u1", null, 50))
+                .thenThrow(new ChatRoomNotFoundException("Chat room not found: room-1"));
+
+        expectProblem(mvc.perform(get(HISTORY).with(oauth2Login().oauth2User(com.lnt.chatmee.support.TestUsers.principal("u1")))), 404, "ROOM_NOT_FOUND");
+    }
+
+    // SPEC-004 D-13: history of a soft-deleted room keeps answering 403 in v0.
+    @Test
+    void getRecentMessages_softDeletedRoom_returns403Problem() throws Exception {
         when(messageService.getMessages("room-1", "u1", null, 50))
                 .thenThrow(new ForbiddenActionException("You are not a participant of this room"));
 

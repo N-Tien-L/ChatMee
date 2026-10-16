@@ -1,5 +1,8 @@
 package com.lnt.chatmee.service;
 
+import java.util.HashSet;
+import java.util.Set;
+
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
@@ -21,6 +24,7 @@ public class UserService {
     static final int MAX_PAGE_SIZE = 50;
 
     private final UserRepository userRepository;
+    private final BlockService blockService;
 
     public UserResponse getUserProfile(String userId) {
         User user = userRepository.findById(userId)
@@ -28,12 +32,22 @@ public class UserService {
         return UserResponse.from(user);
     }
 
-    /** Page is clamped to >= 0 and size to 1..MAX_PAGE_SIZE (non-positive size falls back to the default). */
+    /**
+     * Page is clamped to >= 0 and size to 1..MAX_PAGE_SIZE (non-positive size falls back to the default).
+     * Users blocked in either direction are left out (AC-009-17).
+     */
     public Page<UserSummaryResponse> searchUsers(String query, String currentUserId, int page, int size) {
         String searchQuery = query == null ? "" : query.trim();
         int pageSize = size <= 0 ? DEFAULT_PAGE_SIZE : Math.min(size, MAX_PAGE_SIZE);
         Pageable pageable = PageRequest.of(Math.max(page, 0), pageSize);
-        return userRepository.findByNameContainingIgnoreCaseAndIdNot(searchQuery, currentUserId, pageable)
+        Set<String> blocked = blockService.blockedEitherWay(currentUserId);
+        if (blocked.isEmpty()) {
+            return userRepository.findByNameContainingIgnoreCaseAndIdNot(searchQuery, currentUserId, pageable)
+                    .map(UserService::toSummary);
+        }
+        Set<String> excluded = new HashSet<>(blocked);
+        excluded.add(currentUserId);
+        return userRepository.findByNameContainingIgnoreCaseAndIdNotIn(searchQuery, excluded, pageable)
                 .map(UserService::toSummary);
     }
 

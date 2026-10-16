@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useReducer, useRef, useState } from "react";
 import { StompError, useWebSocket } from "./useWebSocket";
 import { messageApi } from "@/lib/api/messageApi";
+import { chatRoomApi } from "@/lib/api/chatRoomApi";
 import { useAuthStore } from "@/lib/stores/authStore";
+import { useChatRoomsStore } from "@/lib/stores/chatRoomsStore";
 import { Message, MessageResponse, MessageType } from "@/lib/types";
 import {
     deduplicateMessages,
@@ -19,6 +21,11 @@ const sessionCache = new Map<
     { messages: MessageResponse[]; hasMoreMessages: boolean; nextCursor: string | null; lastLoaded: number }
 >();
 
+/** Drops every cached room page; called on logout so the next account never sees them. */
+export function resetRoomMessageCache(): void {
+    sessionCache.clear();
+}
+
 /** Where loadOlder continues for the open room; replaced on every room change. */
 type Paging = { roomId: string; nextCursor: string | null; hasMore: boolean; inFlight: boolean };
 
@@ -27,6 +34,17 @@ const ROOM_DELETED_CONTENT = "This room has been deleted";
 /** The CM-028 room-deleted event: a SYSTEM message without id (see websocket-protocol.md). */
 const isRoomDeletedEvent = (message: Message) =>
     message.type === MessageType.SYSTEM && !message.id && message.content === ROOM_DELETED_CONTENT;
+
+/** Reloads one room into the rooms store so member counts follow joins/leaves the user events do not announce. */
+const refreshRoom = (roomId: string) => {
+    Promise.resolve(chatRoomApi.getChatRoomById(roomId))
+        .then((res) => {
+            if (res?.success) useChatRoomsStore.getState().upsertRoom(res.data);
+        })
+        .catch(() => {
+            // The next reconnect refetch recovers the room.
+        });
+};
 
 function isApiError(err: unknown): err is { response?: { data?: { detail?: string } }, message?: string } {
     return typeof err === "object" && err !== null;
@@ -62,6 +80,11 @@ export const useRoomMessages = (roomId: string, options: RoomMessagesOptions = {
     // Kept outside the reducer so two scroll events before the next render cannot send the same
     // cursor twice, and so a page that arrives after a room switch is recognised and ignored.
     const pagingRef = useRef<Paging>({ roomId, nextCursor: null, hasMore: false, inFlight: false });
+
+    // Members may have joined while this room was closed: refresh it whenever it is opened.
+    useEffect(() => {
+        if (roomId) refreshRoom(roomId);
+    }, [roomId]);
 
     useEffect(() => {
         // History loads merge into what is on screen, so a new room must start empty.
@@ -219,6 +242,10 @@ export const useRoomMessages = (roomId: string, options: RoomMessagesOptions = {
                 onRoomDeletedRef.current?.();
                 return;
             }
+            // Joined/left/role system messages change the member list: refresh the room so counts stay right.
+            if (message.type === MessageType.SYSTEM) {
+                refreshRoom(roomId);
+            }
             // Check if this message confirms one we sent optimistically
             if (message.tempId && message.senderId === user?.id) {
                 clearPendingTimer(message.tempId);
@@ -247,9 +274,10 @@ export const useRoomMessages = (roomId: string, options: RoomMessagesOptions = {
         };
     }, [roomId, subscribeRoom, user?.id, subscribeErrors, clearPendingTimer]);
 
-    const createOptimisticMessage = useCallback((content: string): Message | null => {
+    // A new send gets a new client id; a Resend passes the failed message's id so the server can
+    // recognise a retry of a send it already stored (SPEC-008 AC-008-13).
+    const createOptimisticMessage = useCallback((content: string, tempId = `temp-${Date.now()}-${Math.random()}`): Message | null => {
         if (!user) return null;
-        const tempId = `temp-${Date.now()}-${Math.random()}`;
         const now = new Date().toISOString();
         return {
             id: `optimistic-${tempId}`,
@@ -304,14 +332,14 @@ export const useRoomMessages = (roomId: string, options: RoomMessagesOptions = {
         deliver(optimisticMessage);
     }, [connected, createOptimisticMessage, deliver]);
 
-    /** Sends a failed message again as a new attempt that replaces the failed copy. */
+    /** Sends a failed message again as a new attempt with the same client id, replacing the failed copy. */
     const resendMessage = useCallback((tempId: string) => {
         if (!connected) return;
         const failed = messagesRef.current.find(
             (m) => m.isOptimistic && m.tempId === tempId && m.status === "failed"
         );
         if (!failed) return;
-        const retry = createOptimisticMessage(failed.content);
+        const retry = createOptimisticMessage(failed.content, tempId);
         if (!retry) return;
         dispatch({ type: "RESEND_MESSAGE", payload: { tempId, message: retry } });
         deliver(retry);
@@ -332,4 +360,24 @@ export const useRoomMessages = (roomId: string, options: RoomMessagesOptions = {
         reload,
         loadOlder,
     };
+};
+
+/** Display names of a room's members by user id, from GET /rooms/{id}/members (UX-14). Reloads when the member count changes. */
+export const useRoomMemberNames = (roomId: string, memberCount: number): Record<string, string> => {
+    const [names, setNames] = useState<Record<string, string>>({});
+    useEffect(() => {
+        let active = true;
+        chatRoomApi.getMembers(roomId)
+            .then((res) => {
+                if (!active || !res.success || !Array.isArray(res.data)) return;
+                setNames(Object.fromEntries(res.data.map((member) => [member.id, member.name])));
+            })
+            .catch(() => {
+                // Typing falls back to "Someone" when the member list is unavailable.
+            });
+        return () => {
+            active = false;
+        };
+    }, [roomId, memberCount]);
+    return names;
 };

@@ -1,6 +1,8 @@
 package com.lnt.chatmee.repository;
 
 import java.time.LocalDateTime;
+import java.time.Instant;
+import com.lnt.chatmee.dto.event.LastMessageSummary;
 import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
@@ -67,8 +69,38 @@ public interface ChatRoomRepository extends MongoRepository<ChatRoom, String> {
     long updateEditableFields(String roomId, String name, String description, int maxParticipants,
             RoomSettings settings, LocalDateTime now);
 
+    /** A late writer cannot replace a newer activity timestamp or its matching summary. */
+    @Query("{ '_id': ?0, 'isActive': true, '$or': [ { 'lastActivityAt': null }, { 'lastActivityAt': { '$lt': ?1 } } ] }")
+    @Update("{ '$set': { 'lastActivityAt': ?1, 'lastMessage': ?2 } }")
+    long updateActivity(String roomId, Instant createdAt, LastMessageSummary summary);
+
     /** Soft-deletes an active room and resets its member counter. */
     @Query("{ '_id': ?0, 'isActive': true }")
     @Update("{ '$set': { 'isActive': false, 'memberCount': 0, 'deletedAt': ?1, 'lastActivity': ?1 }, '$unset': { 'memberKey': '' } }")
     long softDelete(String roomId, LocalDateTime now);
+
+    /** Accepted DM request (AC-009-12): REQUESTED -> ACTIVE, at most once. */
+    @Query("{ '_id': ?0, 'isActive': true, 'state': 'REQUESTED' }")
+    @Update("{ '$set': { 'state': 'ACTIVE', 'lastActivity': ?1 } }")
+    long activateRequested(String roomId, LocalDateTime now);
+
+    /** Declined or expired DM request: soft-deletes the room only while it is still REQUESTED (AC-009-12, -13). */
+    @Query("{ '_id': ?0, 'isActive': true, 'state': 'REQUESTED' }")
+    @Update("{ '$set': { 'isActive': false, 'memberCount': 0, 'deletedAt': ?1, 'lastActivity': ?1 }, '$unset': { 'memberKey': '' } }")
+    long softDeleteRequested(String roomId, LocalDateTime now);
+
+    /**
+     * The one message a sender may send while REQUESTED (AC-009-10): the activity summary is written only while the
+     * room has none, so concurrent sends let exactly one through. The summary is the request preview.
+     *
+     * @return 1 if this message took the slot, 0 if a request message exists or the room is no longer REQUESTED
+     */
+    @Query("{ '_id': ?0, 'isActive': true, 'state': 'REQUESTED', 'lastMessage': null }")
+    @Update("{ '$set': { 'lastActivityAt': ?1, 'lastMessage': ?2 } }")
+    long claimRequestMessage(String roomId, Instant createdAt, LastMessageSummary summary);
+
+    /** Gives the request-message slot back when that message could not be saved. */
+    @Query("{ '_id': ?0, 'state': 'REQUESTED', 'lastMessage.id': ?1 }")
+    @Update("{ '$unset': { 'lastActivityAt': '', 'lastMessage': '' } }")
+    long releaseRequestMessage(String roomId, String messageId);
 }

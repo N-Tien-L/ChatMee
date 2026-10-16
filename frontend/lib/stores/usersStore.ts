@@ -1,6 +1,8 @@
 import { create } from 'zustand'
 import { userApi } from '../api/userApi'
-import { UserSummaryResponse } from "@/lib/types";
+import { BlockedUserResponse, UserSummaryResponse } from "@/lib/types";
+import toast from 'react-hot-toast'
+import { useChatRoomsStore } from './chatRoomsStore'
 
 interface UsersState {
     users: UserSummaryResponse[],
@@ -17,7 +19,18 @@ interface UsersState {
     fetchUsers: (query?: string) => Promise<void>
     fetchUserById: (id: string) => Promise<UserSummaryResponse | null>
     setSearchQuery: (query: string) => void;
+
+    /** The caller's blocks (AC-009-15); null until loaded. */
+    blockedUsers: BlockedUserResponse[] | null
+    blocksError: string | null
+    fetchBlocks: () => Promise<void>
+    /** Block a user; their DM turns read-only and they leave search results (AC-009-16/17/19). */
+    blockUser: (user: UserSummaryResponse) => Promise<boolean>
+    unblockUser: (user: Pick<UserSummaryResponse, 'id' | 'name'>) => Promise<boolean>
 }
+
+const failure = (error: unknown, fallback: string) =>
+    error instanceof Error && error.message ? error.message : fallback
 
 let searchTimeout: ReturnType<typeof setTimeout> | null = null;
 
@@ -29,6 +42,8 @@ export const useUsersStore = create<UsersState>((set, get) => ({
     error: null,
     searchQuery: "",
     filteredUsers: [],
+    blockedUsers: null,
+    blocksError: null,
 
     // Actions
     setUsers: (users) => {
@@ -98,6 +113,50 @@ export const useUsersStore = create<UsersState>((set, get) => ({
             console.error('Failed to fetch user by ID:', error)
             return null
         }
+    },
+
+    fetchBlocks: async () => {
+        try {
+            set({ blocksError: null })
+            const response = await userApi.listBlocks()
+            if (response.success && Array.isArray(response.data)) set({ blockedUsers: response.data })
+            else set({ blocksError: response.message || 'Could not load blocked people' })
+        } catch (error) {
+            set({ blocksError: failure(error, 'Could not load blocked people') })
+        }
+    },
+
+    blockUser: async (user) => {
+        try {
+            await userApi.blockUser(user.id)
+        } catch (error) {
+            toast.error(failure(error, `Could not block ${user.name}`))
+            return false
+        }
+        set((state) => ({
+            blockedUsers: state.blockedUsers && !state.blockedUsers.some((b) => b.id === user.id)
+                ? [{ id: user.id, name: user.name, avatarUrl: user.avatarUrl, blockedAt: new Date().toISOString() }, ...state.blockedUsers]
+                : state.blockedUsers,
+            // Search excludes blocked users (AC-009-17); drop them now instead of waiting for the next query.
+            users: state.users.filter((u) => u.id !== user.id),
+            filteredUsers: state.filteredUsers.filter((u) => u.id !== user.id),
+        }))
+        useChatRoomsStore.getState().setCounterpartBlocked(user.id, true)
+        toast.success(`You blocked ${user.name}`)
+        return true
+    },
+
+    unblockUser: async (user) => {
+        try {
+            await userApi.unblockUser(user.id)
+        } catch (error) {
+            toast.error(failure(error, `Could not unblock ${user.name}`))
+            return false
+        }
+        set((state) => ({ blockedUsers: state.blockedUsers?.filter((b) => b.id !== user.id) ?? null }))
+        useChatRoomsStore.getState().setCounterpartBlocked(user.id, false)
+        toast.success(`You unblocked ${user.name}`)
+        return true
     },
 
     setSearchQuery: (query) => {

@@ -3,6 +3,7 @@ package com.lnt.chatmee.controller;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
@@ -31,6 +32,7 @@ import com.lnt.chatmee.dto.response.ChatRoomResponse;
 import com.lnt.chatmee.dto.response.PublicRoomSummary;
 import com.lnt.chatmee.exception.ChatRoomNotFoundException;
 import com.lnt.chatmee.exception.ForbiddenActionException;
+import com.lnt.chatmee.exception.InvalidRequestException;
 import com.lnt.chatmee.exception.RoomCapacityExceededException;
 import com.lnt.chatmee.exception.UnauthorizedRoomActionException;
 import com.lnt.chatmee.exception.UserAlreadyInRoomException;
@@ -102,7 +104,7 @@ class ChatRoomControllerWebMvcTest extends SecuredWebMvcTestSupport {
 
         var request = org.mockito.ArgumentCaptor.forClass(com.lnt.chatmee.dto.request.CreateChatRoomRequest.class);
         org.mockito.Mockito.verify(chatRoomService).createRoom(request.capture(), eq("u1"));
-        ChatRoom.RoomSettings settings = request.getValue().getSettings();
+        ChatRoom.RoomSettings settings = request.getValue().getSettings().toRoomSettings();
         org.assertj.core.api.Assertions.assertThat(settings.isAllowFileSharing()).isFalse();
         org.assertj.core.api.Assertions.assertThat(settings.isAllowGuestUsers()).isFalse();
         org.assertj.core.api.Assertions.assertThat(settings.isModerationRequired()).isFalse();
@@ -180,10 +182,53 @@ class ChatRoomControllerWebMvcTest extends SecuredWebMvcTestSupport {
 
         var request = org.mockito.ArgumentCaptor.forClass(com.lnt.chatmee.dto.request.UpdateChatRoomRequest.class);
         org.mockito.Mockito.verify(chatRoomService).updateChatRoomById(eq("u1"), eq("room-1"), request.capture());
-        ChatRoom.RoomSettings settings = request.getValue().getSettings();
+        ChatRoom.RoomSettings settings = request.getValue().getSettings().toRoomSettings();
         org.assertj.core.api.Assertions.assertThat(settings.isAllowFileSharing()).isFalse();
         org.assertj.core.api.Assertions.assertThat(settings.isAllowGuestUsers()).isFalse();
         org.assertj.core.api.Assertions.assertThat(settings.isModerationRequired()).isFalse();
+    }
+
+    @Test
+    void createRoom_welcomeMessageOf501Characters_returns400ValidationProblem() throws Exception {
+        expectProblem(mvc.perform(post(CREATE).with(oauth2Login().oauth2User(com.lnt.chatmee.support.TestUsers.principal("u1"))).with(csrf().asHeader())
+                .contentType(MediaType.APPLICATION_JSON).content("{\"roomType\":\"PUBLIC\",\"roomName\":\"General\","
+                        + "\"settings\":{\"welcomeMessage\":\"" + "x".repeat(501) + "\"}}")), 400, "VALIDATION_FAILED")
+                .andExpect(jsonPath("$.errors[?(@.field == 'settings.welcomeMessage')]").isNotEmpty());
+        verifyNoInteractions(chatRoomService);
+    }
+
+    @Test
+    void createRoom_welcomeMessageOf500Characters_returnsCreated() throws Exception {
+        when(chatRoomService.createRoom(any(), eq("u1"))).thenReturn(ChatRoomResponse.builder().id("room-1").build());
+
+        mvc.perform(post(CREATE).with(oauth2Login().oauth2User(com.lnt.chatmee.support.TestUsers.principal("u1"))).with(csrf().asHeader())
+                        .contentType(MediaType.APPLICATION_JSON).content("{\"roomType\":\"PUBLIC\",\"roomName\":\"General\","
+                                + "\"settings\":{\"welcomeMessage\":\"" + "x".repeat(500) + "\"}}"))
+                .andExpect(status().isCreated());
+
+        var request = org.mockito.ArgumentCaptor.forClass(com.lnt.chatmee.dto.request.CreateChatRoomRequest.class);
+        org.mockito.Mockito.verify(chatRoomService).createRoom(request.capture(), eq("u1"));
+        org.assertj.core.api.Assertions.assertThat(request.getValue().getSettings().welcomeMessage()).hasSize(500);
+    }
+
+    @Test
+    void updateRoom_welcomeMessageOf501Characters_returns400ValidationProblem() throws Exception {
+        expectProblem(mvc.perform(put("/api/v1/rooms/room-1").with(oauth2Login().oauth2User(com.lnt.chatmee.support.TestUsers.principal("u1"))).with(csrf().asHeader())
+                .contentType(MediaType.APPLICATION_JSON).content("{\"settings\":{\"welcomeMessage\":\"" + "x".repeat(501) + "\"}}")),
+                400, "VALIDATION_FAILED")
+                .andExpect(jsonPath("$.errors[?(@.field == 'settings.welcomeMessage')]").isNotEmpty());
+        verifyNoInteractions(chatRoomService);
+    }
+
+    @Test
+    void updateRoom_welcomeMessageOf500Characters_returnsOk() throws Exception {
+        mvc.perform(put("/api/v1/rooms/room-1").with(oauth2Login().oauth2User(com.lnt.chatmee.support.TestUsers.principal("u1"))).with(csrf().asHeader())
+                        .contentType(MediaType.APPLICATION_JSON).content("{\"settings\":{\"welcomeMessage\":\"" + "x".repeat(500) + "\"}}"))
+                .andExpect(status().isOk());
+
+        var request = org.mockito.ArgumentCaptor.forClass(com.lnt.chatmee.dto.request.UpdateChatRoomRequest.class);
+        org.mockito.Mockito.verify(chatRoomService).updateChatRoomById(eq("u1"), eq("room-1"), request.capture());
+        org.assertj.core.api.Assertions.assertThat(request.getValue().getSettings().welcomeMessage()).hasSize(500);
     }
 
     @Test
@@ -231,10 +276,11 @@ class ChatRoomControllerWebMvcTest extends SecuredWebMvcTestSupport {
     }
 
     @Test
-    void addParticipant_missingUserId_returns400ValidationProblem() throws Exception {
-        expectProblem(mvc.perform(post("/api/v1/rooms/room-1/members").with(oauth2Login().oauth2User(com.lnt.chatmee.support.TestUsers.principal("u1"))).with(csrf().asHeader())
-                .contentType(MediaType.APPLICATION_JSON).content("{}")), 400, "VALIDATION_FAILED")
-                .andExpect(jsonPath("$.errors[?(@.field == 'userId')]").isNotEmpty());
+    void addParticipant_directAddRemoved_returns405WithoutAddingMember() throws Exception {
+        // AC-009-5: members enter a PRIVATE room only by accepting an invitation.
+        mvc.perform(post("/api/v1/rooms/room-1/members").with(oauth2Login().oauth2User(com.lnt.chatmee.support.TestUsers.principal("u1"))).with(csrf().asHeader())
+                .contentType(MediaType.APPLICATION_JSON).content("{\"userId\":\"u2\",\"role\":\"MEMBER\"}"))
+                .andExpect(status().isMethodNotAllowed());
         verifyNoInteractions(participantService);
     }
 
@@ -255,5 +301,104 @@ class ChatRoomControllerWebMvcTest extends SecuredWebMvcTestSupport {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.id").value("dm-1"));
         org.mockito.Mockito.verify(chatRoomService, org.mockito.Mockito.never()).createRoom(any(), any());
+    }
+
+    @Test
+    void markRead_nonMember_returns404() throws Exception {
+        doThrow(new ChatRoomNotFoundException("Room membership not found"))
+            .when(participantService).markRead("room-1", "u1");
+        mvc.perform(put("/api/v1/rooms/room-1/members/me/read")
+            .with(oauth2Login().oauth2User(com.lnt.chatmee.support.TestUsers.principal("u1"))).with(csrf().asHeader()))
+            .andExpect(status().isNotFound());
+    }
+
+    @Test
+    void markRead_member_usesPrincipalAndReturns204() throws Exception {
+        mvc.perform(put("/api/v1/rooms/room-1/members/me/read")
+            .with(oauth2Login().oauth2User(com.lnt.chatmee.support.TestUsers.principal("u1"))).with(csrf().asHeader()))
+            .andExpect(status().isNoContent());
+        org.mockito.Mockito.verify(participantService).markRead("room-1", "u1");
+    }
+
+    @Test
+    void getRooms_activityOrder_includesSummaryUnreadAndMyRole() throws Exception {
+        var now = java.time.Instant.parse("2026-10-12T10:00:00Z");
+        var rows = List.of(ChatRoom.builder().id("new").build(), ChatRoom.builder().id("old").build());
+        when(chatRoomService.getList("u1")).thenReturn(rows);
+        when(chatRoomService.toResponses(rows, "u1")).thenReturn(List.of(
+            ChatRoomResponse.builder().id("new").lastActivityAt(now).unreadCount(2)
+                .lastMessage(new com.lnt.chatmee.dto.event.LastMessageSummary("m1", "u2", "Bob", "hello", now))
+                .myRole(com.lnt.chatmee.model.Participant.Role.ADMIN).build(),
+            ChatRoomResponse.builder().id("old").myRole(com.lnt.chatmee.model.Participant.Role.MEMBER).build()));
+        mvc.perform(get(CREATE).with(oauth2Login().oauth2User(com.lnt.chatmee.support.TestUsers.principal("u1"))))
+            .andExpect(status().isOk()).andExpect(jsonPath("$.data[0].id").value("new"))
+            .andExpect(jsonPath("$.data[1].id").value("old"))
+            .andExpect(jsonPath("$.data[0].myRole").value("ADMIN"))
+            .andExpect(jsonPath("$.data[0].unreadCount").value(2))
+            .andExpect(jsonPath("$.data[0].lastActivityAt").value(now.toString()))
+            .andExpect(jsonPath("$.data[0].lastMessage.preview").value("hello"));
+    }
+
+
+    @Test
+    void getMembers_member_returnsMemberContractUsingPrincipal() throws Exception {
+        when(participantService.getMembers("room-1", "u1")).thenReturn(List.of(
+            new com.lnt.chatmee.dto.response.MemberResponse("u2", "Bob", "avatar", com.lnt.chatmee.model.Participant.Role.ADMIN)));
+        mvc.perform(get("/api/v1/rooms/room-1/members")
+            .with(oauth2Login().oauth2User(com.lnt.chatmee.support.TestUsers.principal("u1"))))
+            .andExpect(status().isOk()).andExpect(jsonPath("$.data[0].id").value("u2"))
+            .andExpect(jsonPath("$.data[0].name").value("Bob"))
+            .andExpect(jsonPath("$.data[0].avatarUrl").value("avatar"))
+            .andExpect(jsonPath("$.data[0].role").value("ADMIN"));
+        org.mockito.Mockito.verify(participantService).getMembers("room-1", "u1");
+    }
+
+    @Test
+    void getMembers_nonMember_returns404() throws Exception {
+        when(participantService.getMembers("room-1", "u1")).thenThrow(new ChatRoomNotFoundException("Room membership not found"));
+        mvc.perform(get("/api/v1/rooms/room-1/members")
+            .with(oauth2Login().oauth2User(com.lnt.chatmee.support.TestUsers.principal("u1"))))
+            .andExpect(status().isNotFound());
+    }
+
+    // CM-075 AC2: hide is DM-only; DELETE on a DM is forbidden (AC-009-21, AC-009-22)
+
+    @Test
+    void hideRoom_directMessage_returns204ForCaller() throws Exception {
+        mvc.perform(post("/api/v1/rooms/dm-1/hide")
+                .with(oauth2Login().oauth2User(com.lnt.chatmee.support.TestUsers.principal("u1"))).with(csrf().asHeader()))
+            .andExpect(status().isNoContent());
+        verify(chatRoomService).hideRoom("u1", "dm-1");
+    }
+
+    @Test
+    void hideRoom_groupRoom_returns400Problem() throws Exception {
+        doThrow(new InvalidRequestException("Only direct messages can be hidden"))
+                .when(chatRoomService).hideRoom("u1", "room-1");
+
+        expectProblem(mvc.perform(post("/api/v1/rooms/room-1/hide")
+                .with(oauth2Login().oauth2User(com.lnt.chatmee.support.TestUsers.principal("u1"))).with(csrf().asHeader())),
+                400, "INVALID_ARGUMENT");
+    }
+
+    @Test
+    void hideRoom_nonMember_returns404Problem() throws Exception {
+        doThrow(new ChatRoomNotFoundException("Can't find chat room with id: dm-1 or user is not a participant"))
+                .when(chatRoomService).hideRoom("u1", "dm-1");
+
+        expectProblem(mvc.perform(post("/api/v1/rooms/dm-1/hide")
+                .with(oauth2Login().oauth2User(com.lnt.chatmee.support.TestUsers.principal("u1"))).with(csrf().asHeader())),
+                404, "ROOM_NOT_FOUND");
+    }
+
+    @Test
+    void deleteRoom_directMessage_returns403UseHideProblem() throws Exception {
+        doThrow(new ForbiddenActionException("Use hide for direct messages"))
+                .when(chatRoomService).deleteChatRoomById("u1", "dm-1");
+
+        expectProblem(mvc.perform(delete("/api/v1/rooms/dm-1")
+                .with(oauth2Login().oauth2User(com.lnt.chatmee.support.TestUsers.principal("u1"))).with(csrf().asHeader())),
+                403, "FORBIDDEN_ACTION")
+            .andExpect(jsonPath("$.detail").value("Use hide for direct messages"));
     }
 }

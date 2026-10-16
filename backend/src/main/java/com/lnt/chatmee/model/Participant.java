@@ -1,6 +1,7 @@
 package com.lnt.chatmee.model;
 
 import java.time.LocalDateTime;
+import java.time.Instant;
 
 import org.springframework.data.annotation.CreatedDate;
 import org.springframework.data.annotation.Id;
@@ -41,6 +42,11 @@ public class Participant {
     private LocalDateTime joinedAt;
 
     private LocalDateTime lastSeenAt; // this field will be used in displaying user's status in the room
+
+    private Instant lastReadAt;
+
+    /** DM hidden by this member (AC-009-21); cleared by the next message persisted after it. */
+    private Instant hiddenAt;
 
     private boolean isMuted;
 

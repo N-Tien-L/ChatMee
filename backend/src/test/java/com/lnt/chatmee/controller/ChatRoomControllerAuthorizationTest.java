@@ -37,9 +37,12 @@ import com.lnt.chatmee.service.policy.*;
 class ChatRoomControllerAuthorizationTest {
     @Autowired MockMvc mvc;
     @MockitoBean ChatRoomService chatRooms;
+    @MockitoBean com.lnt.chatmee.service.MessageService messageService;
+    @MockitoBean com.lnt.chatmee.service.UserEventPublisher userEvents;
     @MockitoBean ChatRoomRepository rooms;
     @MockitoBean UserRepository users;
     @MockitoBean ParticipantRepository participants;
+    @MockitoBean com.lnt.chatmee.repository.MessageRepository messageRepository;
 
     @BeforeEach
     void setUp() {
@@ -59,40 +62,39 @@ class ChatRoomControllerAuthorizationTest {
     }
 
     @Test
-    void addParticipant_adminAssigningAdmin_returnsForbidden() throws Exception {
+    void addParticipant_adminAssigningAdmin_returnsMethodNotAllowed() throws Exception {
         actor(Role.ADMIN);
         when(rooms.findByIdAndIsActiveTrue("room")).thenReturn(Optional.of(ChatRoom.builder()
                 .id("room").type(RoomType.PRIVATE).isActive(true).build()));
         when(users.findById("target")).thenReturn(Optional.of(User.builder().id("target").build()));
-        add("ADMIN", 403);
+        add("ADMIN", 405);
         verify(participants, never()).save(any());
         verify(rooms, never()).save(any());
     }
 
     @Test
-    void addParticipant_directRoom_returnsForbiddenAction() throws Exception {
+    void addParticipant_directRoom_returnsMethodNotAllowed() throws Exception {
         actor(Role.OWNER);
         when(rooms.findByIdAndIsActiveTrue("room")).thenReturn(Optional.of(ChatRoom.builder()
                 .id("room").type(RoomType.DIRECT_MESSAGE).isActive(true).build()));
         mvc.perform(post("/api/v1/rooms/room/members")
                 .with(oauth2Login().oauth2User(com.lnt.chatmee.support.TestUsers.principal("actor"))).with(csrf())
                 .contentType(MediaType.APPLICATION_JSON).content("{\"userId\":\"target\",\"role\":\"MEMBER\"}"))
-                .andExpect(status().isForbidden())
-                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath("$.code").value("FORBIDDEN_ACTION"));
+                .andExpect(status().isMethodNotAllowed());
         verify(participants, never()).save(any());
         verify(rooms, never()).reserveSeat(any(), any());
     }
 
     @Test
-    void addParticipant_invalidRole_returnsBadRequest() throws Exception {
+    void addParticipant_invalidRole_returnsMethodNotAllowed() throws Exception {
         actor(Role.OWNER);
-        add("INVALID", 400);
+        add("INVALID", 405);
         verify(participants, never()).save(any());
     }
 
     @Test
-    void addParticipant_nonParticipant_returnsForbidden() throws Exception {
-        add("MEMBER", 403);
+    void addParticipant_nonParticipant_returnsMethodNotAllowed() throws Exception {
+        add("MEMBER", 405);
         verify(participants, never()).save(any());
     }
 
@@ -117,13 +119,14 @@ class ChatRoomControllerAuthorizationTest {
     }
 
     @Test
-    void addParticipant_ownerAssigningAdmin_returnsOk() throws Exception {
+    void addParticipant_ownerAssigningAdmin_returnsMethodNotAllowedWithoutMember() throws Exception {
         actor(Role.OWNER);
         when(rooms.findByIdAndIsActiveTrue("room")).thenReturn(Optional.of(ChatRoom.builder()
                 .id("room").type(RoomType.PRIVATE).isActive(true).build()));
         when(users.findById("target")).thenReturn(Optional.of(User.builder().id("target").build()));
-        add("ADMIN", 200);
-        verify(participants).save(argThat(p -> p.getUserId().equals("target") && p.getRole() == Role.ADMIN));
+        add("ADMIN", 405);
+        verify(participants, never()).save(any());
+        verify(rooms, never()).reserveSeat(any(), any());
     }
 
     private void actor(Role role) {
@@ -131,10 +134,108 @@ class ChatRoomControllerAuthorizationTest {
                 .thenReturn(Optional.of(Participant.builder().role(role).build()));
     }
 
+    /** AC-009-5: direct add is removed for every caller role; members enter a PRIVATE room only by invitation. */
     private void add(String role, int expectedStatus) throws Exception {
         mvc.perform(post("/api/v1/rooms/room/members").with(oauth2Login().oauth2User(com.lnt.chatmee.support.TestUsers.principal("actor"))).with(csrf())
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("{\"userId\":\"target\",\"role\":\"" + role + "\"}"))
                 .andExpect(status().is(expectedStatus));
     }
+
+    @Test
+    void removeMember_ownerRemovingMember_returns204() throws Exception { remove(Role.OWNER, Role.MEMBER, RoomType.PUBLIC, "target", 204); }
+    @Test
+    void removeMember_ownerRemovingAdmin_returns204() throws Exception { remove(Role.OWNER, Role.ADMIN, RoomType.PRIVATE, "target", 204); }
+    @Test
+    void removeMember_ownerRemovingOwner_returns204() throws Exception { remove(Role.OWNER, Role.OWNER, RoomType.PUBLIC, "target", 204); }
+    @Test
+    void removeMember_ownerRemovingSelf_returns403() throws Exception { remove(Role.OWNER, Role.OWNER, RoomType.PUBLIC, "actor", 403); }
+    @Test
+    void removeMember_adminRemovingMember_returns204() throws Exception { remove(Role.ADMIN, Role.MEMBER, RoomType.PUBLIC, "target", 204); }
+    @Test
+    void removeMember_adminRemovingAdmin_returns403() throws Exception { remove(Role.ADMIN, Role.ADMIN, RoomType.PUBLIC, "target", 403); }
+    @Test
+    void removeMember_adminRemovingOwner_returns403() throws Exception { remove(Role.ADMIN, Role.OWNER, RoomType.PUBLIC, "target", 403); }
+    @Test
+    void removeMember_memberRemovingMember_returns403() throws Exception { remove(Role.MEMBER, Role.MEMBER, RoomType.PUBLIC, "target", 403); }
+    @Test
+    void removeMember_directRoom_returns403() throws Exception { remove(Role.OWNER, Role.MEMBER, RoomType.DIRECT_MESSAGE, "target", 403); }
+    @Test
+    void removeMember_unknownTarget_returns404() throws Exception { remove(Role.OWNER, null, RoomType.PUBLIC, "target", 404); }
+    @Test
+    void removeMember_nonMemberCaller_returns404() throws Exception { remove(null, Role.MEMBER, RoomType.PUBLIC, "target", 404); }
+
+    @Test
+    void roleChange_ownerPromotesMemberToAdmin_returns204() throws Exception { roleChange(Role.OWNER, Role.MEMBER, RoomType.PUBLIC, "target", "{\"role\":\"ADMIN\"}", 204); }
+    @Test
+    void roleChange_ownerDemotesAdminToMember_returns204() throws Exception { roleChange(Role.OWNER, Role.ADMIN, RoomType.PRIVATE, "target", "{\"role\":\"MEMBER\"}", 204); }
+    @Test
+    void roleChange_adminCaller_returns403() throws Exception { roleChange(Role.ADMIN, Role.MEMBER, RoomType.PUBLIC, "target", "{\"role\":\"ADMIN\"}", 403); }
+    @Test
+    void roleChange_memberCaller_returns403() throws Exception { roleChange(Role.MEMBER, Role.MEMBER, RoomType.PUBLIC, "target", "{\"role\":\"ADMIN\"}", 403); }
+    @Test
+    void roleChange_ownerTargetingSelf_returns403() throws Exception { roleChange(Role.OWNER, Role.OWNER, RoomType.PUBLIC, "actor", "{\"role\":\"MEMBER\"}", 403); }
+    @Test
+    void roleChange_targetIsOwner_returns403() throws Exception { roleChange(Role.OWNER, Role.OWNER, RoomType.PUBLIC, "target", "{\"role\":\"MEMBER\"}", 403); }
+    @Test
+    void roleChange_ownerRoleInBody_returns400() throws Exception { roleChange(Role.OWNER, Role.MEMBER, RoomType.PUBLIC, "target", "{\"role\":\"OWNER\"}", 400); }
+    @Test
+    void roleChange_unknownRoleValue_returns400() throws Exception { roleChange(Role.OWNER, Role.MEMBER, RoomType.PUBLIC, "target", "{\"role\":\"SUPERUSER\"}", 400); }
+    @Test
+    void roleChange_directRoom_returns403() throws Exception { roleChange(Role.OWNER, Role.MEMBER, RoomType.DIRECT_MESSAGE, "target", "{\"role\":\"ADMIN\"}", 403); }
+    @Test
+    void roleChange_unknownTarget_returns404() throws Exception { roleChange(Role.OWNER, null, RoomType.PUBLIC, "target", "{\"role\":\"ADMIN\"}", 404); }
+    @Test
+    void roleChange_nonMemberCaller_returns404() throws Exception { roleChange(null, Role.MEMBER, RoomType.PUBLIC, "target", "{\"role\":\"ADMIN\"}", 404); }
+
+    private void roleChange(Role actorRole, Role targetRole, RoomType type, String target, String body, int expected) throws Exception {
+        // createdBy deliberately names the caller: only the participant role may grant a role change.
+        when(rooms.findByIdAndIsActiveTrue("room")).thenReturn(Optional.of(ChatRoom.builder()
+            .id("room").createdBy("actor").type(type).isActive(true).build()));
+        if (actorRole != null) actor(actorRole);
+        if (targetRole != null && !target.equals("actor"))
+            when(participants.findByChatRoomIdAndUserId("room", target)).thenReturn(Optional.of(Participant.builder().userId(target).role(targetRole).build()));
+        if (expected == 204) {
+            when(participants.updateRoleIfCurrent("room", target, targetRole, body.contains("ADMIN") ? Role.ADMIN : Role.MEMBER)).thenReturn(1L);
+            when(users.findById(target)).thenReturn(Optional.of(User.builder().id(target).name("Target").build()));
+        }
+        mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch("/api/v1/rooms/room/members/" + target + "/role")
+            .with(oauth2Login().oauth2User(com.lnt.chatmee.support.TestUsers.principal("actor"))).with(csrf())
+            .contentType(MediaType.APPLICATION_JSON).content(body))
+            .andExpect(status().is(expected));
+        if (expected == 204) {
+            verify(participants).updateRoleIfCurrent(eq("room"), eq(target), eq(targetRole), any());
+            verify(messageService).postSystemMessage(eq("room"), any());
+            verify(userEvents).roomUpdated(eq(target), any());
+        } else {
+            verify(participants, never()).updateRoleIfCurrent(any(), any(), any(), any());
+            verify(messageService, never()).postSystemMessage(any(), any());
+            verifyNoInteractions(userEvents);
+        }
+    }
+
+    private void remove(Role actorRole, Role targetRole, RoomType type, String target, int expected) throws Exception {
+        // createdBy deliberately differs: the participant role controls authorization.
+        when(rooms.findByIdAndIsActiveTrue("room")).thenReturn(Optional.of(ChatRoom.builder()
+            .id("room").createdBy("former-owner").type(type).isActive(true).build()));
+        if (actorRole != null) actor(actorRole);
+        if (targetRole != null && !target.equals("actor"))
+            when(participants.findByChatRoomIdAndUserId("room", target)).thenReturn(Optional.of(Participant.builder().userId(target).role(targetRole).build()));
+        if (expected == 204) {
+            when(participants.deleteByChatRoomIdAndUserId("room", target)).thenReturn(1L);
+            when(users.findById(target)).thenReturn(Optional.of(User.builder().id(target).name("Target").build()));
+        }
+        mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete("/api/v1/rooms/room/members/" + target)
+            .with(oauth2Login().oauth2User(com.lnt.chatmee.support.TestUsers.principal("actor"))).with(csrf()))
+            .andExpect(status().is(expected));
+        if (expected == 204) {
+            verify(participants).deleteByChatRoomIdAndUserId("room", target);
+            verify(rooms).releaseSeat(eq("room"), any());
+            verify(userEvents).roomRemoved(java.util.Set.of(target), "room", "REMOVED");
+        } else {
+            verify(participants, never()).deleteByChatRoomIdAndUserId(any(), any());
+            verifyNoInteractions(userEvents);
+        }
+    }
+
 }

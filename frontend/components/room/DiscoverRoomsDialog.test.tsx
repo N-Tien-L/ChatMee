@@ -1,8 +1,10 @@
 import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest';
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { DiscoverRoomsDialog } from './DiscoverRoomsDialog';
 import { useDiscoverRoomsStore } from '@/lib/stores/discoverRoomsStore';
 
+const push = vi.fn();
+vi.mock('next/navigation', () => ({ useRouter: () => ({ push }) }));
 vi.mock('@/lib/api/chatRoomApi', () => ({
     chatRoomApi: { discoverRooms: vi.fn(), joinChatRoom: vi.fn(), getChatRooms: vi.fn() },
 }));
@@ -15,6 +17,7 @@ const base = {
 };
 
 beforeEach(() => {
+    push.mockReset();
     useDiscoverRoomsStore.setState({
         ...base,
         search: vi.fn().mockResolvedValue(undefined),
@@ -26,7 +29,33 @@ beforeEach(() => {
 afterEach(cleanup);
 
 describe('DiscoverRoomsDialog', () => {
-    it('render_loading_showsSkeletonStatus', () => {
+    it('search_refresh_keepsExistingRowMountedWithoutFlashingSkeletons', () => {
+        useDiscoverRoomsStore.setState({
+            results: [{ id: 'r1', name: 'General', memberCount: 3, maxMembers: 10 }],
+        });
+        const { container } = render(<DiscoverRoomsDialog />);
+        const row = screen.getByRole('button', { name: 'Join General' });
+
+        act(() => useDiscoverRoomsStore.setState({ query: 'gen', loading: true }));
+
+        expect(screen.getByRole('button', { name: 'Join General' })).toBe(row);
+        expect(row).toBeDisabled();
+        expect(container.querySelector('.animate-pulse')).not.toBeInTheDocument();
+        expect(screen.getByRole('status', { name: 'Loading public rooms' })).toBeInTheDocument();
+
+        act(() => useDiscoverRoomsStore.setState({ loading: false }));
+        expect(screen.getByRole('button', { name: 'Join General' })).toBe(row);
+        expect(row).toBeEnabled();
+    });
+
+    it('search_emptyResults_doesNotFlashSkeletonsDuringEachRequest', () => {
+        useDiscoverRoomsStore.setState({ loading: true });
+        render(<DiscoverRoomsDialog />);
+        expect(screen.getByRole('dialog').querySelector('.animate-pulse')).not.toBeInTheDocument();
+        expect(screen.getByText('No public rooms found')).toBeInTheDocument();
+    });
+
+    it('render_loading_showsSearchStatus', () => {
         useDiscoverRoomsStore.setState({ loading: true });
         render(<DiscoverRoomsDialog />);
         expect(screen.getByRole('status', { name: 'Loading public rooms' })).toBeInTheDocument();
@@ -68,5 +97,30 @@ describe('DiscoverRoomsDialog', () => {
         expect(screen.getByRole('alert')).toHaveTextContent('This room is full.');
         fireEvent.change(screen.getByRole('searchbox', { name: 'Search public rooms' }), { target: { value: 'gen' } });
         expect(setQuery).toHaveBeenCalledWith('gen');
+    });
+
+    it('join_success_closesDialogAndOpensTheJoinedRoom', async () => {
+        const close = vi.fn();
+        useDiscoverRoomsStore.setState({
+            results: [{ id: 'r1', name: 'General', memberCount: 3, maxMembers: 10 }],
+            join: vi.fn().mockResolvedValue(true), close,
+        });
+        render(<DiscoverRoomsDialog />);
+        fireEvent.click(screen.getByRole('button', { name: 'Join General' }));
+        await waitFor(() => expect(push).toHaveBeenCalledWith('/dashboard?roomId=r1', { scroll: false }));
+        expect(close).toHaveBeenCalled();
+    });
+
+    it('join_failure_keepsDialogOpen', async () => {
+        const close = vi.fn();
+        useDiscoverRoomsStore.setState({
+            results: [{ id: 'r1', name: 'General', memberCount: 10, maxMembers: 10 }],
+            join: vi.fn().mockResolvedValue(false), close,
+        });
+        render(<DiscoverRoomsDialog />);
+        fireEvent.click(screen.getByRole('button', { name: 'Join General' }));
+        await Promise.resolve();
+        expect(close).not.toHaveBeenCalled();
+        expect(push).not.toHaveBeenCalled();
     });
 });

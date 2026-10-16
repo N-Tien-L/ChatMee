@@ -1,5 +1,6 @@
 package com.lnt.chatmee.repository;
 
+import java.util.Collection;
 import java.util.Optional;
 
 import org.springframework.data.domain.Page;
@@ -17,4 +18,7 @@ public interface UserRepository extends MongoRepository<User, String> {
     Optional<User> findByProviderAndProviderId(String provider, String providerId);
 
     Page<User> findByNameContainingIgnoreCaseAndIdNot(String name, String id, Pageable pageable);
+
+    /** Search that also leaves out users blocked in either direction (AC-009-17). */
+    Page<User> findByNameContainingIgnoreCaseAndIdNotIn(String name, Collection<String> ids, Pageable pageable);
 }

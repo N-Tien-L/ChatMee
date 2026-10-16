@@ -31,11 +31,12 @@ class ResponseContractTest {
     @Test void responseFactories_records_preserveJsonPropertiesAndTimestamps() throws Exception {
         var time = Instant.parse("2026-10-09T01:02:03Z");
         var message = Message.builder().id("message").chatRoomId("room").senderId("user")
+                .clientMessageId("temporary")
                 .content("hello").type(Message.MessageType.TEXT).createdAt(time).updatedAt(time)
                 .isUpdated(true).isDeleted(false).build();
         var messageJson = json.valueToTree(ChatMessageResponse.from(message, "Alice", "temporary"));
         assertThat(messageJson).isEqualTo(json.readTree("""
-                {"id":"message","tempId":"temporary","chatRoomId":"room","senderId":"user",
+                {"id":"message","tempId":"temporary","clientMessageId":"temporary","chatRoomId":"room","senderId":"user",
                  "senderName":"Alice","content":"hello","type":"TEXT",
                  "createdAt":"2026-10-09T01:02:03Z","updatedAt":"2026-10-09T01:02:03Z",
                  "isUpdated":true,"isDeleted":false}
@@ -51,14 +52,60 @@ class ResponseContractTest {
         var room = ChatRoom.builder().id("room").name("Room").description("description")
                 .createdBy("user").type(ChatRoom.RoomType.PUBLIC).maxParticipants(10)
                 .createdAt(LocalDateTime.parse("2026-10-09T01:02:03"))
-                .lastActivity(LocalDateTime.parse("2026-10-09T01:02:03")).build();
-        var roomJson = json.valueToTree(ChatRoomResponse.from(room, Set.of("user")));
+                .lastActivity(LocalDateTime.parse("2026-10-09T01:02:03")).lastActivityAt(time).build();
+        var roomJson = json.readTree(json.writeValueAsString(ChatRoomResponse.from(room, Set.of("user"))));
         assertThat(roomJson).isEqualTo(json.readTree("""
                 {"id":"room","roomName":"Room","roomType":"PUBLIC","description":"description",
                  "createdBy":"user","createdAt":"2026-10-09T01:02:03","updatedAt":"2026-10-09T01:02:03",
-                 "maxUsers":10,"settings":null,"participants":["user"],"counterpart":null}
+                 "maxUsers":10,"settings":null,"participants":["user"],"counterpart":null,
+                 "lastActivityAt":"2026-10-09T01:02:03Z","lastMessage":null,"unreadCount":0,"myRole":null,
+                 "state":"ACTIVE","blocked":false}
                 """));
         for (Class<?> type : new Class<?>[]{AuthResponse.class, UserResponse.class,
                 ChatRoomResponse.class, ChatMessageResponse.class}) assertThat(type.isRecord()).isTrue();
     }
+
+    @Test
+    void chatRoomResponse_withSettings_mapsToSettingsRecordWithSameJson() throws Exception {
+        var settings = ChatRoom.RoomSettings.builder().allowFileSharing(true).allowGuestUsers(false)
+                .moderationRequired(true).welcomeMessage("Welcome").build();
+        var room = ChatRoom.builder().id("room").name("Room").type(ChatRoom.RoomType.PUBLIC).maxParticipants(10)
+                .settings(settings).build();
+
+        var response = ChatRoomResponse.from(room, Set.of("user"));
+
+        assertThat(RoomSettingsResponse.class.isRecord()).isTrue();
+        assertThat(response.settings()).isEqualTo(new RoomSettingsResponse(true, false, true, "Welcome"));
+        assertThat(json.readTree(json.writeValueAsString(response)).get("settings")).isEqualTo(json.readTree("""
+                {"allowFileSharing":true,"allowGuestUsers":false,"moderationRequired":true,"welcomeMessage":"Welcome"}
+                """));
+        assertThat(RoomSettingsResponse.from(null)).isNull();
+    }
+
+    @Test
+    void memberResponse_record_serializesOnlyMemberFields() throws Exception {
+        assertThat(MemberResponse.class.isRecord()).isTrue();
+        tools.jackson.databind.JsonNode member = json.valueToTree(new MemberResponse("user", "Alice", "avatar", com.lnt.chatmee.model.Participant.Role.ADMIN));
+        assertThat(member)
+            .isEqualTo(json.readTree("""
+                {"id":"user","name":"Alice","avatarUrl":"avatar","role":"ADMIN"}
+                """));
+    }
+
+    @Test
+    void invitationResponse_record_serializesInvitationFieldsWithIsoTimestamps() throws Exception {
+        assertThat(InvitationResponse.class.isRecord()).isTrue();
+        var time = Instant.parse("2026-10-09T01:02:03Z");
+        var invitation = new InvitationResponse("inv", new InvitationResponse.RoomSummary("room", "Secret", 3),
+            new UserSummaryResponse("alice", "Alice", "a.png"), new UserSummaryResponse("bob", "Bob", null),
+            time, time.plusSeconds(7 * 24 * 3600));
+        tools.jackson.databind.JsonNode invitationJson = json.valueToTree(invitation);
+        assertThat(invitationJson).isEqualTo(json.readTree("""
+                {"id":"inv","room":{"id":"room","name":"Secret","memberCount":3},
+                 "inviter":{"id":"alice","name":"Alice","avatarUrl":"a.png"},
+                 "invitee":{"id":"bob","name":"Bob","avatarUrl":null},
+                 "createdAt":"2026-10-09T01:02:03Z","expiresAt":"2026-10-16T01:02:03Z"}
+                """));
+    }
+
 }

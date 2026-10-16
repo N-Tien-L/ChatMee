@@ -1,7 +1,9 @@
 package com.lnt.chatmee.service;
 
+import com.lnt.chatmee.dto.request.ChatMessageRequest;
 import com.lnt.chatmee.dto.response.ChatMessageResponse;
 import com.lnt.chatmee.exception.ChatRoomNotFoundException;
+import com.lnt.chatmee.exception.DatabaseOperationException;
 import com.lnt.chatmee.exception.ForbiddenActionException;
 import com.lnt.chatmee.model.Message;
 import com.lnt.chatmee.model.User;
@@ -11,6 +13,7 @@ import com.lnt.chatmee.repository.ParticipantRepository;
 import com.lnt.chatmee.repository.UserRepository;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.springframework.dao.DuplicateKeyException;
 import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
@@ -18,6 +21,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.time.Instant;
 import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
 import java.util.Base64;
 import java.util.List;
 import java.util.Optional;
@@ -49,8 +53,78 @@ class MessageServiceTest {
     @Mock
     private UserRepository userRepository;
 
+    @Mock UserEventPublisher userEvents;
+
+    @Mock DirectMessageRequestService dmRequests;
+
+    @Mock ParticipantRepository participantRepository;
+
+    @Mock BlockService blocks;
+
     @InjectMocks
     private MessageService messageService;
+
+    @Test
+    void sendMessage_sameClientMessageIdTwice_storesOnlyOneMessage() {
+        List<Message> rows = simulateUniqueClientIdIndex();
+        when(participantService.isUserParticipant("room1", "user1")).thenReturn(true);
+
+        ChatMessageResponse first = messageService.sendMessage(textRequest("client-1"), "user1");
+        ChatMessageResponse second = messageService.sendMessage(textRequest("client-1"), "user1");
+
+        assertThat(rows).hasSize(1);
+        assertThat(second.id()).isEqualTo(first.id());
+        assertThat(second.tempId()).isEqualTo("client-1");
+        assertThat(second.clientMessageId()).isEqualTo("client-1");
+    }
+
+    @Test
+    void sendMessage_differentClientMessageIds_storesEachMessage() {
+        List<Message> rows = simulateUniqueClientIdIndex();
+        when(participantService.isUserParticipant("room1", "user1")).thenReturn(true);
+
+        ChatMessageResponse first = messageService.sendMessage(textRequest("client-1"), "user1");
+        ChatMessageResponse second = messageService.sendMessage(textRequest("client-2"), "user1");
+
+        assertThat(rows).hasSize(2);
+        assertThat(second.id()).isNotEqualTo(first.id());
+    }
+
+    @Test
+    void persistMessage_duplicateWithoutClientMessageId_throwsDatabaseOperationException() {
+        when(messageRepository.save(any(Message.class))).thenThrow(new DuplicateKeyException("E11000 duplicate key"));
+        Message message = Message.builder().id("m1").chatRoomId("room1").senderId("user1").build();
+
+        assertThatThrownBy(() -> messageService.persistMessage(message))
+                .isInstanceOf(DatabaseOperationException.class);
+        verify(messageRepository, never()).findFirstByChatRoomIdAndSenderIdAndClientMessageId(any(), any(), any());
+    }
+
+    /** Mimics the unique partial index (room, sender, clientMessageId): a second insert with the same key fails. */
+    private List<Message> simulateUniqueClientIdIndex() {
+        List<Message> rows = new ArrayList<>();
+        when(messageRepository.save(any(Message.class))).thenAnswer(invocation -> {
+            Message incoming = invocation.getArgument(0);
+            boolean duplicate = rows.stream()
+                    .anyMatch(row -> incoming.getClientMessageId().equals(row.getClientMessageId()));
+            if (duplicate) throw new DuplicateKeyException("E11000 duplicate key");
+            rows.add(incoming);
+            return incoming;
+        });
+        lenient().when(messageRepository.findFirstByChatRoomIdAndSenderIdAndClientMessageId(eq("room1"), eq("user1"), anyString()))
+                .thenAnswer(invocation -> rows.stream()
+                        .filter(row -> invocation.getArgument(2).equals(row.getClientMessageId()))
+                        .findFirst());
+        return rows;
+    }
+
+    private static ChatMessageRequest textRequest(String tempId) {
+        ChatMessageRequest request = new ChatMessageRequest();
+        request.setRoomId("room1");
+        request.setContent("hello");
+        request.setTempId(tempId);
+        return request;
+    }
 
     @Test
     void getRecentMessages_roomNotFound_throwsException() {
@@ -61,12 +135,26 @@ class MessageServiceTest {
     }
 
     @Test
-    void getRecentMessages_nonParticipant_throwsException() {
+    void getRecentMessages_nonParticipantOfActiveRoom_throwsRoomNotFound() {
         when(chatRoomRepository.existsById("room1")).thenReturn(true);
         when(participantService.isUserParticipant("room1", "user1")).thenReturn(false);
+        when(chatRoomRepository.findByIdAndIsActiveTrue("room1"))
+                .thenReturn(Optional.of(com.lnt.chatmee.model.ChatRoom.builder().id("room1").isActive(true).build()));
+
+        assertThatThrownBy(() -> messageService.getRecentMessages("room1", "user1"))
+                .isInstanceOf(ChatRoomNotFoundException.class);
+        verifyNoInteractions(messageRepository);
+    }
+
+    @Test
+    void getRecentMessages_softDeletedRoom_throwsForbidden() {
+        when(chatRoomRepository.existsById("room1")).thenReturn(true);
+        when(participantService.isUserParticipant("room1", "user1")).thenReturn(false);
+        when(chatRoomRepository.findByIdAndIsActiveTrue("room1")).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> messageService.getRecentMessages("room1", "user1"))
                 .isInstanceOf(ForbiddenActionException.class);
+        verifyNoInteractions(messageRepository);
     }
 
     @Test
@@ -150,7 +238,7 @@ class MessageServiceTest {
         var page = messageService.getMessages("room1", "user1", cursor("1791507723123:m2"), 2);
 
         assertThat(page.messages()).extracting(ChatMessageResponse::id).containsExactly("m1");
-        assertThat(page.messages().get(0).senderName()).isEqualTo("Unknown User");
+        assertThat(page.messages().get(0).senderName()).isEqualTo("Deleted user");
         assertThat(page.nextCursor()).isNull();
         assertThat(page.hasMore()).isFalse();
         verify(messageRepository).findPageBefore("room1", time, "m2", PageRequest.of(0, 3));
@@ -283,4 +371,335 @@ class MessageServiceTest {
         return converter;
     }
 
+
+    @Test
+    void sendMessage_persistedText_publishesActivityToMembersAfterSave() {
+        var request = new com.lnt.chatmee.dto.request.ChatMessageRequest();
+        request.setRoomId("room1"); request.setContent("private preview");
+        when(participantService.isUserParticipant("room1", "user1")).thenReturn(true);
+        when(participantService.getParticipantUserIds("room1")).thenReturn(Set.of("user1", "user2"));
+        when(messageRepository.save(any())).thenAnswer(call -> call.getArgument(0));
+        ChatMessageResponse response = messageService.sendMessage(request, "user1");
+        var order = inOrder(messageRepository, userEvents);
+        order.verify(messageRepository).save(any());
+        order.verify(userEvents).roomActivity(eq(Set.of("user1", "user2")), eq("room1"), any(com.lnt.chatmee.dto.event.LastMessageSummary.class));
+        verifyNoMoreInteractions(userEvents);
+    }
+
+    @Test
+    void sendMessage_systemMessage_publishesNoActivity() {
+        var request = new com.lnt.chatmee.dto.request.ChatMessageRequest();
+        request.setRoomId("room1"); request.setContent("system"); request.setMessageType(Message.MessageType.SYSTEM);
+        when(participantService.isUserParticipant("room1", "user1")).thenReturn(true);
+        when(messageRepository.save(any())).thenAnswer(call -> call.getArgument(0));
+        messageService.sendMessage(request, "user1");
+        verifyNoInteractions(userEvents, chatRoomRepository);
+        verify(participantService, never()).getParticipantUserIds(anyString());
+    }
+
+    @Test
+    void sendMessage_saveFails_publishesNoActivity() {
+        var request = new com.lnt.chatmee.dto.request.ChatMessageRequest();
+        request.setRoomId("room1"); request.setContent("private preview");
+        when(participantService.isUserParticipant("room1", "user1")).thenReturn(true);
+        when(messageRepository.save(any())).thenThrow(new org.springframework.dao.DataAccessResourceFailureException("offline"));
+        assertThatThrownBy(() -> messageService.sendMessage(request, "user1"))
+            .isInstanceOf(com.lnt.chatmee.exception.DatabaseOperationException.class);
+        verifyNoInteractions(userEvents);
+    }
+
+
+    @Test
+    void sendMessage_postSaveWorkFails_returnsSavedMessage() {
+        when(participantService.isUserParticipant("room1", "user1")).thenReturn(true);
+        when(messageRepository.save(any())).thenAnswer(call -> call.getArgument(0));
+        when(participantService.getParticipantUserIds("room1"))
+            .thenThrow(new org.springframework.dao.DataAccessResourceFailureException("unavailable"));
+        var response = messageService.sendMessage(textRequest("client-1"), "user1");
+        assertThat(response.id()).isNotBlank();
+        assertThat(response.clientMessageId()).isEqualTo("client-1");
+    }
+
+
+    // CM-077: a sender without a stored user or name is labelled "Deleted user" (AC-009-28)
+    @Test
+    void getMessages_missingSender_labelsDeletedUser() {
+        allowHistory();
+        Instant time = Instant.ofEpochMilli(1791507723123L);
+        when(messageRepository.findPage("room1", PageRequest.of(0, 51)))
+                .thenReturn(List.of(historyMessage("m2", "gone", time), historyMessage("m1", "nameless", time)));
+        when(userRepository.findAllById(any())).thenReturn(List.of(User.builder().id("nameless").name(" ").build()));
+
+        var page = messageService.getMessages("room1", "user1", null, 50);
+
+        assertThat(page.messages()).extracting(ChatMessageResponse::senderName)
+                .containsExactly("Deleted user", "Deleted user");
+    }
+
+    @Test
+    void sendMessage_namelessSender_labelsRoomActivityDeletedUser() {
+        when(participantService.isUserParticipant("room1", "user1")).thenReturn(true);
+        when(messageRepository.save(any())).thenAnswer(call -> call.getArgument(0));
+        when(participantService.getParticipantUserIds("room1")).thenReturn(Set.of("user2"));
+
+        var response = messageService.sendMessage(textRequest("client-1"), "user1");
+
+        var summary = ArgumentCaptor.forClass(com.lnt.chatmee.dto.event.LastMessageSummary.class);
+        verify(userEvents).roomActivity(eq(Set.of("user2")), eq("room1"), summary.capture());
+        assertThat(summary.getValue().senderName()).isEqualTo("Deleted user");
+        assertThat(response.senderName()).isEqualTo("Deleted user");
+    }
+
+    @Test
+    void sendMessage_activityUpdateFails_returnsSavedMessage() {
+        when(participantService.isUserParticipant("room1", "user1")).thenReturn(true);
+        when(messageRepository.save(any())).thenAnswer(call -> call.getArgument(0));
+        when(chatRoomRepository.updateActivity(eq("room1"), any(), any()))
+            .thenThrow(new org.springframework.dao.DataAccessResourceFailureException("unavailable"));
+        assertThat(messageService.sendMessage(textRequest("client-1"), "user1").id()).isNotBlank();
+    }
+
+    @Test
+    void sendMessage_savedText_updatesActivityWithSameSummaryAsEvent() {
+        when(participantService.isUserParticipant("room1", "user1")).thenReturn(true);
+        when(messageRepository.save(any())).thenAnswer(call -> call.getArgument(0));
+        when(participantService.getParticipantUserIds("room1")).thenReturn(Set.of("user2"));
+        var request = textRequest("client-1");
+        request.setContent("😀".repeat(101));
+        var response = messageService.sendMessage(request, "user1");
+        var summary = ArgumentCaptor.forClass(com.lnt.chatmee.dto.event.LastMessageSummary.class);
+        var order = inOrder(messageRepository, chatRoomRepository, userEvents);
+        order.verify(messageRepository).save(any());
+        order.verify(chatRoomRepository).updateActivity(eq("room1"), eq(response.createdAt()), summary.capture());
+        order.verify(userEvents).roomActivity(Set.of("user2"), "room1", summary.getValue());
+        assertThat(summary.getValue().id()).isEqualTo(response.id());
+        assertThat(summary.getValue().preview()).isEqualTo("😀".repeat(100));
+        assertThat(summary.getValue().createdAt()).isEqualTo(response.createdAt());
+    }
+
+    @Test
+    void sendMessage_eventPublishingFails_returnsSavedMessage() {
+        when(participantService.isUserParticipant("room1", "user1")).thenReturn(true);
+        when(messageRepository.save(any())).thenAnswer(call -> call.getArgument(0));
+        doThrow(new org.springframework.messaging.MessagingException("unavailable"))
+            .when(userEvents).roomActivity(any(), anyString(), any());
+        assertThat(messageService.sendMessage(textRequest("client-1"), "user1").id()).isNotBlank();
+    }
+
+    // CM-072 AC2: one message while REQUESTED; the recipient's reply accepts (AC-009-10, AC-009-12)
+
+    @Test
+    void sendMessage_senderFirstMessageInRequestedRoom_claimsPreviewSavesAndNotifiesRecipient() {
+        when(participantService.isUserParticipant("room1", "user1")).thenReturn(true);
+        when(chatRoomRepository.findByIdAndIsActiveTrue("room1")).thenReturn(Optional.of(requestedRoom()));
+        when(chatRoomRepository.claimRequestMessage(eq("room1"), any(Instant.class), any())).thenReturn(1L);
+        when(messageRepository.save(any())).thenAnswer(call -> call.getArgument(0));
+
+        ChatMessageResponse response = messageService.sendMessage(textRequest("client-1"), "user1");
+
+        ArgumentCaptor<com.lnt.chatmee.dto.event.LastMessageSummary> claimed =
+            ArgumentCaptor.forClass(com.lnt.chatmee.dto.event.LastMessageSummary.class);
+        verify(chatRoomRepository).claimRequestMessage(eq("room1"), eq(response.createdAt()), claimed.capture());
+        assertThat(claimed.getValue().id()).isEqualTo(response.id());
+        assertThat(claimed.getValue().preview()).isEqualTo("hello");
+        verify(dmRequests).previewChanged("room1");
+    }
+
+    @Test
+    void sendMessage_senderSecondMessageInRequestedRoom_throwsDmRequestPendingWithoutSaving() {
+        when(participantService.isUserParticipant("room1", "user1")).thenReturn(true);
+        when(chatRoomRepository.findByIdAndIsActiveTrue("room1")).thenReturn(Optional.of(requestedRoom()));
+        when(chatRoomRepository.claimRequestMessage(eq("room1"), any(Instant.class), any())).thenReturn(0L);
+
+        assertThatThrownBy(() -> messageService.sendMessage(textRequest("client-2"), "user1"))
+                .isInstanceOf(com.lnt.chatmee.exception.DmRequestPendingException.class)
+                .satisfies(error -> assertThat(((com.lnt.chatmee.exception.ChatMeeException) error).getErrorCode())
+                        .isEqualTo(com.lnt.chatmee.exception.ErrorCode.DM_REQUEST_PENDING));
+        verify(messageRepository, never()).save(any());
+        verify(dmRequests, never()).previewChanged(anyString());
+    }
+
+    @Test
+    void sendMessage_retryOfStoredRequestMessage_returnsStoredMessageWithoutClaim() {
+        Message stored = Message.builder().id("m1").chatRoomId("room1").senderId("user1").clientMessageId("client-1")
+                .content("hello").type(Message.MessageType.TEXT).createdAt(Instant.now()).build();
+        when(participantService.isUserParticipant("room1", "user1")).thenReturn(true);
+        when(chatRoomRepository.findByIdAndIsActiveTrue("room1")).thenReturn(Optional.of(requestedRoom()));
+        when(messageRepository.findFirstByChatRoomIdAndSenderIdAndClientMessageId("room1", "user1", "client-1"))
+                .thenReturn(Optional.of(stored));
+        when(messageRepository.save(any())).thenThrow(new DuplicateKeyException("E11000 duplicate key"));
+
+        assertThat(messageService.sendMessage(textRequest("client-1"), "user1").id()).isEqualTo("m1");
+        verify(chatRoomRepository, never()).claimRequestMessage(anyString(), any(), any());
+    }
+
+    @Test
+    void sendMessage_requestMessageSaveFails_releasesClaim() {
+        when(participantService.isUserParticipant("room1", "user1")).thenReturn(true);
+        when(chatRoomRepository.findByIdAndIsActiveTrue("room1")).thenReturn(Optional.of(requestedRoom()));
+        when(chatRoomRepository.claimRequestMessage(eq("room1"), any(Instant.class), any())).thenReturn(1L);
+        when(messageRepository.save(any())).thenThrow(new org.springframework.dao.DataAccessResourceFailureException("down"));
+
+        assertThatThrownBy(() -> messageService.sendMessage(textRequest("client-1"), "user1"))
+                .isInstanceOf(DatabaseOperationException.class);
+        verify(chatRoomRepository).releaseRequestMessage(eq("room1"), anyString());
+    }
+
+    @Test
+    void sendMessage_senderInExpiredRequest_throwsForbiddenWithoutSaving() {
+        when(participantService.isUserParticipant("room1", "user1")).thenReturn(true);
+        when(chatRoomRepository.findByIdAndIsActiveTrue("room1")).thenReturn(Optional.of(requestedRoom()));
+        when(dmRequests.expireIfDue("room1")).thenReturn(true);
+
+        assertThatThrownBy(() -> messageService.sendMessage(textRequest("client-1"), "user1"))
+                .isInstanceOf(ForbiddenActionException.class);
+        verify(messageRepository, never()).save(any());
+    }
+
+    @Test
+    void sendMessage_recipientRepliesToRequest_acceptsThenSavesMessage() {
+        when(participantService.isUserParticipant("room1", "user1")).thenReturn(false);
+        when(dmRequests.acceptByReply("room1", "user1")).thenReturn(true);
+        when(messageRepository.save(any())).thenAnswer(call -> call.getArgument(0));
+
+        ChatMessageResponse response = messageService.sendMessage(textRequest("client-1"), "user1");
+
+        assertThat(response.senderId()).isEqualTo("user1");
+        var order = inOrder(dmRequests, messageRepository);
+        order.verify(dmRequests).acceptByReply("room1", "user1");
+        order.verify(messageRepository).save(any());
+        verify(chatRoomRepository, never()).claimRequestMessage(anyString(), any(), any());
+    }
+
+    @Test
+    void sendMessage_nonMemberWithoutRequest_throwsForbiddenWithoutSaving() {
+        when(participantService.isUserParticipant("room1", "user1")).thenReturn(false);
+        when(dmRequests.acceptByReply("room1", "user1")).thenReturn(false);
+
+        assertThatThrownBy(() -> messageService.sendMessage(textRequest("client-1"), "user1"))
+                .isInstanceOf(ForbiddenActionException.class);
+        verify(messageRepository, never()).save(any());
+    }
+
+    // CM-073 AC3: DM sends refused while a block exists either way; group rooms unaffected; history readable (AC-009-19)
+
+    @Test
+    void sendMessage_dmMemberBlockedEitherWay_throwsCannotMessageWithoutSaving() {
+        when(participantService.isUserParticipant("room1", "user1")).thenReturn(true);
+        when(chatRoomRepository.findByIdAndIsActiveTrue("room1")).thenReturn(Optional.of(activeDm()));
+        when(blocks.isBlockedEitherWay("user1", "user2")).thenReturn(true);
+
+        assertThatThrownBy(() -> messageService.sendMessage(textRequest("client-1"), "user1"))
+                .isInstanceOf(ForbiddenActionException.class)
+                .hasMessage("Cannot message this user");
+        verify(messageRepository, never()).save(any());
+        verify(chatRoomRepository, never()).claimRequestMessage(anyString(), any(), any());
+        verifyNoInteractions(userEvents);
+    }
+
+    @Test
+    void sendMessage_dmWithoutMemberKey_checksBlockAgainstOtherParticipant() {
+        com.lnt.chatmee.model.ChatRoom legacy = activeDm();
+        legacy.setMemberKey(null);
+        when(participantService.isUserParticipant("room1", "user1")).thenReturn(true);
+        when(chatRoomRepository.findByIdAndIsActiveTrue("room1")).thenReturn(Optional.of(legacy));
+        when(participantService.getParticipantUserIds("room1")).thenReturn(Set.of("user1", "user2"));
+        when(blocks.isBlockedEitherWay("user1", "user2")).thenReturn(true);
+
+        assertThatThrownBy(() -> messageService.sendMessage(textRequest("client-1"), "user1"))
+                .isInstanceOf(ForbiddenActionException.class)
+                .hasMessage("Cannot message this user");
+        verify(messageRepository, never()).save(any());
+    }
+
+    @Test
+    void sendMessage_dmAfterUnblock_savesMessage() {
+        when(participantService.isUserParticipant("room1", "user1")).thenReturn(true);
+        when(chatRoomRepository.findByIdAndIsActiveTrue("room1")).thenReturn(Optional.of(activeDm()));
+        when(blocks.isBlockedEitherWay("user1", "user2")).thenReturn(false);
+        when(messageRepository.save(any())).thenAnswer(call -> call.getArgument(0));
+
+        assertThat(messageService.sendMessage(textRequest("client-1"), "user1").content()).isEqualTo("hello");
+        verify(messageRepository).save(any());
+    }
+
+    @Test
+    void sendMessage_groupRoom_doesNotCheckBlocks() {
+        when(participantService.isUserParticipant("room1", "user1")).thenReturn(true);
+        when(chatRoomRepository.findByIdAndIsActiveTrue("room1")).thenReturn(Optional.of(
+                com.lnt.chatmee.model.ChatRoom.builder().id("room1")
+                        .type(com.lnt.chatmee.model.ChatRoom.RoomType.PUBLIC).isActive(true).build()));
+        when(messageRepository.save(any())).thenAnswer(call -> call.getArgument(0));
+
+        messageService.sendMessage(textRequest("client-1"), "user1");
+
+        verifyNoInteractions(blocks);
+        verify(messageRepository).save(any());
+    }
+
+    @Test
+    void getMessages_blockedDm_historyStaysReadableWithoutBlockCheck() {
+        allowHistory();
+        when(messageRepository.findPage(eq("room1"), any(Pageable.class))).thenReturn(List.of());
+
+        assertThat(messageService.getMessages("room1", "user1", null, 50).messages()).isEmpty();
+        verifyNoInteractions(blocks);
+    }
+
+    private static com.lnt.chatmee.model.ChatRoom activeDm() {
+        return com.lnt.chatmee.model.ChatRoom.builder().id("room1")
+                .type(com.lnt.chatmee.model.ChatRoom.RoomType.DIRECT_MESSAGE).memberKey("user1:user2")
+                .state(com.lnt.chatmee.model.RoomState.ACTIVE).isActive(true).build();
+    }
+
+    private static com.lnt.chatmee.model.ChatRoom requestedRoom() {
+        return com.lnt.chatmee.model.ChatRoom.builder().id("room1")
+                .type(com.lnt.chatmee.model.ChatRoom.RoomType.DIRECT_MESSAGE)
+                .state(com.lnt.chatmee.model.RoomState.REQUESTED).isActive(true).build();
+    }
+
+    // CM-075 AC1: a message after hiddenAt brings the DM back for the member who hid it (AC-009-21, D-06)
+
+    @Test
+    void sendMessage_persistedText_clearsEarlierHiddenAtBeforeActivity() {
+        var request = new com.lnt.chatmee.dto.request.ChatMessageRequest();
+        request.setRoomId("dm"); request.setContent("hello again");
+        when(participantService.isUserParticipant("dm", "user1")).thenReturn(true);
+        when(participantService.getParticipantUserIds("dm")).thenReturn(Set.of("user1", "user2"));
+        when(messageRepository.save(any())).thenAnswer(call -> call.getArgument(0));
+
+        ChatMessageResponse response = messageService.sendMessage(request, "user1");
+
+        var order = inOrder(messageRepository, participantRepository, userEvents);
+        order.verify(messageRepository).save(any());
+        order.verify(participantRepository).unhideBefore("dm", response.createdAt());
+        order.verify(userEvents).roomActivity(eq(Set.of("user1", "user2")), eq("dm"),
+            any(com.lnt.chatmee.dto.event.LastMessageSummary.class));
+    }
+
+    @Test
+    void sendMessage_unhideFails_returnsSavedMessageAndStillPublishesActivity() {
+        var request = new com.lnt.chatmee.dto.request.ChatMessageRequest();
+        request.setRoomId("dm"); request.setContent("hello again");
+        when(participantService.isUserParticipant("dm", "user1")).thenReturn(true);
+        when(participantService.getParticipantUserIds("dm")).thenReturn(Set.of("user1", "user2"));
+        when(messageRepository.save(any())).thenAnswer(call -> call.getArgument(0));
+        when(participantRepository.unhideBefore(eq("dm"), any())).thenThrow(new DuplicateKeyException("db down"));
+
+        assertThat(messageService.sendMessage(request, "user1").content()).isEqualTo("hello again");
+        verify(userEvents).roomActivity(eq(Set.of("user1", "user2")), eq("dm"),
+            any(com.lnt.chatmee.dto.event.LastMessageSummary.class));
+    }
+
+    @Test
+    void sendMessage_systemMessage_doesNotUnhide() {
+        var request = new com.lnt.chatmee.dto.request.ChatMessageRequest();
+        request.setRoomId("dm"); request.setContent("system"); request.setMessageType(Message.MessageType.SYSTEM);
+        when(participantService.isUserParticipant("dm", "user1")).thenReturn(true);
+        when(messageRepository.save(any())).thenAnswer(call -> call.getArgument(0));
+
+        messageService.sendMessage(request, "user1");
+
+        verifyNoInteractions(participantRepository);
+    }
 }

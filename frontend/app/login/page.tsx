@@ -1,81 +1,100 @@
 "use client";
 
 import { LoginForm } from "@/components/LoginForm";
-import BlurText from "@/components/ui/shadcn-io/blur-text";
-import { motion } from "motion/react";
-import { useSearchParams, useRouter } from "next/navigation";
-import { useEffect, useState, Suspense } from "react";
+import { Skeleton } from "@/components/ui/skeleton";
+import Link from "next/link";
+import { useRouter, useSearchParams } from "next/navigation";
+import { useEffect, useRef, useState, Suspense } from "react";
 import { useAuthStore } from "@/lib/stores/authStore";
-import toast from "react-hot-toast";
-import React from "react";
-import { useShallow } from "zustand/react/shallow";
+
+function LoginSkeleton() {
+  return (
+    <div
+      role="status"
+      aria-label="Checking your session"
+      className="flex w-full max-w-sm flex-col items-center gap-6"
+    >
+      <Skeleton className="h-12 w-44 bg-muted" />
+      <Skeleton className="h-56 w-full rounded-md bg-muted" />
+    </div>
+  );
+}
 
 const LoginContent = () => {
-  const searchParams = useSearchParams();
   const router = useRouter();
-  const { isAuthenticated, loading } = useAuthStore(
-    useShallow((state) => ({
-      isAuthenticated: state.isAuthenticated,
-      loading: state.loading,
-    }))
-  );
-  const checkAuthStatus = useAuthStore((state) => state.checkAuthStatus);
-  const [hasCheckedAuth, setHasCheckedAuth] = useState(false);
-
+  const routerRef = useRef(router);
   useEffect(() => {
-    const fetchAuthStatus = async () => {
-      await checkAuthStatus();
-      setHasCheckedAuth(true); // Mark that we've checked
+    routerRef.current = router;
+  }, [router]);
+  const checkAuthStatus = useAuthStore((state) => state.checkAuthStatus);
+  const unreachable = useAuthStore((state) => state.unreachable);
+  const expired = useSearchParams().get("reason") === "expired";
+  const [checked, setChecked] = useState(false);
+  const [retrying, setRetrying] = useState(false);
+
+  const retry = async () => {
+    setRetrying(true);
+    await checkAuthStatus();
+    setRetrying(false);
+    if (useAuthStore.getState().isAuthenticated) routerRef.current.replace("/dashboard");
+  };
+
+  // The server decides: /auth/me 200 -> dashboard, 401 -> the form. Nothing client-side gates this.
+  useEffect(() => {
+    let cancelled = false;
+    checkAuthStatus().then(() => {
+      if (cancelled) return;
+      if (useAuthStore.getState().isAuthenticated) {
+        routerRef.current.replace("/dashboard");
+      } else {
+        setChecked(true);
+      }
+    });
+    return () => {
+      cancelled = true;
     };
-    fetchAuthStatus();
   }, [checkAuthStatus]);
 
-  useEffect(() => {
-    // Only redirect after initial auth check is done
-    if (hasCheckedAuth && !loading && isAuthenticated) {
-      router.push("/dashboard");
-    }
-  }, [hasCheckedAuth, isAuthenticated, loading, router]);
-
-  useEffect(() => {
-    const error = searchParams.get("error");
-    if (error === "true") {
-      toast.error("Login failed. Please try again.", {
-        id: "login-error", // Prevent duplicate toasts
-      });
-    }
-  }, [searchParams]);
+  if (!checked) return <LoginSkeleton />;
 
   return (
-    <div className="flex flex-col justify-center items-center space-y-6 sm:space-y-10 px-4 sm:px-6 lg:px-8">
-      <BlurText
-        text="Welcome to Chatmee"
-        delay={333}
-        animateBy="words"
-        direction="top"
-        className="text-4xl sm:text-5xl md:text-6xl lg:text-7xl text-green-300 font-semibold borel-regular text-center max-w-4xl"
-      />
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 1, duration: 0.5 }}
-        className="w-full"
-      >
-        <LoginForm />
-      </motion.div>
+    <div className="flex w-full max-w-sm flex-col gap-6">
+      <div className="flex flex-col items-center gap-3 text-center">
+        <Link href="/" className="rounded-sm pt-2 font-brand text-5xl leading-none">
+          ChatMee
+        </Link>
+        <p className="text-sm text-muted-foreground">Your rooms and people are one click away.</p>
+      </div>
+      {unreachable ? (
+        <div role="alert" className="rounded-xl border border-warning/40 bg-warning-surface px-4 py-3 text-sm">
+          <p className="font-semibold text-warning">Can&apos;t reach ChatMee right now.</p>
+          <p className="mt-1 text-muted-foreground">
+            The server may be waking up. Try again in a minute.
+          </p>
+          <button
+            type="button"
+            onClick={() => void retry()}
+            disabled={retrying}
+            className="mt-2 rounded-sm font-semibold text-foreground underline underline-offset-4 disabled:opacity-60"
+          >
+            {retrying ? "Checking…" : "Try again"}
+          </button>
+        </div>
+      ) : (
+        expired && (
+          <p role="status" className="rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-sm">
+            Your session ended. Sign in again.
+          </p>
+        )
+      )}
+      <LoginForm />
     </div>
   );
 };
 
 const Login = () => {
   return (
-    <Suspense
-      fallback={
-        <div className="flex justify-center items-center min-h-screen">
-          Loading...
-        </div>
-      }
-    >
+    <Suspense fallback={<LoginSkeleton />}>
       <LoginContent />
     </Suspense>
   );

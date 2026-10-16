@@ -2,10 +2,17 @@ package com.lnt.chatmee.repository;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
 
 import com.lnt.chatmee.config.MongoConfig;
 import com.lnt.chatmee.model.Message;
@@ -15,8 +22,11 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.data.mongodb.test.autoconfigure.DataMongoTest;
 import org.springframework.context.annotation.Import;
+import org.springframework.dao.DuplicateKeyException;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.mongodb.core.MongoTemplate;
+import org.springframework.data.mongodb.core.query.Criteria;
+import org.springframework.data.mongodb.core.query.Query;
 import org.springframework.test.context.ActiveProfiles;
 
 @DataMongoTest
@@ -120,6 +130,69 @@ class MessageRepositoryIT {
     }
 
     @Test
+    void messages_startup_createsUniqueClientMessageIndex() {
+        org.bson.Document index = mongo.getCollection("messages").listIndexes()
+                .into(new ArrayList<>()).stream()
+                .filter(document -> "messages_room_sender_client".equals(document.getString("name")))
+                .findFirst().orElseThrow();
+        assertThat(index.getBoolean("unique")).isTrue();
+        assertThat(new ArrayList<>(index.get("key", org.bson.Document.class).keySet()))
+                .containsExactly("chatRoomId", "senderId", "clientMessageId");
+        assertThat(index.get("partialFilterExpression", org.bson.Document.class))
+                .isEqualTo(new org.bson.Document("clientMessageId", new org.bson.Document("$exists", true)));
+    }
+
+    @Test
+    void save_duplicateClientMessageIdInSameRoomAndSender_rejectsSecondRow() {
+        String clientMessageId = UUID.randomUUID().toString();
+        saveWithClientId(clientMessageId, "first");
+
+        assertThatThrownBy(() -> saveWithClientId(clientMessageId, "second"))
+                .isInstanceOf(DuplicateKeyException.class);
+        assertThat(mongo.count(Query.query(Criteria.where("chatRoomId").is(roomId)), Message.class)).isEqualTo(1);
+    }
+
+    @Test
+    void save_concurrentDuplicateClientMessageId_storesExactlyOneRow() throws Exception {
+        String clientMessageId = UUID.randomUUID().toString();
+        int attempts = 8;
+        ExecutorService pool = Executors.newFixedThreadPool(attempts);
+        CountDownLatch start = new CountDownLatch(1);
+        try {
+            List<Future<Boolean>> results = new ArrayList<>();
+            for (int i = 0; i < attempts; i++) {
+                String suffix = "concurrent-" + i;
+                results.add(pool.submit(() -> {
+                    start.await();
+                    try {
+                        saveUntracked(clientMessageId, suffix);
+                        return true;
+                    } catch (DuplicateKeyException expected) {
+                        return false;
+                    }
+                }));
+            }
+            start.countDown();
+            int stored = 0;
+            for (Future<Boolean> result : results) {
+                if (result.get(10, TimeUnit.SECONDS)) stored++;
+            }
+            for (int i = 0; i < attempts; i++) insertedIds.add(roomId + ":concurrent-" + i);
+            assertThat(stored).isEqualTo(1);
+            assertThat(mongo.count(Query.query(Criteria.where("chatRoomId").is(roomId)), Message.class)).isEqualTo(1);
+        } finally {
+            pool.shutdownNow();
+        }
+    }
+
+    @Test
+    void save_messagesWithoutClientMessageId_areNotConstrained() {
+        saveWithClientId(null, "no-client-1");
+        saveWithClientId(null, "no-client-2");
+        assertThat(mongo.count(Query.query(Criteria.where("chatRoomId").is(roomId)), Message.class)).isEqualTo(2);
+    }
+
+    @Test
     void messages_startup_createsRoomTimeAndIdCompoundIndex() {
         org.bson.Document index = mongo.getCollection("messages").listIndexes()
                 .into(new ArrayList<>()).stream()
@@ -131,6 +204,24 @@ class MessageRepositoryIT {
                 .containsExactly("chatRoomId", "createdAt", "_id");
     }
 
+    private Message saveWithClientId(String clientMessageId, String suffix) {
+        Message message = messages.save(clientMessage(clientMessageId, suffix));
+        insertedIds.add(message.getId());
+        return message;
+    }
+
+    /** Saves without registering the id for cleanup; used from worker threads. */
+    private void saveUntracked(String clientMessageId, String suffix) {
+        messages.save(clientMessage(clientMessageId, suffix));
+    }
+
+    private Message clientMessage(String clientMessageId, String suffix) {
+        Instant time = Instant.parse("2026-10-09T01:02:03Z");
+        return Message.builder().id(roomId + ":" + suffix).chatRoomId(roomId)
+                .senderId("sender").clientMessageId(clientMessageId).content("Client id test")
+                .type(Message.MessageType.TEXT).createdAt(time).updatedAt(time).build();
+    }
+
     private Message save(String suffix, Instant time, boolean deleted) {
         Message message = messages.save(Message.builder().id(roomId + ":" + suffix).chatRoomId(roomId)
                 .senderId("sender").content("Repository history test").type(Message.MessageType.TEXT)
@@ -138,4 +229,21 @@ class MessageRepositoryIT {
         insertedIds.add(message.getId());
         return message;
     }
+
+    @Test
+    void membershipSystemMessages_persisted_appearInHistoryAndNeverCountUnread() {
+        Instant marker = Instant.parse("2026-10-12T00:00:00Z");
+        for (String text : List.of("Alice joined", "Alice left", "Bob removed Alice")) {
+            var saved = messages.save(Message.builder().chatRoomId(roomId).senderId("SYSTEM")
+                .content(text).type(Message.MessageType.SYSTEM).createdAt(marker.plusSeconds(1))
+                .updatedAt(marker.plusSeconds(1)).isDeleted(false).build());
+            insertedIds.add(saved.getId());
+        }
+        assertThat(messages.findPage(roomId, PageRequest.of(0, 100)))
+            .extracting(Message::getContent).containsExactlyInAnyOrder("Alice joined", "Alice left", "Bob removed Alice");
+        assertThat(messages.countUnread(roomId, "reader", marker)).isZero();
+        save("text", marker.plusSeconds(2), false);
+        assertThat(messages.countUnread(roomId, "reader", marker)).isEqualTo(1);
+    }
+
 }

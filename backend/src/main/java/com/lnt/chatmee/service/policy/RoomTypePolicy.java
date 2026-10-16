@@ -11,7 +11,20 @@ import com.lnt.chatmee.model.Participant.Role;
 public interface RoomTypePolicy {
     ChatRoom.RoomType type();
     void checkJoin();
-    void checkAddParticipant();
+    /** Whether OWNER/ADMIN may invite users into this room type (AC-009-1). */
+    void checkInvite();
+
+    default void checkRemoveMember(String callerId, Role callerRole, String targetId, Role targetRole) {
+        if (callerId.equals(targetId) || (callerRole != Role.OWNER
+                && !(callerRole == Role.ADMIN && targetRole == Role.MEMBER))) {
+            throw new com.lnt.chatmee.exception.ForbiddenActionException("Cannot remove this member");
+        }
+    }
+
+    /** Role changes are a group-room feature; direct messages have no roles to change. */
+    default void checkRoleChange() {
+    }
+
     void checkUpdate(UpdateChatRoomRequest request);
     void checkLeave(ChatRoom room, String userId);
     ChatRoom create(CreateChatRoomRequest request, String creatorId, Predicate<String> userExists);

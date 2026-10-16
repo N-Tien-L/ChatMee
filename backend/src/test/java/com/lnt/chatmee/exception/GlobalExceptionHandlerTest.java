@@ -44,6 +44,12 @@ class GlobalExceptionHandlerTest {
     }
 
     @Test
+    void getRoom_dailyLimitReached_returns429ProblemWithRetryAfter() throws Exception {
+        roomFailure(new RateLimitExceededException(42), 429, "RATE_LIMITED")
+                .andExpect(header().string("Retry-After", "42"));
+    }
+
+    @Test
     void getRoom_missingRoom_returns404Problem() throws Exception {
         roomFailure(new ChatRoomNotFoundException("Room not found"), 404, "ROOM_NOT_FOUND");
     }
@@ -111,7 +117,8 @@ class GlobalExceptionHandlerTest {
     void getUser_missingUser_returns404InsteadOfSuccessEnvelope() throws Exception {
         var userService = mock(com.lnt.chatmee.service.UserService.class);
         when(userService.getUserSummary("missing")).thenThrow(new com.lnt.chatmee.exception.UserNotFoundException("Not found"));
-        var userMvc = MockMvcBuilders.standaloneSetup(new com.lnt.chatmee.controller.UserApiController(userService))
+        var userMvc = MockMvcBuilders.standaloneSetup(new com.lnt.chatmee.controller.UserApiController(userService,
+                mock(com.lnt.chatmee.service.BlockService.class)))
                 .setControllerAdvice(new GlobalExceptionHandler()).build();
         check(userMvc.perform(get("/api/v1/users/missing")), 404, "USER_NOT_FOUND");
     }

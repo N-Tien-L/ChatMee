@@ -1,58 +1,36 @@
 import React, { useEffect, useRef, useState } from "react";
-import { ChatRoom } from "@/lib/types";
-import { RoomType } from "@/lib/types";
-import {
-  MoreVertical,
-  Users,
-  Lock,
-  Globe,
-  Trash2,
-  UserPlus,
-  UserMinus,
-  Settings,
-  Check,
-  Info,
-} from "lucide-react";
+import { ChatRoom, RoomType } from "@/lib/types";
+import { MoreVertical, Lock, Trash2, UserMinus, Info, EyeOff } from "lucide-react";
 import { useAuthStore } from "@/lib/stores/authStore";
 import { useChatRoomsStore } from "@/lib/stores/chatRoomsStore";
-import { RoomInfoDialog } from "./RoomInfoDialog";
-import { RoomSettingsDialog } from "./RoomSettingsDialog";
+import { ConfirmDialog } from "@/components/common/ConfirmDialog";
+import { RelativeTime } from "@/components/common/RelativeTime";
+import { RoomAvatar } from "@/components/common/RoomAvatar";
+import { UnreadBadge } from "@/components/common/UnreadBadge";
+import { UserAvatar } from "@/components/common/UserAvatar";
+import { RoomPanel } from "./RoomPanel";
+import { LeaveRoomConfirm } from "./LeaveRoomConfirm";
+import { canDeleteRoom } from "./roomPermissions";
 
 interface ChatRoomListItemProps {
   room: ChatRoom;
-  onJoin: () => Promise<boolean>;
   onLeave?: () => Promise<boolean>;
   onDelete: () => Promise<boolean>;
   onClick?: () => void;
   isSelected?: boolean;
 }
 
-const roomTypeConfig = {
-  [RoomType.PUBLIC]: {
-    Icon: Globe,
-    color: "green",
-    label: "Public",
-  },
-  [RoomType.PRIVATE]: {
-    Icon: Lock,
-    color: "orange",
-    label: "Private",
-  },
-  [RoomType.DIRECT_MESSAGE]: {
-    Icon: Users,
-    color: "blue",
-    label: "Direct",
-  },
-  default: {
-    Icon: Users,
-    color: "gray",
-    label: "Room",
-  },
+const previewText = (room: ChatRoom, currentUserId: string | undefined): string => {
+  const last = room.lastMessage;
+  if (!last) return room.description || "No messages yet";
+  if (last.senderId === currentUserId) return `You: ${last.preview}`;
+  // In a direct message the sender is obvious; the preview is just their words.
+  if (room.roomType === RoomType.DIRECT_MESSAGE) return last.preview;
+  return `${last.senderName || "Someone"}: ${last.preview}`;
 };
 
 const ChatRoomListItem: React.FC<ChatRoomListItemProps> = ({
   room,
-  onJoin,
   onLeave,
   onDelete,
   onClick,
@@ -61,21 +39,21 @@ const ChatRoomListItem: React.FC<ChatRoomListItemProps> = ({
   const [showActions, setShowActions] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [showInfoDialog, setShowInfoDialog] = useState(false);
-  const [showSettingsDialog, setShowSettingsDialog] = useState(false);
+  const [confirming, setConfirming] = useState<"leave" | "delete" | null>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
   // Dialogs opened from the menu return focus here (the menu item is gone by then).
   const actionsButtonRef = useRef<HTMLButtonElement>(null);
   const roomName = room.displayName || room.roomName || "Direct Message";
-  const { user } = useAuthStore();
-  const { updateRoom } = useChatRoomsStore();
-  const roomUI = roomTypeConfig[room.roomType] || roomTypeConfig.default;
-  const { Icon, color, label } = roomUI;
+  const user = useAuthStore((state) => state.user);
 
-  // Check if current user is already in the room
-  const isUserInRoom = room.participants?.includes(user?.id || "");
-
-  // Check if current user is the room's creator
-  const isUserCreator = room.createdBy == user?.id;
+  const isDirect = room.roomType === RoomType.DIRECT_MESSAGE;
+  const isPending = room.state === "REQUESTED";
+  const unread = room.unreadCount ?? 0;
+  const hideRoom = useChatRoomsStore((state) => state.hideRoom);
+  // Actions follow the caller's participant role, never `createdBy` (SPEC-009 AC-009-25).
+  // A DM is never deleted, only hidden for the caller (SPEC-009 AC-009-21/22).
+  const mayDelete = !isDirect && canDeleteRoom(room.myRole);
+  const activityAt = room.lastActivityAt || room.createdAt;
 
   useEffect(() => {
     const handleClickOutSide = (event: MouseEvent) => {
@@ -105,124 +83,89 @@ const ChatRoomListItem: React.FC<ChatRoomListItemProps> = ({
     };
   }, [showActions]);
 
-  const handleJoin = async (e: React.MouseEvent) => {
-    e.stopPropagation();
+  const runConfirmed = async (action: (() => Promise<boolean>) | undefined) => {
+    if (!action) return;
     setIsLoading(true);
     try {
-      await onJoin();
+      await action();
     } finally {
       setIsLoading(false);
       setShowActions(false);
     }
   };
 
-  const handleLeave = async (e: React.MouseEvent) => {
-    e.stopPropagation();
-    if (
-      window.confirm(
-        `Are you sure you want to leave "${room.displayName || room.roomName}"?`
-      )
-    ) {
-      setIsLoading(true);
-      try {
-        if (onLeave) {
-          await onLeave();
-        }
-      } finally {
-        setIsLoading(false);
-        setShowActions(false);
-      }
-    }
-  };
-
-  const handleDelete = async (e: React.MouseEvent) => {
-    e.stopPropagation();
-    if (
-      window.confirm(
-        `Are you sure you want to delete "${
-          room.displayName || room.roomName
-        }"?`
-      )
-    ) {
-      setIsLoading(true);
-      try {
-        await onDelete();
-      } finally {
-        setIsLoading(false);
-        setShowActions(false);
-      }
-    }
-  };
-
   return (
     <div
-      className={`relative group cursor-pointer transition-colors ${
+      className={`relative group cursor-pointer rounded-xl transition-all duration-200 ${
         isSelected
-          ? "bg-blue-50 border-l-4 border-blue-500"
-          : "hover:bg-gray-50 active:bg-gray-100"
+          ? "bg-sidebar-accent shadow-[inset_3px_0_0_var(--primary)] ring-1 ring-primary/15"
+          : "hover:bg-accent/60 active:bg-accent"
       }`}
       onClick={onClick}
     >
-      <div className="flex items-center p-2 sm:p-3 md:p-4 gap-2 sm:gap-3">
-        {/* Room Avatar/Icon - Responsive */}
+      <div className="flex min-h-14 items-center gap-3 px-2.5 py-2.5">
         <div className="flex-shrink-0">
-          <div className="w-10 h-10 sm:w-11 sm:h-11 md:w-12 md:h-12 rounded-full bg-gradient-to-br from-blue-400 to-purple-500 flex items-center justify-center text-white font-semibold text-sm sm:text-base md:text-lg">
-            {room.displayName || room.roomName
-              ? (room.displayName || room.roomName).charAt(0).toUpperCase()
-              : "DM"}
-          </div>
+          {isDirect ? (
+            <UserAvatar
+              name={roomName}
+              avatarUrl={room.counterpart?.avatarUrl}
+              size="lg"
+            />
+          ) : (
+            <RoomAvatar name={roomName} className="h-10 w-10 rounded-xl" />
+          )}
         </div>
 
-        {/* Room Info - Responsive */}
         <div className="flex-1 min-w-0">
-          <div className="flex items-center justify-between mb-0.5 sm:mb-1 gap-2">
-            <h3 className="text-xs sm:text-sm md:text-sm font-medium text-gray-900 truncate min-w-0">
+          <div className="flex items-center justify-between mb-0.5 gap-2">
+            <h3
+              className={`text-sm text-foreground truncate min-w-0 flex items-center gap-1 ${
+                unread > 0 ? "font-semibold" : "font-medium"
+              }`}
+            >
+              {room.roomType === RoomType.PRIVATE && (
+                <Lock
+                  className="w-3.5 h-3.5 flex-shrink-0 text-muted-foreground"
+                  role="img"
+                  aria-label="Private room"
+                />
+              )}
               {/* Keyboard entry point; the click bubbles to the row's onClick. */}
               <button
                 type="button"
                 className="max-w-full truncate text-left rounded"
                 aria-current={isSelected ? "true" : undefined}
               >
-                {room.displayName || room.roomName}
+                {roomName}
               </button>
             </h3>
-            {/* Room Type Badge - Show only on larger screens */}
-            <div className="hidden sm:flex items-center space-x-1 flex-shrink-0">
-              <Icon
-                className={`w-3.5 h-3.5 md:w-4 md:h-4 text-${color}-500`}
-                aria-hidden="true"
+            {activityAt && (
+              <RelativeTime
+                value={activityAt}
+                className="font-mono text-[11px] tabular text-muted-foreground flex-shrink-0"
               />
-              <span
-                className={`text-xs px-1.5 py-0.5 md:px-2 md:py-1 rounded-full ${color}`}
-              >
-                {label}
-              </span>
-            </div>
+            )}
           </div>
 
           <div className="flex items-center justify-between gap-2">
-            {room.description && (
-              <p className="text-xs text-gray-500 truncate hidden md:block">
-                {room.description}
-              </p>
-            )}
-            <div className="flex items-center text-xs text-gray-400 flex-shrink-0">
-              <Users className="w-3 h-3 mr-1" aria-hidden="true" />
-              <span className="hidden sm:inline">{room.maxUsers || "∞"}</span>
+            <p
+              className={`text-xs truncate ${
+                unread > 0 ? "text-foreground font-medium" : "text-muted-foreground"
+              }`}
+            >
+              {previewText(room, user?.id)}
+            </p>
+            <div className="flex items-center gap-1 flex-shrink-0">
+              {isPending && (
+                <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-warning-surface text-warning">
+                  Pending
+                </span>
+              )}
+              <UnreadBadge count={unread} />
             </div>
-          </div>
-
-          {/* Last Activity - Desktop only */}
-          <div className="hidden md:flex items-center justify-between mt-1">
-            <span className="text-xs text-gray-400">
-              {room.createdAt
-                ? new Date(room.createdAt).toLocaleDateString()
-                : "Recently"}
-            </span>
           </div>
         </div>
 
-        {/* Actions Menu - Responsive */}
         <div className="flex-shrink-0 ml-1">
           <div className="relative" ref={dropdownRef}>
             <button
@@ -233,91 +176,71 @@ const ChatRoomListItem: React.FC<ChatRoomListItemProps> = ({
                 setShowActions(!showActions);
               }}
               // Always visible on touch screens; on desktop shown on hover or keyboard focus.
-              className="p-1 sm:p-1.5 rounded-lg hover:bg-gray-200 opacity-100 md:opacity-0 md:group-hover:opacity-100 md:group-focus-within:opacity-100 md:focus-visible:opacity-100 transition-opacity touch-manipulation"
+              className="p-1 sm:p-1.5 rounded-lg hover:bg-accent opacity-100 md:opacity-0 md:group-hover:opacity-100 md:group-focus-within:opacity-100 md:focus-visible:opacity-100 transition-opacity touch-manipulation"
               disabled={isLoading}
               aria-label={`Actions for ${roomName}`}
               aria-haspopup="true"
               aria-expanded={showActions}
             >
-              <MoreVertical className="w-4 h-4 text-gray-500" aria-hidden="true" />
+              <MoreVertical className="w-4 h-4 text-muted-foreground" aria-hidden="true" />
             </button>
 
-            {/* Dropdown Actions */}
             {showActions && (
-              <div className="absolute right-0 top-8 w-48 bg-white border border-gray-200 rounded-lg shadow-lg z-10">
+              <div className="absolute right-0 top-8 w-48 bg-card border border-border rounded-lg shadow-lg z-10">
                 <div className="py-1">
-                  {/* Show Join button only if user is NOT in the room */}
-                  {!isUserInRoom && (
-                    <button
-                      onClick={handleJoin}
-                      disabled={isLoading}
-                      className="w-full flex items-center px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 disabled:opacity-50"
-                    >
-                      <UserPlus size={16} className="mr-2" />
-                      Join Room
-                    </button>
-                  )}
-
-                  {/* Show Leave button only if user IS in the room, onLeave is provided, AND it's NOT a Direct Message */}
-                  {isUserInRoom &&
-                    onLeave &&
-                    room.roomType !== RoomType.DIRECT_MESSAGE && (
-                      <button
-                        onClick={handleLeave}
-                        disabled={isLoading}
-                        className="w-full flex items-center px-4 py-2 text-sm text-orange-600 hover:bg-orange-50 disabled:opacity-50"
-                      >
-                        <UserMinus size={16} className="mr-2" />
-                        Leave Room
-                      </button>
-                    )}
-
-                  {/* Show "Already Joined" as disabled option if user is in room, no onLeave, AND it's NOT a Direct Message */}
-                  {isUserInRoom &&
-                    !onLeave &&
-                    room.roomType !== RoomType.DIRECT_MESSAGE && (
-                      <div className="w-full flex items-center px-4 py-2 text-sm text-green-600 bg-green-50 cursor-not-allowed">
-                        <Check size={16} className="mr-2" />
-                        Already Joined
-                      </div>
-                    )}
-
-                  {isUserCreator && (
-                    <>
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setShowActions(false);
-                          setShowSettingsDialog(true);
-                        }}
-                        className="w-full flex items-center px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
-                      >
-                        <Settings size={16} className="mr-2" />
-                        Room Settings
-                      </button>
-
-                      <button
-                        onClick={handleDelete}
-                        disabled={isLoading}
-                        className="w-full flex items-center px-4 py-2 text-sm text-red-600 hover:bg-red-50 disabled:opacity-50"
-                      >
-                        <Trash2 size={16} className="mr-2" />
-                        Delete Room
-                      </button>
-                    </>
-                  )}
-
                   <button
                     onClick={(e) => {
                       e.stopPropagation();
                       setShowActions(false);
                       setShowInfoDialog(true);
                     }}
-                    className="w-full flex items-center px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+                    className="w-full flex items-center px-4 py-2 text-sm text-foreground hover:bg-accent"
                   >
-                    <Info size={16} className="mr-2"></Info>
+                    <Info size={16} className="mr-2" aria-hidden="true" />
                     Info
                   </button>
+
+                  {onLeave && !isDirect && (
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setConfirming("leave");
+                      }}
+                      disabled={isLoading}
+                      className="w-full flex items-center px-4 py-2 text-sm text-warning hover:bg-warning-surface disabled:opacity-50"
+                    >
+                      <UserMinus size={16} className="mr-2" aria-hidden="true" />
+                      Leave
+                    </button>
+                  )}
+
+                  {isDirect && (
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        void runConfirmed(() => hideRoom(room.id));
+                      }}
+                      disabled={isLoading}
+                      className="w-full flex items-center px-4 py-2 text-sm text-foreground hover:bg-accent disabled:opacity-50"
+                    >
+                      <EyeOff size={16} className="mr-2" aria-hidden="true" />
+                      Hide
+                    </button>
+                  )}
+
+                  {mayDelete && (
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setConfirming("delete");
+                      }}
+                      disabled={isLoading}
+                      className="w-full flex items-center px-4 py-2 text-sm text-destructive hover:bg-danger-surface disabled:opacity-50"
+                    >
+                      <Trash2 size={16} className="mr-2" aria-hidden="true" />
+                      Delete
+                    </button>
+                  )}
                 </div>
               </div>
             )}
@@ -325,35 +248,38 @@ const ChatRoomListItem: React.FC<ChatRoomListItemProps> = ({
         </div>
       </div>
 
-      {/* Loading Overlay */}
       {isLoading && (
-        <div className="absolute inset-0 bg-white bg-opacity-50 flex items-center justify-center">
-          <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-500"></div>
+        <div className="absolute inset-0 bg-card/50 flex items-center justify-center">
+          <div className="motion-safe:animate-spin rounded-full h-4 w-4 border-b-2 border-primary"></div>
         </div>
       )}
 
-      {/* Room Info Dialog */}
-      <RoomInfoDialog
+      <LeaveRoomConfirm
+        open={confirming === "leave"}
+        onOpenChange={(open) => !open && setConfirming(null)}
+        roomId={room.id}
+        roomName={roomName}
+        roomType={room.roomType}
+        myRole={room.myRole}
+        myUserId={user?.id}
+        onConfirm={() => void runConfirmed(onLeave)}
+      />
+      <ConfirmDialog
+        open={confirming === "delete"}
+        onOpenChange={(open) => !open && setConfirming(null)}
+        title="Delete this room?"
+        description={`"${roomName}" and its messages will be removed for everyone.`}
+        confirmLabel="Delete"
+        destructive
+        onConfirm={() => void runConfirmed(onDelete)}
+      />
+
+      <RoomPanel
         roomId={room.id}
         isOpen={showInfoDialog}
         onClose={() => setShowInfoDialog(false)}
-        onOpenSettings={() => setShowSettingsDialog(true)}
         returnFocusRef={actionsButtonRef}
       />
-
-      {/* Room Settings Dialog */}
-      {isUserCreator && (
-        <RoomSettingsDialog
-          roomId={room.id}
-          isOpen={showSettingsDialog}
-          onClose={() => setShowSettingsDialog(false)}
-          returnFocusRef={actionsButtonRef}
-          onSaved={(updatedRoom) => {
-            // Update the room in the store
-            updateRoom(room.id, updatedRoom);
-          }}
-        />
-      )}
     </div>
   );
 };

@@ -4,38 +4,102 @@ import { userApi } from "../api/userApi";
 import {
     RoomType,
 } from "@/lib/types";
-import { ChatRoom, UserSummaryResponse } from "@/lib/types";
+import { ChatRoom, LastMessageSummary, UserSummaryResponse } from "@/lib/types";
 import { useAuthStore } from "./authStore";
 import toast from "react-hot-toast";
 import Fuse from "fuse.js";
 import { CreateChatRoomRequest } from "@/lib/types";
 
+/** `ROOM_REMOVED` reasons (docs/design/websocket-protocol.md, "User events"). */
+export type RoomEndReason = "LEFT" | "REMOVED" | "DELETED" | "HIDDEN" | "DECLINED" | "EXPIRED";
+
+const END_REASONS: readonly RoomEndReason[] = ["LEFT", "REMOVED", "DELETED", "HIDDEN", "DECLINED", "EXPIRED"];
+
+const isEndReason = (value: unknown): value is RoomEndReason =>
+    typeof value === "string" && (END_REASONS as readonly string[]).includes(value);
+
 interface chatRoomState {
     rooms: ChatRoom[];
     filteredRooms: ChatRoom[];
     searchQuery: string;
-    roomTypeFilter: RoomType | "ALL";
+    /** "ROOMS" = public and private group rooms (no direct messages). */
+    roomTypeFilter: RoomType | "ALL" | "ROOMS";
     loading: boolean;
     error: string | null;
     usersCache: Map<string, UserSummaryResponse>;
     isCreateRoomModalOpen: boolean;
+    /** Which create flow is open: a group room, or a direct message to one person (D-14). */
+    createRoomModalMode: "room" | "direct";
+    /** The room open in the conversation pane, or null. Drives the unread rules. */
+    activeRoomId: string | null;
+    /**
+     * Why a room left the list, by room id, from the `ROOM_REMOVED` user event. The open conversation reads it to show the
+     * right ended state without waiting for a room-topic frame. Cleared when the room comes back.
+     */
+    endedRooms: Record<string, RoomEndReason>;
 
+    setActiveRoom: (roomId: string | null) => void;
+    upsertRoom: (room: ChatRoom) => void;
+    removeRoom: (roomId: string, reason?: RoomEndReason) => void;
+    applyActivity: (roomId: string, lastMessage: LastMessageSummary) => void;
+    markRoomRead: (roomId: string) => Promise<void>;
+    handleUserEvent: (event: unknown) => Promise<void>;
+    getUnreadTotal: () => number;
     setRooms: (rooms: ChatRoom[]) => void;
     addRoom: (room: ChatRoom) => void;
     updateRoom: (id: string, updates: Partial<ChatRoom>) => void;
     deleteRoom: (id: string) => void;
     setSearchQuery: (query: string) => void;
-    setRoomTypeFilter: (filter: RoomType | "ALL") => void;
+    setRoomTypeFilter: (filter: RoomType | "ALL" | "ROOMS") => void;
     fetchRooms: () => Promise<void>;
     joinRoom: (roomId: string) => Promise<boolean>;
     leaveRoom: (roomId: string) => Promise<boolean>;
     deleteRoomById: (roomId: string) => Promise<boolean>;
     applyFilters: () => void;
-    createRoom: (request: CreateChatRoomRequest) => Promise<boolean>;
+    /** Resolves to the created room, or null when creation failed. */
+    createRoom: (request: CreateChatRoomRequest) => Promise<ChatRoom | null>;
+    /** The DM with this user: the listed one if it exists (never a duplicate), otherwise a new DM request (AC-008-8). */
+    startDirectMessage: (userId: string) => Promise<ChatRoom | null>;
+    /** Hide a DM for the caller only (AC-009-21); the row leaves the list and the open view says so. */
+    hideRoom: (roomId: string) => Promise<boolean>;
+    /** Mirror a block or unblock on the caller's DM with that user (`blocked`, AC-009-19); no event comes for it. */
+    setCounterpartBlocked: (userId: string, blocked: boolean) => void;
     getDirectMessageDisplayName: (room: ChatRoom) => Promise<string>;
-    openCreateRoomModal: () => void;
+    openCreateRoomModal: (mode?: "room" | "direct") => void;
     closeCreateRoomModal: () => void;
 }
+
+const activityTime = (room: ChatRoom): number => {
+    const time = Date.parse(room.lastActivityAt || room.createdAt || "");
+    return Number.isNaN(time) ? 0 : time;
+};
+
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+    typeof value === "object" && value !== null;
+
+const isRoom = (value: unknown): value is ChatRoom =>
+    isRecord(value) && typeof value.id === "string";
+
+const isLastMessage = (value: unknown): value is LastMessageSummary =>
+    isRecord(value) && typeof value.senderId === "string" && typeof value.createdAt === "string";
+
+/** Room ids whose GET /rooms/{id} is in flight, so an event burst fetches each unknown room once. */
+const fetchingRooms = new Set<string>();
+
+const withDisplayName = (room: ChatRoom): ChatRoom =>
+    room.roomType === RoomType.DIRECT_MESSAGE && room.counterpart?.name
+        ? { ...room, displayName: room.counterpart.name }
+        : room;
+
+/** Drops ended reasons for rooms that are listed again; returns the same object when nothing changes. */
+const withoutEnded = (ended: Record<string, RoomEndReason>, ids: string[]): Record<string, RoomEndReason> => {
+    if (!ids.some((id) => id in ended)) return ended;
+    const next = { ...ended };
+    for (const id of ids) delete next[id];
+    return next;
+};
+
+const tabIsVisible = () => typeof document === "undefined" || document.visibilityState === "visible";
 
 export const useChatRoomsStore = create<chatRoomState>((set, get) => ({
     // Initial state
@@ -47,16 +111,126 @@ export const useChatRoomsStore = create<chatRoomState>((set, get) => ({
     error: null,
     usersCache: new Map(),
     isCreateRoomModalOpen: false,
+    createRoomModalMode: "room",
+    activeRoomId: null,
+    endedRooms: {},
 
     // Actions
+    setActiveRoom: (roomId) => set({ activeRoomId: roomId }),
+
+    upsertRoom: (room) => {
+        const next = withDisplayName(room);
+        set((state) => ({
+            rooms: state.rooms.some((r) => r.id === next.id)
+                ? state.rooms.map((r) => (r.id === next.id ? { ...r, ...next } : r))
+                : [...state.rooms, next],
+            endedRooms: withoutEnded(state.endedRooms, [next.id]),
+        }));
+        get().applyFilters();
+    },
+
+    removeRoom: (roomId, reason) => {
+        set((state) => ({
+            rooms: state.rooms.filter((room) => room.id !== roomId),
+            activeRoomId: state.activeRoomId === roomId ? null : state.activeRoomId,
+            endedRooms: reason ? { ...state.endedRooms, [roomId]: reason } : state.endedRooms,
+        }));
+        get().applyFilters();
+    },
+
+    markRoomRead: async (roomId) => {
+        const room = get().rooms.find((r) => r.id === roomId);
+        if (room && room.unreadCount) get().updateRoom(roomId, { unreadCount: 0 });
+        try {
+            await chatRoomApi.markRoomRead(roomId);
+        } catch {
+            // The marker is retried by the next open or refetch; the list keeps working.
+        }
+    },
+
+    applyActivity: (roomId, lastMessage) => {
+        const currentUserId = useAuthStore.getState().user?.id;
+        const isOpenAndVisible = get().activeRoomId === roomId && tabIsVisible();
+        const fromMe = lastMessage.senderId === currentUserId;
+        set((state) => ({
+            rooms: state.rooms.map((room) =>
+                room.id === roomId
+                    ? {
+                          ...room,
+                          lastMessage,
+                          lastActivityAt: lastMessage.createdAt,
+                          unreadCount: fromMe || isOpenAndVisible ? room.unreadCount ?? 0 : (room.unreadCount ?? 0) + 1,
+                      }
+                    : room
+            ),
+        }));
+        get().applyFilters();
+        if (isOpenAndVisible && !fromMe) void get().markRoomRead(roomId);
+    },
+
+    handleUserEvent: async (event) => {
+        if (!isRecord(event) || typeof event.type !== "string" || !isRecord(event.payload)) return;
+        const payload = event.payload;
+        const fetchUnknown = async (roomId: string) => {
+            if (fetchingRooms.has(roomId)) return;
+            fetchingRooms.add(roomId);
+            try {
+                const response = await chatRoomApi.getChatRoomById(roomId);
+                if (response.success) get().upsertRoom(response.data);
+            } catch {
+                // The next reconnect refetch recovers the room.
+            } finally {
+                fetchingRooms.delete(roomId);
+            }
+        };
+        switch (event.type) {
+            case "ROOM_ADDED":
+            case "ROOM_UPDATED":
+                if (isRoom(payload.room)) get().upsertRoom(payload.room);
+                break;
+            case "ROOM_REMOVED": {
+                const roomId = payload.roomId;
+                if (typeof roomId !== "string") break;
+                const reason = isEndReason(payload.reason) ? payload.reason : undefined;
+                // DM request outcomes for the sender (SPEC-009 AC-009-12/13): tell them even when the DM is not open.
+                if (reason === "DECLINED" || reason === "EXPIRED") {
+                    const name = get().rooms.find((r) => r.id === roomId)?.displayName;
+                    const to = name ? ` to ${name}` : "";
+                    toast(reason === "DECLINED" ? `Your message request${to} was declined` : `Your message request${to} expired`, {
+                        id: `dm-request-${roomId}`,
+                    });
+                }
+                get().removeRoom(roomId, reason);
+                break;
+            }
+            case "ROOM_ACTIVITY": {
+                const roomId = payload.roomId;
+                if (typeof roomId !== "string" || !isLastMessage(payload.lastMessage)) break;
+                if (get().rooms.some((r) => r.id === roomId)) {
+                    get().applyActivity(roomId, payload.lastMessage);
+                } else {
+                    await fetchUnknown(roomId);
+                }
+                break;
+            }
+            default:
+                break;
+        }
+    },
+
+    getUnreadTotal: () => get().rooms.reduce((sum, room) => sum + (room.unreadCount ?? 0), 0),
     setRooms: (rooms) => {
-        set({ rooms });
+        set((state) => ({ rooms, endedRooms: withoutEnded(state.endedRooms, rooms.map((room) => room.id)) }));
         get().applyFilters();
     },
 
     addRoom: (room) => {
+        // The ROOM_ADDED event can beat the create response, so the room may already be listed.
         set((state) => ({
-            rooms: [...state.rooms, room],
+            rooms: state.rooms.some((r) => r.id === room.id)
+                ? state.rooms.map((r) => (r.id === room.id ? { ...r, ...room } : r))
+                : [...state.rooms, room],
+            endedRooms: withoutEnded(state.endedRooms, [room.id]),
         }));
         get().applyFilters();
     },
@@ -119,22 +293,56 @@ export const useChatRoomsStore = create<chatRoomState>((set, get) => ({
             const response = await chatRoomApi.createChatRoom(request);
             if (response.success) {
                 // For Direct Message rooms, compute the display name before adding
-                if (response.data.roomType === RoomType.DIRECT_MESSAGE) {
-                    const displayName = await get().getDirectMessageDisplayName(response.data);
-                    get().addRoom({ ...response.data, displayName });
-                } else {
-                    get().addRoom(response.data);
-                }
-                toast.success("Room created successfully!");
-                return true;
+                const room =
+                    response.data.roomType === RoomType.DIRECT_MESSAGE
+                        ? { ...response.data, displayName: await get().getDirectMessageDisplayName(response.data) }
+                        : response.data;
+                get().addRoom(room);
+                // A DM that comes back ACTIVE already existed or accepted their pending request (AC-009-9): no request toast.
+                if (response.data.roomType !== RoomType.DIRECT_MESSAGE) toast.success("Room created successfully!");
+                else if (response.data.state === "REQUESTED") toast.success("Message request sent");
+                return room;
             } else {
                 toast.error(response.message || "Failed to create room");
-                return false;
+                return null;
             }
-        } catch {
-            toast.error("Failed to create room");
+        } catch (error) {
+            // Keep the server's reason, e.g. "Cannot message this user" (block or decline cooldown) or a daily limit.
+            toast.error(error instanceof Error && error.message ? error.message : "Failed to create room");
+            return null;
+        }
+    },
+
+    startDirectMessage: async (userId: string) => {
+        const isDmWith = (room: ChatRoom) =>
+            room.roomType === RoomType.DIRECT_MESSAGE && room.counterpart?.id === userId;
+        const existing = get().rooms.find(isDmWith);
+        if (existing) return existing;
+        const created = await get().createRoom({ roomType: RoomType.DIRECT_MESSAGE, participantId: userId, maxUsers: 2 });
+        if (!created) return null;
+        // The server returns the existing DM when there is one; the list keeps a single row per id either way.
+        return get().rooms.find((room) => room.id === created.id) ?? created;
+    },
+
+    hideRoom: async (roomId: string) => {
+        try {
+            await chatRoomApi.hideRoom(roomId);
+            get().removeRoom(roomId, "HIDDEN");
+            toast.success("Conversation hidden. It comes back with the next message.");
+            return true;
+        } catch (error) {
+            toast.error(error instanceof Error && error.message ? error.message : "Could not hide the conversation");
             return false;
         }
+    },
+
+    setCounterpartBlocked: (userId, blocked) => {
+        set((state) => ({
+            rooms: state.rooms.map((room) =>
+                room.roomType === RoomType.DIRECT_MESSAGE && room.counterpart?.id === userId ? { ...room, blocked } : room
+            ),
+        }));
+        get().applyFilters();
     },
 
     joinRoom: async (roomId: string) => {
@@ -188,10 +396,13 @@ export const useChatRoomsStore = create<chatRoomState>((set, get) => ({
 
     applyFilters: () => {
         const { rooms, searchQuery, roomTypeFilter } = get();
-        let filtered = [...rooms];
+        // Newest activity first; Array.sort is stable, so equal times keep their order.
+        let filtered = [...rooms].sort((a, b) => activityTime(b) - activityTime(a));
 
         // Apply room type filter
-        if (roomTypeFilter !== "ALL") {
+        if (roomTypeFilter === "ROOMS") {
+            filtered = filtered.filter((room) => room.roomType !== RoomType.DIRECT_MESSAGE);
+        } else if (roomTypeFilter !== "ALL") {
             filtered = filtered.filter((room) => room.roomType === roomTypeFilter);
         }
 
@@ -260,6 +471,6 @@ export const useChatRoomsStore = create<chatRoomState>((set, get) => ({
     },
 
     // Actions on create room modal
-    openCreateRoomModal: () => set({ isCreateRoomModalOpen: true }),
+    openCreateRoomModal: (mode = "room") => set({ isCreateRoomModalOpen: true, createRoomModalMode: mode }),
     closeCreateRoomModal: () => set({ isCreateRoomModalOpen: false }),
 }));

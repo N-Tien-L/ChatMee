@@ -1,10 +1,14 @@
 import React from "react";
+import { UserAvatar } from "../common/UserAvatar";
 
 interface TypingIndicatorProps {
   typingUserNames: string[];
   typingUsersCount: number;
 }
 
+const MAX_FACES = 3;
+
+/** Who is typing: their faces, a ghost bubble with a dot wave, and the names (D-16). */
 const TypingIndicator: React.FC<TypingIndicatorProps> = ({
   typingUserNames,
   typingUsersCount,
@@ -25,23 +29,21 @@ const TypingIndicator: React.FC<TypingIndicatorProps> = ({
       : "Someone is typing...";
 
   return (
-    <div className="flex justify-start px-3 sm:px-4 pb-2 flex-shrink-0">
-      <div className="max-w-[85%] sm:max-w-sm md:max-w-md lg:max-w-lg">
-        <p className="text-xs text-gray-500 mb-1 px-3 truncate">{typingText}</p>
-        <div className="px-3 sm:px-4 py-2 rounded-2xl bg-gray-100">
-          <div className="flex space-x-1">
-            <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce"></div>
-            <div
-              className="w-2 h-2 bg-gray-400 rounded-full animate-bounce"
-              style={{ animationDelay: "0.1s" }}
-            ></div>
-            <div
-              className="w-2 h-2 bg-gray-400 rounded-full animate-bounce"
-              style={{ animationDelay: "0.2s" }}
-            ></div>
-          </div>
-        </div>
-      </div>
+    <div className="animate-message-in flex flex-shrink-0 items-center gap-2.5 px-3 pb-2 sm:px-7">
+      <span className="flex -space-x-2" aria-hidden="true">
+        {typingUserNames.slice(0, MAX_FACES).map((name, index) => (
+          <UserAvatar key={`${name}-${index}`} name={name} size="sm" className="ring-2 ring-background" />
+        ))}
+      </span>
+      <span
+        className="flex items-center gap-1 rounded-2xl rounded-bl-md bg-card px-3 py-2.5 shadow-[0_4px_14px_-8px_rgb(0_0_0/0.4)] ring-1 ring-border"
+        aria-hidden="true"
+      >
+        {[0, 1, 2].map((dot) => (
+          <span key={dot} className="typing-dot h-1.5 w-1.5 rounded-full bg-primary" style={{ animationDelay: `${dot * 140}ms` }} />
+        ))}
+      </span>
+      <p className="truncate text-xs text-muted-foreground">{typingText}</p>
     </div>
   );
 };

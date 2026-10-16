@@ -86,6 +86,7 @@ class SubscriptionRevocationIT {
         for (String id : roomIds) {
             mongo.remove(Query.query(Criteria.where("chatRoomId").is(id)), Participant.class);
             mongo.remove(Query.query(Criteria.where("id").is(id)), ChatRoom.class);
+            mongo.remove(Query.query(Criteria.where("chatRoomId").is(id)), com.lnt.chatmee.model.Message.class);
         }
         for (User user : users) mongo.remove(user);
         for (String token : issuedTokens) redis.delete("ws-token:" + token);
@@ -106,6 +107,7 @@ class SubscriptionRevocationIT {
         BlockingQueue<JsonNode> typing = subscribeReady(observer, topic(roomId) + "/typing", null);
 
         leave(member);
+        assertThat(take(room).path("content").asString()).isEqualTo(member.getName() + " left");
         publishRoomAndTyping("after-leave");
 
         assertThat(take(room).path("marker").asString()).isEqualTo("after-leave");
@@ -122,6 +124,7 @@ class SubscriptionRevocationIT {
         BlockingQueue<JsonNode> typing = subscribeReady(observer, topic(roomId) + "/typing", null);
 
         leave(member);
+        assertThat(take(room).path("content").asString()).isEqualTo(member.getName() + " left");
         publishRoomAndTyping("still-member");
 
         assertThat(take(room).path("marker").asString()).isEqualTo("still-member");
@@ -279,7 +282,7 @@ class SubscriptionRevocationIT {
         long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(10);
         while (System.nanoTime() < deadline) {
             if (userId == null) messaging.convertAndSend(destination, (Object) Map.of("subscriptionReady", probe));
-            else messaging.convertAndSendToUser(userId, "/queue/errors", Map.of("subscriptionReady", probe));
+            else messaging.convertAndSendToUser(userId, destination.substring("/user".length()), Map.of("subscriptionReady", probe));
             if (probe.equals(readiness.poll(100, TimeUnit.MILLISECONDS))) return received;
         }
         throw new AssertionError("Subscription did not become ready: " + destination);
@@ -307,4 +310,39 @@ class SubscriptionRevocationIT {
         }
         throw new AssertionError("Expected presence marker within ten seconds");
     }
+
+    @Test
+    void removeMember_subscribedTabs_receiveRemovedEventAndNoFurtherRoomFrames() throws Exception {
+        List<BlockingQueue<JsonNode>> revoked = new ArrayList<>();
+        List<BlockingQueue<JsonNode>> events = new ArrayList<>();
+        for (int i = 0; i < 2; i++) {
+            var session = connect(member);
+            revoked.add(subscribeReady(session, topic(roomId), null));
+            revoked.add(subscribeReady(session, topic(roomId) + "/typing", null));
+            events.add(subscribeReady(session, "/user/queue/events", member.getId()));
+        }
+        var observer = connect(owner);
+        var room = subscribeReady(observer, topic(roomId), null);
+        var ownerEvents = subscribeReady(observer, "/user/queue/events", owner.getId());
+        mvc.perform(delete("/api/v1/rooms/" + roomId + "/members/" + member.getId())
+            .with(oauth2Login().oauth2User(principal(owner))).with(csrf().asHeader()))
+            .andExpect(status().isNoContent());
+        for (var queue : events) {
+            var event = take(queue);
+            assertThat(event.path("type").asString()).isEqualTo("ROOM_REMOVED");
+            assertThat(event.path("payload").path("reason").asString()).isEqualTo("REMOVED");
+            assertThat(event.path("payload").path("roomId").asString()).isEqualTo(roomId);
+        }
+        var announcement = take(room);
+        assertThat(announcement.path("type").asString()).isEqualTo("SYSTEM");
+        assertThat(announcement.path("content").asString()).isEqualTo(owner.getName() + " removed " + member.getName());
+        assertThat(mongo.findById(announcement.path("id").asString(), com.lnt.chatmee.model.Message.class)).isNotNull();
+        publishRoomAndTyping("after-removal");
+        assertThat(take(room).path("marker").asString()).isEqualTo("after-removal");
+        for (var queue : revoked) assertSilent(queue);
+        assertSilent(ownerEvents);
+        assertThat(participants.isUserParticipant(roomId, member.getId())).isFalse();
+        for (var session : sessions) assertThat(session.isConnected()).isTrue();
+    }
+
 }

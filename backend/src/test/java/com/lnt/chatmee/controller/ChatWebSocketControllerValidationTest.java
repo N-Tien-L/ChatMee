@@ -32,7 +32,10 @@ class ChatWebSocketControllerValidationTest {
     private final SimpMessagingTemplate messaging = mock(SimpMessagingTemplate.class);
     private final UserRepository users = mock(UserRepository.class);
     private final com.lnt.chatmee.service.ParticipantService participants = mock(com.lnt.chatmee.service.ParticipantService.class);
-    private final MessageService messages = spy(new MessageService(mock(com.lnt.chatmee.repository.ChatRoomRepository.class), participants, mock(com.lnt.chatmee.repository.MessageRepository.class), users));
+    private final MessageService messages = spy(new MessageService(mock(com.lnt.chatmee.repository.ChatRoomRepository.class), participants, mock(com.lnt.chatmee.repository.MessageRepository.class), users, mock(com.lnt.chatmee.service.UserEventPublisher.class),
+            mock(com.lnt.chatmee.service.DirectMessageRequestService.class),
+            mock(com.lnt.chatmee.repository.ParticipantRepository.class),
+            mock(com.lnt.chatmee.service.BlockService.class)));
     private final StaticApplicationContext context = new StaticApplicationContext();
     private final OptionalValidatorFactoryBean validator = new OptionalValidatorFactoryBean();
     private SimpAnnotationMethodMessageHandler handler;
@@ -58,12 +61,17 @@ class ChatWebSocketControllerValidationTest {
         context.close();
     }
 
+    /** Private errors carry the originating STOMP session id, so only that session receives them. */
+    private static Map<String, Object> privateTo(String sessionId) {
+        return argThat(headers -> sessionId.equals(headers.get(SimpMessageHeaderAccessor.SESSION_ID_HEADER)));
+    }
+
     @Test
     void sendMessage_contentOf5001Characters_reportsErrorWithoutSavingOrBroadcasting() {
         dispatch("/app/chat.sendMessage", 5001);
         verifyNoInteractions(messages, users, participants);
         ArgumentCaptor<StompError> error = ArgumentCaptor.forClass(StompError.class);
-        verify(messaging).convertAndSendToUser(eq("test-user"), eq("/queue/errors"), error.capture());
+        verify(messaging).convertAndSendToUser(eq("test-user"), eq("/queue/errors"), error.capture(), privateTo("test-session"));
         assertEquals("test-temp", error.getValue().getTempId());
         assertTrue(error.getValue().getMessage().contains("5000"));
         verifyNoMoreInteractions(messaging);
@@ -86,10 +94,33 @@ class ChatWebSocketControllerValidationTest {
         dispatch("/app/chat.sendMessage", 10, com.lnt.chatmee.model.Message.MessageType.SYSTEM);
         verifyNoInteractions(messages, users, participants);
         ArgumentCaptor<StompError> error = ArgumentCaptor.forClass(StompError.class);
-        verify(messaging).convertAndSendToUser(eq("test-user"), eq("/queue/errors"), error.capture());
+        verify(messaging).convertAndSendToUser(eq("test-user"), eq("/queue/errors"), error.capture(), privateTo("test-session"));
         assertEquals("test-temp", error.getValue().getTempId());
         assertEquals("VALIDATION_FAILED", error.getValue().getCode());
         assertTrue(error.getValue().getMessage().contains("Only TEXT messages can be sent"));
+        verifyNoMoreInteractions(messaging);
+    }
+
+    @Test
+    void sendMessage_tempIdOf65Characters_reportsErrorWithoutSavingOrBroadcasting() {
+        dispatch("/app/chat.sendMessage", 10, com.lnt.chatmee.model.Message.MessageType.TEXT, "t".repeat(65));
+        verifyNoInteractions(messages, users, participants);
+        ArgumentCaptor<StompError> error = ArgumentCaptor.forClass(StompError.class);
+        verify(messaging).convertAndSendToUser(eq("test-user"), eq("/queue/errors"), error.capture(), privateTo("test-session"));
+        assertEquals("VALIDATION_FAILED", error.getValue().getCode());
+        assertTrue(error.getValue().getMessage().contains("64"));
+        verifyNoMoreInteractions(messaging);
+    }
+
+    @Test
+    void sendMessage_tempIdOf64Characters_savesAndBroadcasts() {
+        when(users.findById("test-user")).thenReturn(Optional.of(
+                User.builder().id("test-user").name("Test User").build()));
+        when(participants.isUserParticipant("test-room", "test-user")).thenReturn(true);
+        doAnswer(invocation -> invocation.getArgument(0)).when(messages).persistMessage(any());
+        dispatch("/app/chat.sendMessage", 10, com.lnt.chatmee.model.Message.MessageType.TEXT, "t".repeat(64));
+        verify(messages).persistMessage(argThat(message -> "t".repeat(64).equals(message.getClientMessageId())));
+        verify(messaging).convertAndSend(eq("/topic/rooms/test-room"), any(ChatMessageResponse.class));
         verifyNoMoreInteractions(messaging);
     }
 
@@ -104,11 +135,15 @@ class ChatWebSocketControllerValidationTest {
     }
 
     private void dispatch(String destination, int length, com.lnt.chatmee.model.Message.MessageType type) {
+        dispatch(destination, length, type, "test-temp");
+    }
+
+    private void dispatch(String destination, int length, com.lnt.chatmee.model.Message.MessageType type, String tempId) {
         ChatMessageRequest request = new ChatMessageRequest();
         request.setRoomId("test-room");
         request.setContent("x".repeat(length));
         request.setMessageType(type);
-        request.setTempId("test-temp");
+        request.setTempId(tempId);
         SimpMessageHeaderAccessor headers = SimpMessageHeaderAccessor.create(SimpMessageType.MESSAGE);
         headers.setDestination(destination);
         headers.setSessionId("test-session");

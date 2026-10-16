@@ -10,14 +10,15 @@ import com.lnt.chatmee.exception.*;
 import com.lnt.chatmee.model.ChatRoom;
 import com.lnt.chatmee.model.ChatRoom.RoomType;
 import com.lnt.chatmee.model.Participant.Role;
+import com.lnt.chatmee.model.RoomState;
 
 class DirectRoomPolicyTest {
     private final DirectRoomPolicy policy = new DirectRoomPolicy();
     @Test void checkJoin_directRoom_throwsForbidden() {
         assertEquals("Only PUBLIC rooms can be joined", assertThrows(ForbiddenActionException.class, policy::checkJoin).getMessage());
     }
-    @Test void checkAddParticipant_directRoom_throwsForbiddenAction() {
-        assertEquals(ErrorCode.FORBIDDEN_ACTION, assertThrows(ForbiddenActionException.class, policy::checkAddParticipant).getErrorCode());
+    @Test void checkInvite_directRoom_throwsForbiddenAction() {
+        assertEquals(ErrorCode.FORBIDDEN_ACTION, assertThrows(ForbiddenActionException.class, policy::checkInvite).getErrorCode());
     }
     @Test void checkUpdate_capacityChange_throwsInvalidRequest() {
         var request = new UpdateChatRoomRequest(); request.setMaxUsers(2);
@@ -31,19 +32,21 @@ class DirectRoomPolicyTest {
     @Test void checkLeave_anyMember_throwsForbidden() {
         var room = ChatRoom.builder().createdBy("owner").build();
         for (String user : List.of("owner", "member")) {
-            assertEquals("Cannot leave direct message rooms. Please delete the room instead.",
+            assertEquals("Cannot leave direct message rooms. Use hide for direct messages.",
                 assertThrows(ForbiddenActionException.class, () -> policy.checkLeave(room, user)).getMessage());
         }
     }
-    @Test void create_twoUsers_buildsFixedCapacityAndInitialMemberships() {
+    @Test void create_twoUsers_buildsRequestedRoomWithOnlySenderAsInitialMember() {
         var request = request("member");
         var room = policy.create(request, "owner", id -> id.equals("member"));
         assertEquals(RoomType.DIRECT_MESSAGE, room.getType()); assertEquals("owner", room.getCreatedBy());
-        assertEquals(2, room.getMemberCount()); assertEquals(2, room.getMaxParticipants()); assertTrue(room.isActive());
+        // AC-009-9: the recipient's seat is reserved only when the request is accepted.
+        assertEquals(RoomState.REQUESTED, room.getState()); assertEquals("member:owner", room.getMemberKey());
+        assertEquals(1, room.getMemberCount()); assertEquals(2, room.getMaxParticipants()); assertTrue(room.isActive());
         assertNull(room.getId()); assertNull(room.getName()); assertNotNull(room.getLastActivity()); assertNull(room.getCreatedAt());
         assertTrue(room.getSettings().isAllowFileSharing()); assertFalse(room.getSettings().isAllowGuestUsers());
         assertFalse(room.getSettings().isModerationRequired());
-        assertEquals(Map.of("owner", Role.OWNER, "member", Role.MEMBER), policy.initialMembers(request, "owner"));
+        assertEquals(Map.of("owner", Role.OWNER), policy.initialMembers(request, "owner"));
     }
     @Test void create_missingUser_throwsUserNotFound() {
         assertEquals("Participant not found", assertThrows(UserNotFoundException.class,

@@ -13,6 +13,7 @@ import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -21,9 +22,10 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.lnt.chatmee.dto.request.CreateChatRoomRequest;
-import com.lnt.chatmee.dto.request.JoinChatRoomRequest;
 import com.lnt.chatmee.dto.request.UpdateChatRoomRequest;
+import com.lnt.chatmee.dto.request.UpdateMemberRoleRequest;
 import com.lnt.chatmee.dto.response.ApiResponse;
+import com.lnt.chatmee.dto.response.MemberResponse;
 import com.lnt.chatmee.dto.response.ChatRoomResponse;
 import com.lnt.chatmee.dto.response.PagedResponse;
 import com.lnt.chatmee.dto.response.PublicRoomSummary;
@@ -98,11 +100,19 @@ public class ChatRoomController {
         return ResponseEntity.ok(ApiResponse.success("Chat room updated successfully", responseBody));
     }
 
-    @Operation(summary = "Delete a room (creator only)")
+    @Operation(summary = "Delete a group room (owner only); direct messages are hidden instead")
     @DeleteMapping("/{roomId}")
     public ResponseEntity<ApiResponse<String>> deleteChatRoom(@CurrentUser UserPrincipal user, @PathVariable String roomId) {
         chatRoomService.deleteChatRoomById(user.userId(), roomId);
         return ResponseEntity.ok(ApiResponse.success("Chat room deleted successfully"));
+    }
+
+    @Operation(summary = "Hide a direct message for the caller (it reappears with the next message)")
+    @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "204", description = "Room hidden for the caller")
+    @PostMapping("/{roomId}/hide")
+    public ResponseEntity<Void> hideRoom(@CurrentUser UserPrincipal user, @PathVariable String roomId) {
+        chatRoomService.hideRoom(user.userId(), roomId);
+        return ResponseEntity.noContent().build();
     }
 
     @Operation(summary = "Join a public room as the caller")
@@ -117,14 +127,34 @@ public class ChatRoomController {
         return ResponseEntity.noContent().build();
     }
 
-    @Operation(summary = "Add a participant (owner or admin only)")
-    @PostMapping("/{roomId}/members")
-    public ResponseEntity<ApiResponse<String>> addParticipantToChatRoom(
-            @CurrentUser UserPrincipal user,
-            @PathVariable String roomId,
-            @Validated @RequestBody JoinChatRoomRequest request) {
-        participantService.addParticipant(roomId, user.userId(), request.getUserId(), request.getRole());
-        return ResponseEntity.ok(ApiResponse.success("Participant successfully added to the chat room"));
+    @Operation(summary = "Mark the caller's room messages as read")
+    @PutMapping("/{roomId}/members/me/read")
+    public ResponseEntity<Void> markRead(@CurrentUser UserPrincipal user, @PathVariable String roomId) {
+        participantService.markRead(roomId, user.userId());
+        return ResponseEntity.noContent().build();
+    }
+
+    @Operation(summary = "List room members and their roles (members only)")
+    @GetMapping("/{roomId}/members")
+    public ResponseEntity<ApiResponse<List<MemberResponse>>> getMembers(@CurrentUser UserPrincipal user, @PathVariable String roomId) {
+        return ResponseEntity.ok(ApiResponse.success(participantService.getMembers(roomId, user.userId())));
+    }
+
+    @Operation(summary = "Remove a member (owner or admin, according to participant roles)")
+    @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "204", description = "Member removed")
+    @DeleteMapping("/{roomId}/members/{userId}")
+    public ResponseEntity<Void> removeMember(@CurrentUser UserPrincipal user, @PathVariable String roomId, @PathVariable String userId) {
+        participantService.removeMember(roomId, user.userId(), userId);
+        return ResponseEntity.noContent().build();
+    }
+
+    @Operation(summary = "Promote or demote a member between ADMIN and MEMBER (owner only)")
+    @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "204", description = "Role changed")
+    @PatchMapping("/{roomId}/members/{userId}/role")
+    public ResponseEntity<Void> changeMemberRole(@CurrentUser UserPrincipal user, @PathVariable String roomId,
+            @PathVariable String userId, @Validated @RequestBody UpdateMemberRoleRequest request) {
+        participantService.changeMemberRole(roomId, user.userId(), userId, request.role());
+        return ResponseEntity.noContent().build();
     }
 
     @Operation(summary = "Leave a room")

@@ -10,7 +10,6 @@ export type MessageState = {
     loadingOlder: boolean;
     olderError: string | null;
     error: string | null;
-    sending: boolean;
 }
 
 export type MessageAction =
@@ -37,7 +36,6 @@ export const initialState: MessageState = {
     loadingOlder: false,
     olderError: null,
     error: null,
-    sending: false
 }
 
 export function messageReducer(state: MessageState, action: MessageAction): MessageState {
@@ -85,7 +83,6 @@ export function messageReducer(state: MessageState, action: MessageAction): Mess
         case "ADD_OPTIMISTIC_MESSAGE":
             return {
                 ...state,
-                sending: false,
                 messages: [...state.messages, action.payload],
             };
 
@@ -95,11 +92,10 @@ export function messageReducer(state: MessageState, action: MessageAction): Mess
             if (!pending) {
                 // Discarded or sent from another tab: the server saved it, so show it once.
                 if (state.messages.some((m) => m.id === action.payload.id)) return state;
-                return { ...state, sending: false, messages: [...state.messages, confirmed] };
+                return { ...state, messages: [...state.messages, confirmed] };
             }
             return {
                 ...state,
-                sending: false,
                 messages: state.messages.map((m) =>
                     m.isOptimistic && m.tempId === action.payload.tempId ? confirmed : m
                 ),
@@ -109,7 +105,6 @@ export function messageReducer(state: MessageState, action: MessageAction): Mess
         case "FAIL_SENT_MESSAGE":
             return {
                 ...state,
-                sending: false,
                 messages: state.messages.map((m) =>
                     m.isOptimistic && m.tempId === action.payload.tempId
                         ? { ...m, status: "failed", errorMessage: action.payload.error, errorCode: action.payload.code }

@@ -1,5 +1,5 @@
 import { RoomSettings } from "../entities/chat/chat-room.entity";
-import { MessageType, RoomType } from "../entities/chat/enums";
+import { MessageType, ParticipantRole, RoomType } from "../entities/chat/enums";
 import { UserSummaryResponse } from "./user.dto";
 
 // Requests
@@ -20,11 +20,6 @@ export interface UpdateChatRoomRequest {
     settings?: Partial<RoomSettings>;
 }
 
-export interface JoinChatRoomRequest {
-    userId: string;
-    role?: string;
-}
-
 export interface ChatMessageRequest {
     roomId: string;
     content: string;
@@ -33,6 +28,15 @@ export interface ChatMessageRequest {
 }
 
 // Response
+
+/** Preview of the newest non-SYSTEM message of a room (`lastMessage` of a room, `ROOM_ACTIVITY`). */
+export interface LastMessageSummary {
+    id: string;
+    senderId: string;
+    senderName?: string;
+    preview: string;
+    createdAt: string;
+}
 
 export interface ChatRoomResponse {
     id: string;
@@ -47,11 +51,37 @@ export interface ChatRoomResponse {
     /** DIRECT_MESSAGE rooms: the other member as seen by the caller (CM-049). */
     counterpart?: UserSummaryResponse | null;
     updatedAt?: string;
+    /** ISO-8601 UTC time of the newest activity; the list is sorted by it. */
+    lastActivityAt?: string | null;
+    lastMessage?: LastMessageSummary | null;
+    unreadCount?: number;
+    myRole?: ParticipantRole | null;
+    /** Absent until CM-072; a missing value means ACTIVE. REQUESTED = a DM request not yet accepted. */
+    state?: "ACTIVE" | "REQUESTED";
+    /** DIRECT_MESSAGE rooms: true when the caller blocked the other member; never sent to the blocked user (AC-009-19). */
+    blocked?: boolean;
+}
+
+/** One row of GET /api/v1/rooms/{roomId}/members (CM-062): members only, with their role. */
+export interface MemberResponse {
+    id: string;
+    name: string;
+    avatarUrl?: string | null;
+    role: ParticipantRole;
+}
+
+/** Envelope of every frame on `/user/queue/events`. */
+export interface UserEventEnvelope {
+    type: string;
+    payload: unknown;
+    occurredAt: string;
 }
 
 export interface MessageResponse {
     id: string;
     tempId?: string;
+    /** The sender's client id as stored by the server; history carries it so a resync can match a pending copy. */
+    clientMessageId?: string;
     chatRoomId: string;
     senderId: string;
     senderName?: string;

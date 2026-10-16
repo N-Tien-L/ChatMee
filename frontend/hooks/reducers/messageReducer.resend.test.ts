@@ -64,6 +64,8 @@ const transport = vi.hoisted(() => ({
 }));
 vi.mock('../useWebSocket', () => ({ useWebSocket: () => transport }));
 vi.mock('@/lib/stores/authStore', () => ({ useAuthStore: () => ({ user: { id: 'u1', name: 'Alice' } }) }));
+// The hook refreshes the opened room; keep the real HTTP client (and its timers) out of the timer-count tests.
+vi.mock('@/lib/api/chatRoomApi', () => ({ chatRoomApi: { getChatRoomById: vi.fn(), getMembers: vi.fn() } }));
 vi.mock('@/lib/api/messageApi', () => ({
     messageApi: { getMessages: vi.fn().mockResolvedValue({ success: true, data: { messages: [], nextCursor: null, hasMore: false } }) },
 }));
@@ -84,7 +86,7 @@ describe('useRoomMessages resend, reload and resync', () => {
         return { ...hook, roomId };
     }
 
-    it('resendMessage_rateLimitedMessage_publishesNewAttemptAndReplacesFailedCopy', async () => {
+    it('resendMessage_rateLimitedMessage_reusesClientIdAndReplacesFailedCopy', async () => {
         const { result } = await mountRoom();
         act(() => { void result.current.sendMessage('hello'); });
         const first = result.current.messages[0];
@@ -96,7 +98,8 @@ describe('useRoomMessages resend, reload and resync', () => {
         expect(result.current.messages).toHaveLength(1);
         const retry = result.current.messages[0];
         expect(retry.status).toBe('sending');
-        expect(retry.tempId).not.toBe(first.tempId);
+        // A Resend keeps the failed message's client id, so the server can recognise a retry of a stored send.
+        expect(retry.tempId).toBe(first.tempId);
         expect(transport.sendMessage).toHaveBeenLastCalledWith(expect.any(String), 'hello', retry.tempId);
         expect(vi.getTimerCount()).toBe(1);
     });

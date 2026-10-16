@@ -6,9 +6,12 @@ import { UserSummaryResponse, PagedResponse } from "@/lib/types";
 vi.mock('../api/userApi', () => ({
     userApi: {
         searchUsers: vi.fn(),
-        getUserById: vi.fn()
+        getUserById: vi.fn(),
+        blockUser: vi.fn(),
+        unblockUser: vi.fn(),
     }
 }));
+vi.mock('react-hot-toast', () => ({ default: { success: vi.fn(), error: vi.fn() } }));
 
 const mockUser: UserSummaryResponse = {
     id: 'user1',
@@ -87,5 +90,33 @@ describe('usersStore', () => {
 
         expect(useUsersStore.getState().users).toEqual([]);
         expect(useUsersStore.getState().loading).toBe(false);
+    });
+});
+
+describe('usersStore blocks', () => {
+    it('blockUser_success_dropsUserFromResultsAndFlagsTheirDm', async () => {
+        const { useChatRoomsStore } = await import('./chatRoomsStore');
+        const { RoomType } = await import('@/lib/types');
+        useChatRoomsStore.setState({
+            rooms: [{ id: 'dm1', roomType: RoomType.DIRECT_MESSAGE, counterpart: { id: 'user1', name: 'Test User', avatarUrl: '' } }],
+        } as never);
+        useUsersStore.setState({ users: [mockUser], filteredUsers: [mockUser], blockedUsers: [] });
+        vi.mocked(userApi.blockUser).mockResolvedValue(undefined);
+
+        expect(await useUsersStore.getState().blockUser(mockUser)).toBe(true);
+
+        expect(userApi.blockUser).toHaveBeenCalledWith('user1');
+        expect(useUsersStore.getState().filteredUsers).toEqual([]);
+        expect(useUsersStore.getState().blockedUsers?.map((b) => b.id)).toEqual(['user1']);
+        expect(useChatRoomsStore.getState().rooms[0].blocked).toBe(true);
+    });
+
+    it('blockUser_failure_keepsStateAndReturnsFalse', async () => {
+        useUsersStore.setState({ users: [mockUser], filteredUsers: [mockUser], blockedUsers: [] });
+        vi.mocked(userApi.blockUser).mockRejectedValue(new Error('Not found'));
+
+        expect(await useUsersStore.getState().blockUser(mockUser)).toBe(false);
+        expect(useUsersStore.getState().filteredUsers).toHaveLength(1);
+        expect(useUsersStore.getState().blockedUsers).toEqual([]);
     });
 });

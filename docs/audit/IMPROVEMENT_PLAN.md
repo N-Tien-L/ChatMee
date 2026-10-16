@@ -1,5 +1,7 @@
 # ChatMee: Kế hoạch sửa và cải thiện
 
+> **Tài liệu lịch sử (đã hoàn thành).** Các ticket CM-001..058 đã merge (xem `docs/plan/BOARD.md`). Kế hoạch hiện hành là `docs/plan/MVP_V0_PLAN.md`.
+
 > Dựa trên `AUDIT_REPORT.md` (ID lỗi C-*, H-*, M-*, Q-*, F-*, A-*, D-*, P-*, R-*) và `SPEC_DRIVEN_SETUP.md`.
 > Mỗi ticket có thể làm độc lập, mỗi ticket là một PR, trừ khi có ghi "Depends on".
 > Ước lượng: **S** ≈ 2–4 giờ · **M** ≈ 0,5–2 ngày · **L** > 2 ngày.

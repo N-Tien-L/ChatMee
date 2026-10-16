@@ -6,7 +6,7 @@ Status: Implemented (CM-028). Decision record: ADR-0005.
 
 | Collection | Document | Key fields | Indexes |
 |---|---|---|---|
-| `chat_rooms` | `ChatRoom` | `type`, `name`, `createdBy`, `maxParticipants` (`<= 0` = unlimited), `memberCount`, `isActive`, `deletedAt`, `createdAt` (auditing), `lastActivity`, `settings` | `_id` |
+| `chat_rooms` | `ChatRoom` | `type`, `name`, `createdBy`, `maxParticipants` (`<= 0` = unlimited), `memberCount`, `isActive`, `deletedAt`, `createdAt` (auditing), `lastActivity`, `settings` (`allowFileSharing`, `allowGuestUsers`, `moderationRequired`, `welcomeMessage` at most 500 characters; returned as `RoomSettingsResponse`) | `_id` |
 | `participants` | `Participant` | `chatRoomId`, `userId`, `role` (OWNER, ADMIN, MEMBER), `joinedAt` / `updatedAt` (auditing) | unique `(chatRoomId, userId)`, `userId` |
 | `messages` | `Message` | `chatRoomId`, `senderId`, `createdAt`, `isDeleted` | `_id`; `messages_room_created_id`: `(chatRoomId ASC, createdAt DESC, _id DESC)` (CM-044) |
 
@@ -136,8 +136,8 @@ role assignment checks and atomic capacity reservation/compensation remain in
 
 | Type / policy | Create | Join | Add participant | Update | Leave |
 |---|---|---|---|---|---|
-| PUBLIC / PublicRoomPolicy | Configurable group, one OWNER, default unlimited capacity | Allowed | CM-008 role rules | Editable fields, atomic capacity check | Members may leave; creator denied (403) |
-| PRIVATE / PrivateRoomPolicy | Configurable group, one OWNER, default unlimited capacity | Denied (403) | CM-008 role rules | Editable fields, atomic capacity check | Members may leave; creator denied (403) |
+| PUBLIC / PublicRoomPolicy | Configurable group, one OWNER, default unlimited capacity | Allowed | CM-008 role rules | OWNER or ADMIN (role from participants, CM-076); editable fields, atomic capacity check | Anyone may leave; the OWNER leaving transfers ownership, a sole member deletes the room (AC-009-24) |
+| PRIVATE / PrivateRoomPolicy | Configurable group, one OWNER, default unlimited capacity | Denied (403) | CM-008 role rules | OWNER or ADMIN (CM-076); editable fields, atomic capacity check | Anyone may leave; the OWNER leaving transfers ownership, a sole member deletes the room (AC-009-24) |
 | DIRECT_MESSAGE / DirectRoomPolicy | Existing other user, OWNER + MEMBER, fixed capacity 2; self DM denied (400) | Denied (403) | Denied (403 FORBIDDEN_ACTION) | Capacity changes denied (400); other fields allowed | Denied (403) |
 
 `ParticipantService.isUserParticipant` requires both an active room and a membership
@@ -151,3 +151,101 @@ Only the server-marked room-deleted event uses its pre-delete member snapshot.
 Other subscriptions and the STOMP connection remain usable; already accepted
 transport frames cannot be recalled. See `websocket-protocol.md` for the instance-local
 room-event fan-out limitation and the per-recipient database-read cost.
+
+## MVP v0 additions (SPEC-008, planned)
+Status: Approved design, implemented by the tickets named below.
+
+### chat_rooms: activity summary (CM-061 implemented)
+- `lastActivityAt` (`Instant`, new): set with one atomic `$set` after a non-SYSTEM message insert. Missing on old rooms: readers fall
+  back to `createdAt`, so no backfill is needed.
+- `lastMessage` (embedded, new): `{id, senderId, senderName, preview (<= 100 chars), createdAt}`, written in the same `$set`.
+  Use a conditional update (`lastActivityAt < message.createdAt` or missing) so a late writer never moves it backwards.
+- The existing `lastActivity` (`LocalDateTime`) is changed by membership and settings updates, not by messages. It is left as is in v0
+  (not shown in the UI, not used for sorting) and removed with the `Instant` cleanup in v1.
+- SYSTEM messages never update `lastActivityAt`/`lastMessage` (SPEC-008 AC-008-7).
+
+### participants: read marker (CM-061 implemented)
+- `lastReadAt` (`Instant`, new) is the read marker. An atomic `$max` keeps concurrent requests from moving it backwards. `PUT /rooms/{id}/members/me/read` sets it to now. A new member gets `lastReadAt = now`.
+- `lastSeenAt` is **not** reused: it is a `LocalDateTime`, which Spring converts with the server time zone, so comparing it with
+  `messages.createdAt` (`Instant`, UTC) would shift by the zone offset on any non-UTC machine.
+- `unreadCount` = count of messages with `chatRoomId = room`, `createdAt > lastReadAt`, `senderId != caller`, `type != SYSTEM`,
+  `isDeleted = false`, using the existing index `(chatRoomId, createdAt, _id)`. A missing `lastReadAt` (rows created before CM-061)
+  counts as 0 unread, so existing users do not see a burst of old badges after the release.
+
+### messages: client id (CM-068)
+- `clientMessageId` (string, optional, new): the client's `tempId`, stored on insert.
+- Unique partial index `messages_room_sender_client`: `{chatRoomId: 1, senderId: 1, clientMessageId: 1}` where `clientMessageId` exists.
+  A `DuplicateKeyException` on insert loads and returns the stored message (no second row); history and broadcasts include `clientMessageId`.
+
+## Consent, requests, blocks and reports (SPEC-009, v0 scope)
+Status: Approved (SPEC-009, ADR-0006). Join requests, `room_removals` and mute are v1 (D-02, D-03).
+
+### chat_rooms (new field, CM-072 implemented)
+- `state`: `ACTIVE` (default; a missing field reads as `ACTIVE`, so no backfill) | `REQUESTED` (DM waiting for the recipient).
+  `isActive` stays the soft-delete flag.
+- `memberKey` remains set for `REQUESTED` and `ACTIVE` DMs, so one DM per pair is enforced by the existing unique sparse index.
+  Decline and expiry clear it (as soft delete does today).
+- CM-072: `ChatRoom.getState()` returns `ACTIVE` for a missing field. A DM is created `REQUESTED` with `memberCount` 1 and only the
+  sender's row; accept reserves the recipient's seat (`reserveSeat`) and then sets `ACTIVE` with a conditional update
+  (`activateRequested`). Decline and expiry use `softDeleteRequested`, which only matches a room that is still `REQUESTED`.
+- The sender's one request message (AC-009-10) is enforced by `claimRequestMessage`: a conditional `$set` of `lastActivityAt` and
+  `lastMessage` that matches only while the REQUESTED room has no `lastMessage`. It runs before the message is saved and is undone
+  (`releaseRequestMessage`) if the save fails. `lastMessage.preview` is the request preview. SYSTEM messages never take it.
+
+### participants (new field, CM-075 implemented)
+- `hiddenAt` (`Instant`, nullable): DM hidden by this member. A message persisted after it clears it for that member (AC-009-21).
+- `isMuted` exists but stays unused in v0 (mute is v1).
+- The owner is the row with `role = OWNER` (CM-076). `createdBy` on `chat_rooms` stays as history.
+- Owner auto-transfer (AC-009-24): pick the earliest `joinedAt` ADMIN, else the earliest MEMBER (tie-break `_id`), update that row to
+  `OWNER` with a conditional update (still the role it was read with), then delete the leaving owner's row with a conditional delete
+  (`role = OWNER`) and release the seat. If that delete finds no row, the promotion is reverted so one OWNER remains. Implemented in CM-076.
+
+### membership_requests (new, CM-070 implemented for `INVITE`; CM-072 implemented for `DM_REQUEST`)
+| Field | Notes |
+|---|---|
+| `_id` | id |
+| `kind` | `INVITE` \| `DM_REQUEST` (`JOIN_REQUEST` reserved for v1) |
+| `roomId` | target room (the DM room for `DM_REQUEST`) |
+| `inviterId` | who started it (inviter, or DM sender) |
+| `targetUserId` | who must answer (invitee or DM recipient) |
+| `status` | `PENDING` \| `ACCEPTED` \| `DECLINED` \| `REVOKED` \| `EXPIRED` (`REJECTED` reserved for v1) |
+| `pairKey` | sorted user pair (same format as `memberKey`), `DM_REQUEST` only |
+| `createdAt`, `expiresAt`, `decidedAt` | `Instant` |
+| `cooldownUntil` | `Instant`, set on a declined `DM_REQUEST` (decided + 30 days) |
+
+Indexes:
+- unique partial `{roomId: 1, targetUserId: 1}` where `status = PENDING` (one pending per room and person);
+- `{targetUserId: 1, kind: 1, status: 1}` for "my pending invitations / DM requests";
+- `{roomId: 1, status: 1}` for the room's pending invitations;
+- `{pairKey: 1, cooldownUntil: 1}` for DM decline cooldowns.
+
+Accept path (ADR-0005 style): `findAndModify` `{_id, status: PENDING, expiresAt > now}` -> `ACCEPTED`; then `reserveSeat` and insert the
+participant; if either fails, set the request back to `PENDING` and return the error.
+CM-070: the four indexes are declared on `MembershipRequest` (names `membership_requests_room_target_pending`,
+`membership_requests_target_kind_status`, `membership_requests_room_status`, `membership_requests_pair_cooldown`) and created by
+auto-index creation. The conditional transition is an atomic `updateFirst` on that filter (`decidePending`, returns the match count);
+the document is not needed back. An expired `PENDING` row found by an invite for the same person is set to `EXPIRED` first, so the
+partial unique index admits the new invitation. Inviting checks `memberCount < maxParticipants` (409) as a fast path; the seat
+reservation on accept stays the authority.
+
+### user_blocks (new, CM-073 implemented)
+- `{blockerId, blockedId, createdAt}`; unique `{blockerId: 1, blockedId: 1}`; `{blockedId: 1, blockerId: 1}` for the reverse check.
+  "Blocked either way" is one `$or` query on these two indexes.
+- CM-073: `UserBlock` declares both indexes (`user_blocks_blocker_blocked_unique`, `user_blocks_blocked_blocker`), created by
+  auto-index creation. `existsEitherWay` is the block check; `findInvolving` (the same `$or` on one user) feeds search exclusion and
+  the DM request filter; `findByBlockerIdAndBlockedIdIn` feeds `ChatRoomResponse.blocked`. A concurrent duplicate block hits the
+  unique index and is treated as already blocked.
+
+### reports (new, CM-074)
+- `{reporterId, targetType, targetId, reason, note (<= 500), createdAt}`; unique `{reporterId: 1, targetType: 1, targetId: 1}`;
+  `{targetType: 1, targetId: 1}` for later reviews. No status field in v0.
+
+### Expiry (CM-072 implemented)
+- An hourly `@Scheduled` job sets `EXPIRED` on `PENDING` rows past `expiresAt` in batches, and for `DM_REQUEST` soft-deletes the room and
+  sends `ROOM_REMOVED {reason: EXPIRED}` to the sender. Every read and accept also checks `expiresAt`, so the job is not needed for correctness.
+  v0 runs one backend instance (D-11); the job is idempotent if that changes.
+- CM-072: `MembershipRequestExpiryJob` runs every hour (first run one hour after startup; `@EnableScheduling` is already on
+  `PresenceService`). It reads PENDING rows with `expiresAt <= now` in pages of 100 and moves each with the conditional `expireIfPast`;
+  INVITE rows are only marked `EXPIRED`. That query has no dedicated `{status, expiresAt}` index (CM-072 follow-up).
+- A declined `DM_REQUEST` keeps `cooldownUntil` on its own row; the cooldown check is `exists(pairKey, cooldownUntil > now)` on the
+  `membership_requests_pair_cooldown` index, so it applies to the pair in both directions.

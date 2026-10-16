@@ -58,11 +58,12 @@ const mayHaveBeenSaved = (m: Message) =>
 
 /**
  * Finds the server copies of pending optimistic messages whose confirmation was lost (e.g. during a
- * disconnect). History has no tempId, so the heuristic is: same sender (me), same trimmed content,
+ * disconnect). A server copy that carries a client id (clientMessageId, or tempId on a broadcast)
+ * matches only the pending message with that id, however late the resync is. Copies without one
+ * (stored before client ids existed) fall back to the heuristic: same sender (me), same trimmed content,
  * server createdAt within PENDING_MATCH_WINDOW_MS of the optimistic createdAt, and a server message
  * not already on screen. Each server message confirms at most one pending message (oldest pending
  * first, nearest createdAt wins), so two identical sends are not collapsed into one.
- * A server copy that carries the same tempId always matches.
  * Returns tempId -> server message.
  */
 export const matchResyncedPending = (
@@ -86,8 +87,9 @@ export const matchResyncedPending = (
         let bestDelta = Infinity;
         for (const candidate of candidates) {
             if (claimed.has(candidate.id)) continue;
-            if (candidate.tempId) {
-                if (candidate.tempId !== tempId) continue;
+            const clientId = candidate.clientMessageId ?? candidate.tempId;
+            if (clientId) {
+                if (clientId !== tempId) continue;
                 best = candidate;
                 break;
             }

@@ -14,15 +14,16 @@ import com.lnt.chatmee.model.Participant.Role;
 class PublicRoomPolicyTest {
     private final PublicRoomPolicy policy = new PublicRoomPolicy();
     @Test void checkJoin_roomType_preservesJoinRule() { assertDoesNotThrow(policy::checkJoin); }
-    @Test void checkAddParticipant_groupRoom_allowsAddition() { assertDoesNotThrow(policy::checkAddParticipant); }
+    @Test void checkInvite_publicRoom_throwsInvalidArgument() {
+        assertEquals(ErrorCode.INVALID_ARGUMENT, assertThrows(InvalidRequestException.class, policy::checkInvite).getErrorCode());
+    }
     @Test void checkUpdate_capacityChange_allowsUpdate() {
         var request = new UpdateChatRoomRequest(); request.setMaxUsers(5);
         assertDoesNotThrow(() -> policy.checkUpdate(request));
     }
-    @Test void checkLeave_creator_throwsForbidden() {
+    @Test void checkLeave_creator_allowedBecauseOwnershipMovesByRole() {
         var room = ChatRoom.builder().createdBy("owner").build();
-        assertEquals("Room creator cannot leave the room. Please delete the room or transfer ownership first.",
-            assertThrows(ForbiddenActionException.class, () -> policy.checkLeave(room, "owner")).getMessage());
+        assertDoesNotThrow(() -> policy.checkLeave(room, "owner"));
     }
     @Test void checkLeave_member_allowsLeave() {
         assertDoesNotThrow(() -> policy.checkLeave(ChatRoom.builder().createdBy("owner").build(), "member"));
@@ -40,8 +41,9 @@ class PublicRoomPolicyTest {
     }
     @Test void create_customSettingsAndCapacity_preservesRequest() {
         var request = new CreateChatRoomRequest(); request.setMaxUsers(8);
-        var settings = ChatRoom.RoomSettings.builder().allowFileSharing(true).build(); request.setSettings(settings);
+        request.setSettings(new com.lnt.chatmee.dto.request.RoomSettingsRequest(true, false, false, "Hi"));
         var room = policy.create(request, "owner", id -> true);
-        assertEquals(8, room.getMaxParticipants()); assertSame(settings, room.getSettings());
+        assertEquals(8, room.getMaxParticipants()); assertTrue(room.getSettings().isAllowFileSharing());
+        assertFalse(room.getSettings().isAllowGuestUsers()); assertEquals("Hi", room.getSettings().getWelcomeMessage());
     }
 }

@@ -1,12 +1,12 @@
 # SPEC-006: User search
-- Status: Draft
-- Owner: @N-Tien-L · Created: 2026-10-09 · Related: design/error-handling.md
+- Status: Approved (2026-10-12; amended by SPEC-009 AC-009-17)
+- Owner: @N-Tien-L · Created: 2026-10-09 · Related: design/error-handling.md, SPEC-009
 
 ## 1. Goal
 Users find other people by name to start a DM or add them to a room, without exposing anyone's email.
 
 ## 2. Non-goals
-- Search by email, friend lists, blocking.
+- Search by email, friend lists. (Blocking is in SPEC-009; blocked users are excluded from search both ways, AC-009-17, CM-073.)
 
 ## 3. User stories
 - US-1: As a user, I type part of a name and pick a person from the results.
@@ -34,4 +34,4 @@ The frontend debounces search input by 300 ms (`lib/stores/usersStore.test.ts`).
 docs/design/error-handling.md, OpenAPI at `/v3/api-docs` (dev/local profiles only).
 
 ## 9. Open questions
-- Enforce a minimum query length and rank results by match quality?
+- Resolved 2026-10-12 (D-21): minimum query length and ranking by match quality are v1. A batch lookup `GET /users?ids=` is added only if measured N+1 calls require it.

@@ -2,31 +2,23 @@
 
 import { useAuthStore } from "@/lib/stores/authStore";
 import { useChatRoomsStore } from "@/lib/stores/chatRoomsStore";
-import { useEffect, useRef, useState, Suspense } from "react";
-import { useIsMobile } from "@/hooks/use-mobile";
+import { useEffect, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import React from "react";
 import ChatRoomsList from "@/components/room/ChatRoomsList";
 import ChatInterface from "@/components/chat/ChatInterface";
-import { useShallow } from "zustand/react/shallow";
 import { CreateRoomModal } from "@/components/room/CreateRoomModal";
-import { LogOut } from "lucide-react";
+import { NewMessageDialog } from "@/components/room/NewMessageDialog";
+import { WelcomePanel } from "@/components/room/WelcomePanel";
+import { QuickSwitcher, openQuickSwitcher } from "@/components/room/QuickSwitcher";
+import { ArrowLeft } from "lucide-react";
 
 const DashboardContent = () => {
-  const { user, isAuthenticated, loading, logout } = useAuthStore(
-    useShallow((state) => ({
-      user: state.user,
-      isAuthenticated: state.isAuthenticated,
-      loading: state.loading,
-      logout: state.logout,
-    }))
+  const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
+  const isCreateRoomModalOpen = useChatRoomsStore(
+    (state) => state.isCreateRoomModalOpen
   );
-  const { isCreateRoomModalOpen } = useChatRoomsStore(
-    useShallow((state) => ({
-      isCreateRoomModalOpen: state.isCreateRoomModalOpen,
-    }))
-  );
-  const checkAuthStatus = useAuthStore((state) => state.checkAuthStatus);
+  const createMode = useChatRoomsStore((state) => state.createRoomModalMode);
   const fetchRooms = useChatRoomsStore((state) => state.fetchRooms);
   const closeCreateRoomModal = useChatRoomsStore(
     (state) => state.closeCreateRoomModal
@@ -34,176 +26,54 @@ const DashboardContent = () => {
   const router = useRouter();
   const searchParams = useSearchParams();
   const roomId = searchParams.get("roomId");
-  const [hasCheckedAuth, setHasCheckedAuth] = useState(false);
-  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
-  const isMobile = useIsMobile();
-  const sidebarRef = useRef<HTMLElement>(null);
-
-  // Mobile drawer: move focus into it, close on Escape, give focus back to the opener on close.
-  useEffect(() => {
-    if (!isSidebarOpen) return;
-    const opener =
-      document.activeElement instanceof HTMLElement
-        ? document.activeElement
-        : null;
-    sidebarRef.current?.focus();
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") setIsSidebarOpen(false);
-    };
-    document.addEventListener("keydown", handleKeyDown);
-    return () => {
-      document.removeEventListener("keydown", handleKeyDown);
-      if (opener && opener.isConnected) opener.focus();
-    };
-  }, [isSidebarOpen]);
 
   useEffect(() => {
-    const fetchAuthStatus = async () => {
-      await checkAuthStatus();
-      setHasCheckedAuth(true); // Mark that we've checked
-    };
-    fetchAuthStatus();
-  }, [checkAuthStatus]);
-
-  useEffect(() => {
-    // Only redirect AFTER we've checked auth status
-    if (hasCheckedAuth && !loading && !isAuthenticated) {
-      router.push("/login");
-    }
-  }, [hasCheckedAuth, isAuthenticated, loading, router]);
-
-  useEffect(() => {
-    // Fetch chat rooms when user is authenticated
-    if (hasCheckedAuth && isAuthenticated && !loading) {
+    // The dashboard layout gate guarantees a verified session before this page renders.
+    if (isAuthenticated) {
       fetchRooms();
     }
-  }, [hasCheckedAuth, isAuthenticated, loading, fetchRooms]);
+  }, [isAuthenticated, fetchRooms]);
 
-  // Show loading while checking auth OR while loading
-  if (!hasCheckedAuth || loading) {
-    return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="text-2xl text-gray-600">Loading...</div>
-      </div>
-    );
-  }
-
-  if (!isAuthenticated) {
-    return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="text-center">
-          <div className="text-2xl text-gray-600 mb-4">Access Denied</div>
-          <div className="text-gray-500 mb-6">
-            You must be logged in to access the dashboard.
-          </div>
-          <a
-            href="/login"
-            className="bg-blue-500 hover:bg-blue-600 text-white px-6 py-2 rounded-lg"
-          >
-            Go to Login
-          </a>
-        </div>
-      </div>
-    );
-  }
-
+  // Below md only one pane shows: the room list is home, a selected room is a full screen with Back.
   return (
-    <div className="h-dvh w-full bg-gray-50 flex flex-col overflow-hidden">
-      {/* Header */}
-      <header className="bg-white shadow-sm border-b h-16 flex items-center px-6 flex-shrink-0 z-10">
-        <h1 className="text-xl font-semibold text-gray-900">ChatMee</h1>
-        <div className="ml-auto flex items-center space-x-4">
-          <span className="text-gray-700 hidden sm:inline">
-            Welcome, {user?.name}
-          </span>
-          <img
-            src={user?.avatarUrl || "/default-avatar.png"}
-            alt={user?.name ? `${user.name}'s avatar` : "Profile"}
-            className="w-8 h-8 rounded-full"
-          />
-          <button
-            onClick={() => logout()}
-            className="p-2 hover:bg-gray-100 rounded-full text-gray-600 hover:text-red-600 transition-colors"
-            title="Logout"
-            aria-label="Logout"
-          >
-            <LogOut className="w-5 h-5" aria-hidden="true" />
-          </button>
-        </div>
-      </header>
+    <div className="h-full flex flex-row overflow-hidden bg-background">
+      <aside
+        aria-label="Chat rooms"
+        className={`${roomId ? "hidden" : "block"} md:block w-full md:w-72 lg:w-80 flex-shrink-0 border-r bg-sidebar`}
+      >
+        <ChatRoomsList />
+      </aside>
 
-      {/* page.tsx */}
-      <div className="flex-1 overflow-hidden">
-        <div className="h-full flex flex-row">
-          {/* Sidebar - Hidden on mobile */}
-          <aside
-            ref={sidebarRef}
-            aria-label="Chat rooms"
-            tabIndex={-1}
-            // Off-screen on mobile when closed: keep it out of the tab order and accessibility tree.
-            inert={isMobile && !isSidebarOpen ? true : undefined}
-            className={`fixed md:static inset-y-0 left-0 z-30 top-16 md:top-0 outline-none
-    bg-white border-r transform md:translate-x-0 transition-transform duration-300
-    w-full sm:w-80 md:w-80 lg:w-96
-    ${isSidebarOpen ? "translate-x-0" : "-translate-x-full"}`}
-          >
-            <ChatRoomsList onCloseSidebar={() => setIsSidebarOpen(false)} />
-          </aside>
+      <main
+        className={`${roomId ? "flex" : "hidden"} md:flex flex-1 min-w-0 flex-col overflow-hidden bg-background`}
+      >
+        {roomId ? (
+          <>
+            <div className="md:hidden flex flex-shrink-0 items-center border-b bg-card px-2 py-1">
+              <button
+                type="button"
+                onClick={() => router.push("/dashboard")}
+                className="flex items-center gap-1 rounded-md p-2 text-sm text-foreground hover:bg-accent"
+                aria-label="Back to chat rooms"
+              >
+                <ArrowLeft className="h-4 w-4" aria-hidden="true" />
+                Back
+              </button>
+            </div>
+            <ChatInterface key={roomId} roomId={roomId} />
+          </>
+        ) : (
+          <WelcomePanel onOpenSwitcher={openQuickSwitcher} />
+        )}
+      </main>
 
-          {/* Backdrop overlay for mobile */}
-          {isSidebarOpen && (
-            <div
-              className="fixed inset-0 bg-black/50 z-20 md:hidden top-16"
-              onClick={() => setIsSidebarOpen(false)}
-              aria-hidden="true"
-            />
-          )}
-
-          {/* Main content */}
-          <main className="flex-1 bg-gray-100 w-full overflow-hidden min-w-0 flex flex-col">
-            {roomId ? (
-              <ChatInterface
-                key={roomId}
-                roomId={roomId}
-                onToggleSidebar={() => setIsSidebarOpen(true)}
-              />
-            ) : (
-              <>
-                {/* Mobile header toggle - only show when no room selected */}
-                <div className="md:hidden flex items-center justify-between px-4 py-2 bg-white border-b flex-shrink-0">
-                  <button
-                    onClick={() => setIsSidebarOpen(true)}
-                    className="text-gray-700 p-2 hover:bg-gray-100 rounded-md"
-                    aria-label="Open sidebar"
-                  >
-                    <span aria-hidden="true">☰</span>
-                  </button>
-                  <span className="font-semibold text-gray-800">ChatMee</span>
-                  <div className="w-10" aria-hidden="true" /> {/* Spacer for centering */}
-                </div>
-
-                <div className="flex-1 flex items-center justify-center">
-                  <div className="text-center px-4">
-                    <div className="text-6xl mb-4" aria-hidden="true">
-                      💬
-                    </div>
-                    <h2 className="text-2xl font-semibold text-gray-700 mb-2">
-                      Select a chat room
-                    </h2>
-                    <p className="text-gray-500">
-                      Choose a chat room from the sidebar to start messaging
-                    </p>
-                  </div>
-                </div>
-              </>
-            )}
-          </main>
-        </div>
-      </div>
-
-      {/* Modal remains at the top level */}
       <CreateRoomModal
-        isOpen={isCreateRoomModalOpen}
+        isOpen={isCreateRoomModalOpen && createMode === "room"}
+        onClose={() => closeCreateRoomModal()}
+      />
+      <QuickSwitcher />
+      <NewMessageDialog
+        isOpen={isCreateRoomModalOpen && createMode === "direct"}
         onClose={() => closeCreateRoomModal()}
       />
     </div>
@@ -214,8 +84,8 @@ const Dashboard = () => {
   return (
     <Suspense
       fallback={
-        <div className="flex items-center justify-center min-h-screen">
-          <div className="text-2xl text-gray-600">Loading...</div>
+        <div role="status" className="flex h-full items-center justify-center text-muted-foreground">
+          Loading...
         </div>
       }
     >

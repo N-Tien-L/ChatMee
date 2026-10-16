@@ -36,7 +36,10 @@ class ChatWebSocketControllerAuthTest {
     private final SimpMessagingTemplate messaging = mock(SimpMessagingTemplate.class);
     private final UserRepository users = mock(UserRepository.class);
     private final com.lnt.chatmee.service.ParticipantService participants = mock(com.lnt.chatmee.service.ParticipantService.class);
-    private final MessageService messages = spy(new MessageService(mock(com.lnt.chatmee.repository.ChatRoomRepository.class), participants, mock(com.lnt.chatmee.repository.MessageRepository.class), users));
+    private final MessageService messages = spy(new MessageService(mock(com.lnt.chatmee.repository.ChatRoomRepository.class), participants, mock(com.lnt.chatmee.repository.MessageRepository.class), users, mock(com.lnt.chatmee.service.UserEventPublisher.class),
+            mock(com.lnt.chatmee.service.DirectMessageRequestService.class),
+            mock(com.lnt.chatmee.repository.ParticipantRepository.class),
+            mock(com.lnt.chatmee.service.BlockService.class)));
     private final StaticApplicationContext context = new StaticApplicationContext();
     private final OptionalValidatorFactoryBean validator = new OptionalValidatorFactoryBean();
     private SimpAnnotationMethodMessageHandler handler;
@@ -126,7 +129,8 @@ class ChatWebSocketControllerAuthTest {
 
     private void assertPrivateError() {
         verify(messaging).convertAndSendToUser(eq("internal-user"), eq("/queue/errors"),
-                argThat((StompError error) -> "temp".equals(error.getTempId()) && !error.getMessage().isBlank()));
+                argThat((StompError error) -> "temp".equals(error.getTempId()) && !error.getMessage().isBlank()),
+                argThat((Map<String, Object> headers) -> "session".equals(headers.get(SimpMessageHeaderAccessor.SESSION_ID_HEADER))));
         verifyNoMoreInteractions(messaging);
     }
 

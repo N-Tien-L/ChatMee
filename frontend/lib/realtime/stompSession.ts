@@ -8,7 +8,8 @@ import type { IFrame, IMessage, StompHeaders, StompSubscription } from "@stomp/s
  * - `/user/queue/errors` is subscribed once and dispatched to the error handlers registered
  *   when an error arrives.
  * - Reconnection is driven here (the client's own reconnectDelay is 0) with a capped
- *   exponential backoff, and every attempt fetches a fresh single-use ws-token.
+ *   exponential backoff plus jitter, and every attempt fetches a fresh single-use ws-token.
+ *   A WsUnauthorizedError from the token request stops the session instead (no retries).
  * - SUBSCRIBE frames carry a receipt id. Spring echoes it as `receipt-id` on the ERROR frame of a
  *   denied SUBSCRIBE, so that destination is not re-subscribed on the next connect (a denied
  *   SUBSCRIBE closes the whole connection).
@@ -46,6 +47,17 @@ export interface StompClientCallbacks {
 /** Creates a client that does not reconnect on its own and reports through the callbacks. */
 export type StompClientFactory = (callbacks: StompClientCallbacks) => StompClientLike;
 
+/**
+ * Thrown by getToken when the server rejects the ws-token request with HTTP 401. The session is then
+ * over: retrying cannot succeed until the person signs in again.
+ */
+export class WsUnauthorizedError extends Error {
+    constructor() {
+        super("WebSocket authentication was rejected");
+        this.name = "WsUnauthorizedError";
+    }
+}
+
 export interface StompSessionOptions {
     clientFactory: StompClientFactory;
     getToken: () => Promise<string>;
@@ -55,6 +67,10 @@ export interface StompSessionOptions {
     stableAfterMs?: number;
     /** Consecutive failed attempts after which the status becomes "disconnected". */
     disconnectedAfterFailures?: number;
+    /** Random source for the reconnect jitter, in [0, 1). Defaults to Math.random. */
+    random?: () => number;
+    /** Called once when the session stops because the token request was rejected (WsUnauthorizedError). */
+    onUnauthorized?: () => void;
 }
 
 export interface StompSession {
@@ -72,6 +88,7 @@ export interface StompSession {
 }
 
 export const ERROR_QUEUE = "/user/queue/errors";
+export const EVENTS_QUEUE = "/user/queue/events";
 const TOKEN_HEADER = "X-WS-Token";
 
 function isStompError(value: unknown): value is StompError {
@@ -84,6 +101,7 @@ export function createStompSession(options: StompSessionOptions): StompSession {
     const maxDelay = options.maxRetryDelayMs ?? 30_000;
     const stableAfter = options.stableAfterMs ?? 10_000;
     const disconnectedAfter = options.disconnectedAfterFailures ?? 3;
+    const random = options.random ?? Math.random;
 
     // Handler entries are objects so the same function can be registered twice independently.
     const registry = new Map<string, Set<{ handler: MessageHandler }>>();
@@ -135,12 +153,26 @@ export function createStompSession(options: StompSessionOptions): StompSession {
         failures += 1;
         if (failures >= disconnectedAfter) setStatus("disconnected");
         else setStatus(hasConnected ? "reconnecting" : "connecting");
-        const delay = Math.min(maxDelay, initialDelay * 2 ** (failures - 1));
+        // Equal jitter: between half and all of the capped backoff, so clients that lost the server
+        // together do not all retry at the same moment (SPEC-008 AC-008-14).
+        const capped = Math.min(maxDelay, initialDelay * 2 ** (failures - 1));
+        const delay = capped / 2 + (random() * capped) / 2;
         void target.deactivate();
         retryTimer = setTimeout(() => {
             retryTimer = null;
             if (client === target) target.activate();
         }, delay);
+    };
+
+    const stopSession = () => {
+        retryTimer = clearTimer(retryTimer);
+        stableTimer = clearTimer(stableTimer);
+        const current = client;
+        client = null;
+        wireSubscriptions.clear();
+        pendingReceipts.clear();
+        setStatus("idle");
+        if (current) void current.deactivate();
     };
 
     const createClient = () => {
@@ -152,7 +184,15 @@ export function createStompSession(options: StompSessionOptions): StompSession {
                     const token = await options.getToken();
                     if (client !== created || !created.active) return;
                     created.connectHeaders = { [TOKEN_HEADER]: token };
-                } catch {
+                } catch (error) {
+                    if (error instanceof WsUnauthorizedError) {
+                        // Rejected by the server: stop instead of retrying forever (AC-008-14).
+                        if (client === created) {
+                            stopSession();
+                            options.onUnauthorized?.();
+                        }
+                        return;
+                    }
                     scheduleReconnect(created);
                 }
             },
@@ -251,16 +291,7 @@ export function createStompSession(options: StompSessionOptions): StompSession {
             client = createClient();
             client.activate();
         },
-        stop() {
-            retryTimer = clearTimer(retryTimer);
-            stableTimer = clearTimer(stableTimer);
-            const current = client;
-            client = null;
-            wireSubscriptions.clear();
-            pendingReceipts.clear();
-            setStatus("idle");
-            if (current) void current.deactivate();
-        },
+        stop: stopSession,
         getStatus: () => status,
         onStatus: listener => addListener(statusListeners, listener),
         subscribe,
