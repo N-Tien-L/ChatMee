@@ -56,6 +56,8 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ roomId }) => {
   useEffect(() => {
     if (roomExists) {
       shownRoomRef.current = roomId;
+      // The room is back (re-invited and accepted): leave the ended view.
+      setEnded((previous) => (previous?.roomId === roomId ? null : previous));
       return;
     }
     if (shownRoomRef.current === roomId) {
