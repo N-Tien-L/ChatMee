@@ -62,9 +62,12 @@ Develop was pushed normally, without a force update. Main remains `3cb5f89`.
   [frontend minor/patch PR #13](https://github.com/N-Tien-L/ChatMee/pull/13).
 - At that checkpoint, verified four remote branches: main, develop and those two PR branches.
 - At 18:11:16 Asia/Bangkok, `dependabot[bot]` subsequently closed PR #13 and removed
-  its branch. Final verification found three remote branches: main, develop and
-  the Maven minor/patch branch for PR #1. The bot's frontend update run completed
-  successfully; no frontend dependency PR was merged by this cleanup.
+  its branch. An intermediate verification found three remote branches. The bot
+  then opened [replacement frontend PR #15](https://github.com/N-Tien-L/ChatMee/pull/15)
+  against the updated baseline. The resulting four branches are main, develop,
+  the Maven group for PR #1 and the new frontend group for PR #15. These grouped
+  minor/patch proposals remain for a separate dependency review. The bot's frontend
+  update run completed successfully; no dependency PR was merged by this cleanup.
 
 The major-version ignore rules are committed on develop. Dependabot reads its
 configuration from the default branch, so these rules become active after the
