@@ -5,6 +5,10 @@ updates:
     schedule:
       interval: "weekly"
     target-branch: "develop"
+    # Major upgrades are planned in dedicated maintenance tickets.
+    ignore:
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
     groups:
       minor-and-patch:
         update-types:
@@ -22,13 +26,8 @@ updates:
           - "minor"
           - "patch"
     ignore:
-      - dependency-name: "next"
-        update-types: ["version-update:semver-major"]
-      - dependency-name: "eslint-config-next"
-        update-types: ["version-update:semver-major"]
-      - dependency-name: "react"
-        update-types: ["version-update:semver-major"]
-      - dependency-name: "react-dom"
+      # Major upgrades are planned in dedicated maintenance tickets.
+      - dependency-name: "*"
         update-types: ["version-update:semver-major"]
 
   - package-ecosystem: "github-actions"
@@ -36,6 +35,10 @@ updates:
     schedule:
       interval: "weekly"
     target-branch: "develop"
+    # Major upgrades are planned in dedicated maintenance tickets.
+    ignore:
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
     groups:
       minor-and-patch:
         update-types:
