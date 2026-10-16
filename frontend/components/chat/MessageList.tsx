@@ -16,6 +16,8 @@ const LOAD_OLDER_THRESHOLD_PX = 48;
 const NEAR_BOTTOM_PX = 80;
 /** Consecutive messages from one sender inside this window share one avatar and name. */
 const GROUP_WINDOW_MS = 5 * 60 * 1000;
+/** A pause this long inside one day gets its own time marker, as in Messenger. */
+const TIME_BREAK_MS = 60 * 60 * 1000;
 
 interface MessageListProps {
   messages: Message[];
@@ -326,6 +328,10 @@ const MessageListContent: React.FC<MessageListContentProps> = ({
             formatDate(messageDate) !==
               formatDate(new Date(messages[index - 1].createdAt));
           const groupStart = startsGroup(messages, index, showDate);
+          const showTimeBreak =
+            !showDate &&
+            Date.parse(message.createdAt) - Date.parse(messages[index - 1].createdAt) >= TIME_BREAK_MS;
+          const showSentMark = message.status !== "sent" || index === lastOwnIndex;
           const online = onlineUsers.has(message.senderId);
           const failed = message.isOwn && message.status === "failed";
           const pending = message.isOwn && message.status === "sending";
@@ -336,6 +342,14 @@ const MessageListContent: React.FC<MessageListContentProps> = ({
                 <div className="flex justify-center my-4">
                   <span className="rounded-full bg-card px-3 py-1 font-mono text-[11px] uppercase tracking-[0.12em] text-muted-foreground shadow-sm ring-1 ring-border">
                     {formatDate(messageDate)}
+                  </span>
+                </div>
+              )}
+
+              {showTimeBreak && (
+                <div className="flex justify-center my-4">
+                  <span className="rounded-full bg-card px-3 py-1 font-mono text-[11px] uppercase tracking-[0.12em] text-muted-foreground shadow-sm ring-1 ring-border">
+                    {formatTime(messageDate)}
                   </span>
                 </div>
               )}
@@ -351,6 +365,15 @@ const MessageListContent: React.FC<MessageListContentProps> = ({
                   data-message-type={message.type}
                   className={`animate-message-in group flex flex-col items-end gap-1 ${groupStart ? "mt-4" : "mt-1"}`}
                 >
+                  <div className="flex max-w-full items-end justify-end gap-2">
+                  {!showSentMark && (
+                    <time
+                      dateTime={message.createdAt}
+                      className="pb-1 font-mono text-[11px] tabular text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100"
+                    >
+                      {formatTime(messageDate)}
+                    </time>
+                  )}
                   <BubbleActions
                     enabled={!failed && !pending}
                     message={message}
@@ -370,6 +393,7 @@ const MessageListContent: React.FC<MessageListContentProps> = ({
                     <p className="text-sm whitespace-pre-wrap break-words">{message.content}</p>
                   </OwnBubble>
                   </BubbleActions>
+                  </div>
                   <div className="flex flex-wrap items-center justify-end gap-x-2 gap-y-1 text-xs">
                     {failed && message.tempId && (
                       <>
@@ -397,16 +421,8 @@ const MessageListContent: React.FC<MessageListContentProps> = ({
                         )}
                       </>
                     )}
-                    {/* Like Messenger: only the latest sent message keeps its mark; older ones show it on hover. */}
-                    <span
-                      className={
-                        message.status === "sent" && index !== lastOwnIndex
-                          ? "opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100"
-                          : undefined
-                      }
-                    >
-                      <DeliveryTab message={message} formatTime={formatTime} />
-                    </span>
+                    {/* Like Messenger: only the latest sent message keeps its mark; older ones show a plain time on hover. */}
+                    {showSentMark && <DeliveryTab message={message} formatTime={formatTime} />}
                   </div>
                 </div>
               ) : (
