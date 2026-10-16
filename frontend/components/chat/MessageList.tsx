@@ -2,12 +2,13 @@
 
 import { Message, MessageType } from "@/lib/types";
 import React, { useCallback, useLayoutEffect, useRef, useState } from "react";
-import { AlertCircle, ArrowDown, Flag, MessageSquare, RotateCw } from "lucide-react";
+import { AlertCircle, ArrowDown, MessageSquare, RotateCw } from "lucide-react";
 import { Skeleton } from "../ui/skeleton";
 import { Button } from "../ui/button";
 import { UserAvatar } from "../common/UserAvatar";
 import { isDeletedUser } from "../common/deletedUser";
 import { DeliveryTab, useJustConfirmed } from "./DeliveryTab";
+import { MessageActions } from "./MessageActions";
 
 /** Distance from the top of the list at which the next older page is requested. */
 const LOAD_OLDER_THRESHOLD_PX = 48;
@@ -38,7 +39,7 @@ interface MessageListProps {
   onLoadOlder?: () => void;
   /** Direct message with this person: no sender names or avatars on their messages, and a person intro on top. */
   directWith?: { name: string; avatarUrl?: string | null } | null;
-  /** Report another member's message (SPEC-009 AC-009-20); shown on hover or keyboard focus. */
+  /** Report another member's message (SPEC-009 AC-009-20); offered in the message actions menu. */
   onReport?: (message: Message) => void;
 }
 
@@ -54,6 +55,21 @@ const startsGroup = (messages: Message[], index: number, showDate: boolean) => {
   if (previous.senderId !== current.senderId) return true;
   return Date.parse(current.createdAt) - Date.parse(previous.createdAt) > GROUP_WINDOW_MS;
 };
+
+const findLastOwnIndex = (messages: Message[]) => {
+  for (let i = messages.length - 1; i >= 0; i--) if (messages[i].isOwn) return i;
+  return -1;
+};
+
+/** Wraps a bubble in its actions menu; pending and failed messages have nothing to act on yet. */
+function BubbleActions({
+  enabled,
+  children,
+  ...rest
+}: { enabled: boolean } & React.ComponentProps<typeof MessageActions>) {
+  if (!enabled) return <div className={rest.className}>{children}</div>;
+  return <MessageActions {...rest}>{children}</MessageActions>;
+}
 
 /** Your own bubble: floats a little while sending, then settles with one ember ring when the server confirms. */
 function OwnBubble({ status, className, children }: { status: Message["status"]; className: string; children: React.ReactNode }) {
@@ -219,6 +235,8 @@ const MessageListContent: React.FC<MessageListContentProps> = ({
     );
   }
 
+  const lastOwnIndex = findLastOwnIndex(messages);
+
   return (
     <>
       {error && (
@@ -331,11 +349,17 @@ const MessageListContent: React.FC<MessageListContentProps> = ({
               ) : message.isOwn ? (
                 <div
                   data-message-type={message.type}
-                  className={`animate-message-in flex flex-col items-end gap-1 ${groupStart ? "mt-4" : "mt-1"}`}
+                  className={`animate-message-in group flex flex-col items-end gap-1 ${groupStart ? "mt-4" : "mt-1"}`}
                 >
+                  <BubbleActions
+                    enabled={!failed && !pending}
+                    message={message}
+                    timeLabel={formatTime(messageDate)}
+                    className="max-w-[85%] sm:max-w-md lg:max-w-xl"
+                  >
                   <OwnBubble
                     status={message.status}
-                    className={`max-w-[85%] sm:max-w-md lg:max-w-xl rounded-2xl rounded-br-md px-3.5 py-2 break-words transition-[colors,transform,box-shadow] duration-300 ${
+                    className={`rounded-2xl rounded-br-md px-3.5 py-2 break-words transition-[colors,transform,box-shadow] duration-300 ${
                       failed
                         ? "border-[1.5px] border-destructive bg-card text-foreground"
                         : pending
@@ -345,6 +369,7 @@ const MessageListContent: React.FC<MessageListContentProps> = ({
                   >
                     <p className="text-sm whitespace-pre-wrap break-words">{message.content}</p>
                   </OwnBubble>
+                  </BubbleActions>
                   <div className="flex flex-wrap items-center justify-end gap-x-2 gap-y-1 text-xs">
                     {failed && message.tempId && (
                       <>
@@ -372,7 +397,16 @@ const MessageListContent: React.FC<MessageListContentProps> = ({
                         )}
                       </>
                     )}
-                    <DeliveryTab message={message} formatTime={formatTime} />
+                    {/* Like Messenger: only the latest sent message keeps its mark; older ones show it on hover. */}
+                    <span
+                      className={
+                        message.status === "sent" && index !== lastOwnIndex
+                          ? "opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100"
+                          : undefined
+                      }
+                    >
+                      <DeliveryTab message={message} formatTime={formatTime} />
+                    </span>
                   </div>
                 </div>
               ) : (
@@ -412,9 +446,17 @@ const MessageListContent: React.FC<MessageListContentProps> = ({
                       </div>
                     )}
                     <div className="flex items-end gap-2">
-                      <div className={`rounded-2xl bg-card px-3.5 py-2 break-words text-card-foreground shadow-[0_2px_10px_-6px_rgb(15_31_28/0.25)] ring-1 ring-border ${groupStart ? "rounded-tl-md" : ""}`}>
-                        <p className="text-sm whitespace-pre-wrap break-words">{message.content}</p>
-                      </div>
+                      <BubbleActions
+                        enabled
+                        message={message}
+                        timeLabel={formatTime(messageDate)}
+                        onReport={onReport}
+                        className="min-w-0"
+                      >
+                        <div className={`rounded-2xl bg-card px-3.5 py-2 break-words text-card-foreground shadow-[0_2px_10px_-6px_rgb(15_31_28/0.25)] ring-1 ring-border ${groupStart ? "rounded-tl-md" : ""}`}>
+                          <p className="text-sm whitespace-pre-wrap break-words">{message.content}</p>
+                        </div>
+                      </BubbleActions>
                       {(!groupStart || directWith) && (
                         <time
                           dateTime={message.createdAt}
@@ -422,17 +464,6 @@ const MessageListContent: React.FC<MessageListContentProps> = ({
                         >
                           {formatTime(messageDate)}
                         </time>
-                      )}
-                      {onReport && message.id && (
-                        <button
-                          type="button"
-                          onClick={() => onReport(message)}
-                          aria-label={`Report message from ${message.senderName || "this member"}`}
-                          title="Report message"
-                          className="mb-0.5 rounded-md p-1 text-muted-foreground opacity-0 transition-opacity hover:bg-accent hover:text-destructive focus-visible:opacity-100 group-hover:opacity-100 group-focus-within:opacity-100 pointer-coarse:opacity-100"
-                        >
-                          <Flag className="h-3.5 w-3.5" aria-hidden="true" />
-                        </button>
                       )}
                     </div>
                   </div>
