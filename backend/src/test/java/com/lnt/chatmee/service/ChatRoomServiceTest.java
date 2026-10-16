@@ -880,6 +880,21 @@ class ChatRoomServiceTest {
         assertThat(responses.get(1).counterpart()).isNull();
     }
 
+    // CM-091: a REQUESTED DM has only the sender's row; the counterpart comes from the pair key
+    @Test
+    void toResponses_requestedDirectRoom_showsRecipientFromPairKeyAsCounterpart() {
+        ChatRoom dm = ChatRoom.builder().id("dm").type(ChatRoom.RoomType.DIRECT_MESSAGE)
+                .state(RoomState.REQUESTED).memberKey("user1:user2").build();
+        when(participantService.getParticipantUserIds(List.of("dm"))).thenReturn(Map.of("dm", Set.of("user1")));
+        when(userRepository.findAllById(Set.of("user2")))
+                .thenReturn(List.of(User.builder().id("user2").name("Bob").avatarUrl("b.png").email("bob@x").build()));
+
+        List<ChatRoomResponse> responses = chatRoomService.toResponses(List.of(dm), "user1");
+
+        assertThat(responses.get(0).counterpart().id()).isEqualTo("user2");
+        assertThat(responses.get(0).counterpart().name()).isEqualTo("Bob");
+    }
+
     // CM-077: a DM whose other member no longer exists keeps a "Deleted user" counterpart (AC-009-28)
     @Test
     void toResponses_directRoomWithMissingUser_showsDeletedUserCounterpart() {

@@ -171,15 +171,15 @@ public class ChatRoomService {
         }
         Set<String> blockedByCaller = blockService.blockedBy(callerId, new HashSet<>(otherMembers.values()));
         Map<String, UserSummaryResponse> summaries = new HashMap<>();
-        if (!counterpartIds.isEmpty()) {
-            userRepository.findAllById(new HashSet<>(counterpartIds.values())).forEach(user ->
+        if (!otherMembers.isEmpty()) {
+            userRepository.findAllById(new HashSet<>(otherMembers.values())).forEach(user ->
                 summaries.put(user.getId(), new UserSummaryResponse(user.getId(), DisplayNames.of(user), user.getAvatarUrl())));
         }
         Map<String, Participant> memberships = new HashMap<>();
         participantService.getMemberships(callerId).forEach(row -> memberships.put(row.getChatRoomId(), row));
         return rooms.stream()
             .map(room -> ChatRoomResponse.from(room, members.getOrDefault(room.getId(), Set.of()),
-                counterpart(counterpartIds.get(room.getId()), summaries), unreadCount(room.getId(), callerId, memberships.get(room.getId())),
+                counterpart(otherMembers.get(room.getId()), summaries), unreadCount(room.getId(), callerId, memberships.get(room.getId())),
                 memberships.containsKey(room.getId()) ? memberships.get(room.getId()).getRole() : null,
                 otherMembers.containsKey(room.getId()) && blockedByCaller.contains(otherMembers.get(room.getId()))))
             .toList();
