@@ -1,10 +1,9 @@
 import { useUsersStore } from "@/lib/stores";
 import { UserSummaryResponse } from "@/lib/types";
-import { AlertCircle, RotateCw, Search, User } from "lucide-react";
+import { AlertCircle, LoaderCircle, RotateCw, Search, User } from "lucide-react";
 import React, { useEffect, useMemo, useState } from "react";
 import { useShallow } from "zustand/react/shallow";
 import { Input } from "../ui/input";
-import { Skeleton } from "../ui/skeleton";
 import { Button } from "../ui/button";
 import UserSearchItem from "./UserSearchItem";
 
@@ -95,35 +94,28 @@ const UserSearchList = ({
           placeholder={placeHolder}
           value={searchQuery}
           onChange={handleSearchChange}
-          className="h-11 rounded-xl pl-10 pr-4 border-border focus:border-ring focus:ring-ring"
+          className="h-11 rounded-xl pl-10 pr-10 border-border focus:border-ring focus:ring-ring"
         />
+        <span
+          hidden={!loading}
+          role="status"
+          aria-busy={loading}
+          aria-label="Searching users"
+          className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground"
+        >
+          <LoaderCircle className="h-4 w-4 animate-spin motion-reduce:animate-none" aria-hidden="true" />
+        </span>
       </div>
 
       {/* Search Results */}
-      <div className="max-h-72 overflow-y-auto space-y-0.5">
-        {loading ? (
-          // Loading State
-          <div
-            className="space-y-2"
-            role="status"
-            aria-busy="true"
-            aria-label="Searching users"
-          >
-            {[0, 1, 2].map((index) => (
-              <div
-                key={index}
-                className="flex items-center gap-3 rounded-xl border p-3"
-              >
-                <Skeleton className="w-10 h-10 rounded-full" />
-                <div className="flex-1 space-y-2">
-                  <Skeleton className="h-4" />
-                  <Skeleton className="h-3 w-2/3" />
-                </div>
-                <Skeleton className="w-16 h-8" />
-              </div>
-            ))}
-          </div>
-        ) : error ? (
+      {/* Reserve the same result space in every state so centred dialogs do not jump. */}
+      <fieldset
+        disabled={loading}
+        aria-busy={loading}
+        aria-label="User search results"
+        className="min-w-0 h-72 max-h-[40dvh] overflow-y-auto space-y-0.5 [scrollbar-gutter:stable]"
+      >
+        {error ? (
           // Error State
           <div className="text-center py-8 text-muted-foreground" role="alert">
             <AlertCircle
@@ -177,14 +169,13 @@ const UserSearchList = ({
             />
           ))
         )}
-      </div>
-
-      {/* Results Count */}
-      {searchQuery.trim() && !loading && displayUsers.length > 0 && (
-        <div className="text-xs text-muted-foreground text-center" role="status">
-          Found {displayUsers.length} user{displayUsers.length !== 1 ? "s" : ""}
-        </div>
-      )}
+        {/* Keep the count inside the reserved area; it must not resize the dialog. */}
+        {searchQuery.trim() && !error && displayUsers.length > 0 && (
+          <div className="pt-3 text-xs text-muted-foreground text-center" role="status">
+            Found {displayUsers.length} user{displayUsers.length !== 1 ? "s" : ""}
+          </div>
+        )}
+      </fieldset>
     </div>
   );
 };

@@ -1,6 +1,6 @@
 "use client";
 import React from "react";
-import { AlertCircle, Globe, RotateCw, Search, Users } from "lucide-react";
+import { AlertCircle, Globe, LoaderCircle, RotateCw, Search, Users } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useShallow } from "zustand/react/shallow";
 import { useDiscoverRoomsStore } from "@/lib/stores/discoverRoomsStore";
@@ -12,7 +12,6 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Skeleton } from "@/components/ui/skeleton";
 
 export const DiscoverRoomsDialog: React.FC = () => {
   const router = useRouter();
@@ -58,15 +57,15 @@ export const DiscoverRoomsDialog: React.FC = () => {
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && close()}>
-      <DialogContent className="max-w-md max-h-[85vh] flex flex-col">
-        <DialogHeader>
+      <DialogContent className="max-w-md h-[min(32rem,85dvh)] flex flex-col">
+        <DialogHeader className="shrink-0">
           <DialogTitle>Discover rooms</DialogTitle>
           <DialogDescription>
             Find public rooms you have not joined yet.
           </DialogDescription>
         </DialogHeader>
 
-        <div className="relative">
+        <div className="relative shrink-0">
           <Search
             className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground w-4 h-4"
             aria-hidden="true"
@@ -77,8 +76,17 @@ export const DiscoverRoomsDialog: React.FC = () => {
             placeholder="Search public rooms..."
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            className="w-full pl-9 pr-3 py-2 text-sm border border-border rounded-lg focus:ring-2 focus:ring-ring focus:border-transparent"
+            className="w-full pl-9 pr-10 py-2 text-sm border border-border rounded-lg focus:ring-2 focus:ring-ring focus:border-transparent"
           />
+          <span
+            hidden={!loading}
+            role="status"
+            aria-busy={loading}
+            aria-label="Loading public rooms"
+            className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground"
+          >
+            <LoaderCircle className="h-4 w-4 animate-spin motion-reduce:animate-none" aria-hidden="true" />
+          </span>
         </div>
 
         {joinError && (
@@ -90,26 +98,7 @@ export const DiscoverRoomsDialog: React.FC = () => {
           </div>
         )}
 
-        <div className="flex-1 overflow-y-auto min-h-0">
-          {loading && (
-            <div
-              className="space-y-3"
-              role="status"
-              aria-busy="true"
-              aria-label="Loading public rooms"
-            >
-              {[0, 1, 2].map((i) => (
-                <div key={i} className="flex items-center gap-3 p-2">
-                  <Skeleton className="h-10 w-10 rounded-full flex-shrink-0" />
-                  <div className="flex-1 space-y-2">
-                    <Skeleton className="h-4 w-3/4" />
-                    <Skeleton className="h-3 w-1/2" />
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-
+        <div aria-busy={loading} className="flex-1 overflow-y-auto min-h-0 [scrollbar-gutter:stable]">
           {!loading && error && (
             <div
               className="p-4 bg-danger-surface border border-destructive/30 rounded-lg"
@@ -133,7 +122,7 @@ export const DiscoverRoomsDialog: React.FC = () => {
             </div>
           )}
 
-          {!loading && !error && results.length === 0 && (
+          {!error && results.length === 0 && (
             <div className="flex flex-col items-center py-8 text-center">
               <Globe className="w-10 h-10 text-muted-foreground mb-3" aria-hidden="true" />
               <p className="text-sm font-medium text-foreground">
@@ -147,7 +136,7 @@ export const DiscoverRoomsDialog: React.FC = () => {
             </div>
           )}
 
-          {!loading && results.length > 0 && (
+          {results.length > 0 && (
             <ul className="divide-y divide-border/60">
               {results.map((room) => (
                 <li key={room.id} className="flex items-center gap-3 py-3">
@@ -170,7 +159,7 @@ export const DiscoverRoomsDialog: React.FC = () => {
                   <Button
                     type="button"
                     size="sm"
-                    disabled={joiningId !== null}
+                    disabled={loading || joiningId !== null}
                     aria-label={`Join ${room.name}`}
                     onClick={() => void joinAndOpen(room.id)}
                   >
@@ -181,13 +170,13 @@ export const DiscoverRoomsDialog: React.FC = () => {
             </ul>
           )}
 
-          {!loading && hasMore && (
+          {hasMore && (
             <div className="pt-3 text-center">
               <Button
                 type="button"
                 variant="outline"
                 size="sm"
-                disabled={loadingMore}
+                disabled={loading || loadingMore}
                 onClick={() => loadMore()}
               >
                 {loadingMore ? "Loading..." : "Load more"}
