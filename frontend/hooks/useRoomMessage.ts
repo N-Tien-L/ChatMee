@@ -35,6 +35,17 @@ const ROOM_DELETED_CONTENT = "This room has been deleted";
 const isRoomDeletedEvent = (message: Message) =>
     message.type === MessageType.SYSTEM && !message.id && message.content === ROOM_DELETED_CONTENT;
 
+/** Reloads one room into the rooms store so member counts follow joins/leaves the user events do not announce. */
+const refreshRoom = (roomId: string) => {
+    Promise.resolve(chatRoomApi.getChatRoomById(roomId))
+        .then((res) => {
+            if (res?.success) useChatRoomsStore.getState().upsertRoom(res.data);
+        })
+        .catch(() => {
+            // The next reconnect refetch recovers the room.
+        });
+};
+
 function isApiError(err: unknown): err is { response?: { data?: { detail?: string } }, message?: string } {
     return typeof err === "object" && err !== null;
 }
@@ -69,6 +80,11 @@ export const useRoomMessages = (roomId: string, options: RoomMessagesOptions = {
     // Kept outside the reducer so two scroll events before the next render cannot send the same
     // cursor twice, and so a page that arrives after a room switch is recognised and ignored.
     const pagingRef = useRef<Paging>({ roomId, nextCursor: null, hasMore: false, inFlight: false });
+
+    // Members may have joined while this room was closed: refresh it whenever it is opened.
+    useEffect(() => {
+        if (roomId) refreshRoom(roomId);
+    }, [roomId]);
 
     useEffect(() => {
         // History loads merge into what is on screen, so a new room must start empty.
@@ -228,13 +244,7 @@ export const useRoomMessages = (roomId: string, options: RoomMessagesOptions = {
             }
             // Joined/left/role system messages change the member list: refresh the room so counts stay right.
             if (message.type === MessageType.SYSTEM) {
-                chatRoomApi.getChatRoomById(roomId)
-                    .then((res) => {
-                        if (res.success) useChatRoomsStore.getState().upsertRoom(res.data);
-                    })
-                    .catch(() => {
-                        // The next reconnect refetch recovers the room.
-                    });
+                refreshRoom(roomId);
             }
             // Check if this message confirms one we sent optimistically
             if (message.tempId && message.senderId === user?.id) {
