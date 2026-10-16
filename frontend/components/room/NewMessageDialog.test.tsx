@@ -10,8 +10,11 @@ const person = { id: 'u2', name: 'Bob Tran', avatarUrl: '' };
 const push = vi.fn();
 vi.mock('next/navigation', () => ({ useRouter: () => ({ push }) }));
 vi.mock('@/components/user/UserSearchList', () => ({
-    default: ({ onUserAdd }: { onUserAdd: (user: typeof person) => void }) => (
-        <button type="button" onClick={() => onUserAdd(person)}>Pick Bob</button>
+    default: ({ onUserAdd, excludeUserIds }: { onUserAdd: (user: typeof person) => void; excludeUserIds?: string[] }) => (
+        <>
+            <button type="button" onClick={() => onUserAdd(person)}>Pick Bob</button>
+            <output aria-label="excluded">{excludeUserIds?.join(',')}</output>
+        </>
     ),
 }));
 
@@ -66,5 +69,14 @@ describe('NewMessageDialog', () => {
         fireEvent.click(screen.getByRole('button', { name: 'Pick Bob' }));
 
         await waitFor(() => expect(push).toHaveBeenCalledWith('/dashboard?roomId=dm-new', { scroll: false }));
+    });
+
+    it('render_blockedConversation_isNotRecentAndIsExcludedFromSearch', () => {
+        useChatRoomsStore.setState({
+            rooms: [{ id: 'dm-bob', roomType: RoomType.DIRECT_MESSAGE, counterpart: person, blocked: true, roomName: '', createdAt: '' }],
+        } as never);
+        render(<NewMessageDialog isOpen onClose={vi.fn()} />);
+        expect(screen.queryByText('Recent')).toBeNull();
+        expect(screen.getByLabelText('excluded')).toHaveTextContent('u2');
     });
 });
