@@ -58,13 +58,18 @@ Develop was pushed normally, without a force update. Main remains `3cb5f89`.
 - Closed PRs #4, #5, #8, #9, #10, #11, #12 and #14: major version upgrades are
   deferred to dedicated maintenance work; no dependency upgrade was merged.
 - Deleted the remote branch of each of these ten closed PRs and pruned local refs.
-- Retained [Maven minor/patch PR #1](https://github.com/N-Tien-L/ChatMee/pull/1) and
+- At completion of the manual cleanup, retained [Maven minor/patch PR #1](https://github.com/N-Tien-L/ChatMee/pull/1) and
   [frontend minor/patch PR #13](https://github.com/N-Tien-L/ChatMee/pull/13).
-- Verified four remote branches remain: main, develop and those two PR branches.
+- At that checkpoint, verified four remote branches: main, develop and those two PR branches.
+- At 18:11:16 Asia/Bangkok, `dependabot[bot]` subsequently closed PR #13 and removed
+  its branch. Final verification found three remote branches: main, develop and
+  the Maven minor/patch branch for PR #1. The bot's frontend update run completed
+  successfully; no frontend dependency PR was merged by this cleanup.
 
 The major-version ignore rules are committed on develop. Dependabot reads its
 configuration from the default branch, so these rules become active after the
-eventual merge into main. See the [GitHub configuration reference](https://docs.github.com/en/code-security/reference/supply-chain-security/dependabot-options-reference).
+eventual merge into main. See [where GitHub reads the configuration](https://docs.github.com/en/code-security/concepts/supply-chain-security/about-the-dependabot-yml-file#where-to-store-the-dependabotyml-file)
+and the [configuration reference](https://docs.github.com/en/code-security/reference/supply-chain-security/dependabot-options-reference).
 
 ## Verification
 
