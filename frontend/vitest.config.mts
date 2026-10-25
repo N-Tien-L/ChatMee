@@ -1,4 +1,4 @@
-import { defineConfig } from 'vitest/config'
+import { configDefaults, defineConfig } from 'vitest/config'
 import react from '@vitejs/plugin-react'
 import { resolve } from 'path'
 
@@ -8,6 +8,7 @@ export default defineConfig({
   esbuild: { jsx: 'automatic' },
   test: {
     environment: 'jsdom',
+    exclude: [...configDefaults.exclude, 'tests/e2e/**'],
     setupFiles: ['./vitest.setup.ts'],
     alias: {
       '@': resolve(__dirname, './'),
