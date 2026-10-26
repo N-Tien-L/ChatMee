@@ -313,7 +313,7 @@ class StompMessagingIT {
     }
 
     private String issueToken(User user) {
-        String token = tokens.issueToken(user.getId());
+        String token = tokens.issueToken(user.getId(), new org.springframework.mock.web.MockHttpSession());
         issuedTokens.add(token);
         return token;
     }

@@ -145,7 +145,9 @@ class AuthChannelInterceptorTest {
             Message<?> message = applicationFrame(StompCommand.SUBSCRIBE, destination, "internal-user");
             assertSame(message, interceptor.preSend(message, channel));
         }
-        verifyNoInteractions(participants, tokens);
+        verifyNoInteractions(participants);
+        verify(tokens, times(2)).requireSocket(null);
+        verifyNoMoreInteractions(tokens);
     }
 
     @Test
@@ -178,7 +180,9 @@ class AuthChannelInterceptorTest {
             Message<?> message = applicationFrame(StompCommand.SEND, destination, "internal-user");
             assertSame(message, interceptor.preSend(message, channel));
         }
-        verifyNoInteractions(participants, tokens);
+        verifyNoInteractions(participants);
+        verify(tokens, times(3)).requireSocket(null);
+        verifyNoMoreInteractions(tokens);
     }
 
     @Test
@@ -216,7 +220,7 @@ class AuthChannelInterceptorTest {
     // Exercises the real registered interceptor, broker and WebSocket endpoint on loopback.
     // Redis is mocked here; the real Redis/Mongo Testcontainers gate belongs to CM-023.
     @Nested
-    @SpringBootTest(classes = {WebSocketConfig.class, AuthChannelInterceptor.class},
+    @SpringBootTest(classes = {WebSocketConfig.class, AuthChannelInterceptor.class, WsSessionRegistry.class},
             webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
             properties = "app.client.url=http://localhost")
     @ActiveProfiles("actuator-test")
@@ -224,6 +228,17 @@ class AuthChannelInterceptorTest {
     @ImportAutoConfiguration({TomcatServletWebServerAutoConfiguration.class,
             DispatcherServletAutoConfiguration.class, WebMvcAutoConfiguration.class})
     class WireConnect {
+        @MockitoBean private org.springframework.data.redis.core.StringRedisTemplate wireRedis;
+        @Autowired private WsSessionRegistry wireRegistry;
+        @org.junit.jupiter.api.BeforeEach
+        void bindSyntheticHttpSessions() {
+            doAnswer(invocation -> {
+                String token = invocation.getArgument(0), user = invocation.getArgument(1), socket = invocation.getArgument(2);
+                wireRegistry.registerToken(token, user, new org.springframework.mock.web.MockHttpSession());
+                wireRegistry.bindToken(token, user, socket);
+                return null;
+            }).when(wireTokens).bindSocket(anyString(), anyString(), anyString());
+        }
         @LocalServerPort
         private int port;
         @MockitoBean
@@ -428,7 +443,9 @@ class AuthChannelInterceptorTest {
         }
         assertThrows(BadCredentialsException.class, () -> interceptor.preSend(
             applicationFrame(StompCommand.SUBSCRIBE, "/user/queue/events", null), channel));
-        verifyNoInteractions(participants, tokens);
+        verifyNoInteractions(participants);
+        verify(tokens, times(5)).requireSocket(null);
+        verifyNoMoreInteractions(tokens);
     }
 
 }

@@ -25,6 +25,7 @@ import lombok.RequiredArgsConstructor;
 public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
 
     private final AuthChannelInterceptor authChannelInterceptor;
+    private final com.lnt.chatmee.security.WsSessionRegistry sessionRegistry;
     private final RoomSubscriptionInterceptor roomSubscriptionInterceptor;
 
     @Value("${app.client.url}")
@@ -57,7 +58,7 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
 
     @Override
     public void configureClientOutboundChannel(ChannelRegistration registration) {
-        registration.interceptors(roomSubscriptionInterceptor);
+        registration.interceptors(sessionRegistry, roomSubscriptionInterceptor);
         registration.taskExecutor()
                 .corePoolSize(4)
                 .maxPoolSize(16)
@@ -66,6 +67,7 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
 
     @Override
     public void configureWebSocketTransport(WebSocketTransportRegistration registration) {
+        registration.addDecoratorFactory(sessionRegistry::decorate);
         registration.setMessageSizeLimit(128 * 1024) // 128 KB
                     .setSendBufferSizeLimit(512 * 1024) // 512 KB
                     .setSendTimeLimit(20000) // 20 seconds

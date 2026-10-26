@@ -62,9 +62,14 @@ test('auth_logoutConfirmed_clearsAccountState', async ({ alice }) => {
 test('auth_expiredSession_stopsReconnect', async ({ alice }) => {
   // Natural server idle expiry, not a forged 401. WS heartbeats do not refresh HTTP sessions.
   // The 60-second test-only servlet timeout needs a quiet interval with no session reads.
+  let expiredSocketClosed = false;
+  alice.on('websocket', socket => socket.on('close', () => { expiredSocketClosed = true; }));
+  await alice.reload();
   await expect(alice.getByText('On air', { exact: true })).toBeVisible();
+  expiredSocketClosed = false;
   await me(alice.context());
   await alice.waitForTimeout(65_000);
+  expect(expiredSocketClosed).toBe(true);
   await alice.reload();
   await expect(alice).toHaveURL(/\/login/);
   await expect(alice.waitForRequest('**/api/v1/auth/ws-token', { timeout: 2500 })).rejects.toThrow(/Timeout/);
@@ -130,3 +135,85 @@ for (const fault of ['network', '503'] as const) {
     await expect(page).toHaveURL(/\/dashboard/);
   });
 }
+
+test('auth_logoutCurrentSession_closesSiblingTabAndPreservesIndependentLogin', async ({ alice, bob }) => {
+  const identity = await me(alice.context());
+  await signOut(bob);
+  await login(bob, 'Alice');
+  expect((await me(bob.context())).id === identity.id).toBe(true);
+  const mirror = await alice.context().newPage();
+  let mirrorClosed = false;
+  mirror.on('websocket', socket => socket.on('close', () => { mirrorClosed = true; }));
+  try {
+    await mirror.goto('/dashboard');
+    await expect(mirror.getByText('On air', { exact: true })).toBeVisible();
+    await signOut(alice);
+    await expect.poll(() => mirrorClosed, { timeout: 5000 }).toBe(true);
+    expect((await me(bob.context())).id === identity.id).toBe(true);
+    const room = await createConversation(bob);
+    await bob.getByRole('textbox', { name: 'Message', exact: true }).fill('Synthetic independent session remains usable');
+    await bob.getByRole('button', { name: 'Send message', exact: true }).click();
+    await expect.poll(async () => {
+      const response = await bob.request.get(origin + '/api/v1/rooms/' + room + '/messages');
+      return JSON.stringify(await response.json()).includes('Synthetic independent session remains usable');
+    }).toBe(true);
+  } finally { await mirror.close(); }
+});
+
+test('auth_logoutCurrentSession_revokesUnusedWsToken', async ({ alice, bob }) => {
+  const token = await alice.evaluate(async () => {
+    const csrf = document.cookie.split('; ').find(value => value.startsWith('XSRF-TOKEN='))?.split('=')[1];
+    const response = await fetch('/api/v1/auth/ws-token', { method: 'POST',
+      headers: { 'X-XSRF-TOKEN': decodeURIComponent(csrf ?? '') } });
+    if (response.status !== 200) throw new Error('Synthetic token issue failed');
+    return (await response.json()).token as string;
+  });
+  await signOut(alice);
+  // The other real session stays usable; only the old issuing session's grant is tested.
+  await me(bob.context());
+  const rejected = await bob.evaluate(value => new Promise<boolean>((resolve, reject) => {
+    const socket = new WebSocket('ws://127.0.0.1:8100/ws', ['v12.stomp']);
+    let error = false;
+    const deadline = setTimeout(() => { socket.close(); reject(new Error('Synthetic CONNECT deadline')); }, 5000);
+    socket.onopen = () => socket.send('CONNECT\naccept-version:1.2\nhost:localhost\nX-WS-Token:' + value + '\n\n\0');
+    socket.onmessage = event => {
+      const frame = String(event.data);
+      if (frame.startsWith('ERROR')) error = true;
+      if (frame.startsWith('CONNECTED')) { clearTimeout(deadline); resolve(false); socket.close(); }
+    };
+    socket.onclose = () => { clearTimeout(deadline); resolve(error); };
+  }), token);
+  expect(rejected).toBe(true);
+});
+
+
+test('auth_logoutCurrentSession_serverClosesTransportsWithoutClientCooperation', async ({ alice, bob }) => {
+  const grants = await alice.evaluate(async () => {
+    const csrf = document.cookie.split('; ').find(value => value.startsWith('XSRF-TOKEN='))?.split('=')[1];
+    const values: string[] = [];
+    for (let n = 0; n < 2; n++) {
+      const response = await fetch('/api/v1/auth/ws-token', { method: 'POST', headers: { 'X-XSRF-TOKEN': decodeURIComponent(csrf ?? '') } });
+      if (response.status !== 200) throw new Error('Synthetic token issue failed');
+      values.push((await response.json()).token);
+    }
+    return values;
+  });
+  // These transports belong to Alice's HTTP session, but Bob's page never runs Alice's
+  // logout cleanup/navigation. Only server revocation can close them here.
+  await bob.evaluate(values => Promise.all(values.map((value, index) => new Promise<void>((resolve, reject) => {
+    const state = window as typeof window & { __cm102Closed?: boolean[] };
+    (state.__cm102Closed ??= [false, false]);
+    const socket = new WebSocket('ws://127.0.0.1:8100/ws', ['v12.stomp']);
+    const deadline = setTimeout(() => { socket.close(); reject(new Error('Synthetic CONNECT deadline')); }, 5000);
+    socket.onopen = () => socket.send('CONNECT\naccept-version:1.2\nhost:localhost\nX-WS-Token:' + value + '\n\n\0');
+    socket.onmessage = event => {
+      if (String(event.data).startsWith('CONNECTED')) { clearTimeout(deadline); resolve(); }
+      if (String(event.data).startsWith('ERROR')) { clearTimeout(deadline); reject(new Error('Synthetic CONNECT rejected')); }
+    };
+    socket.onclose = () => { state.__cm102Closed![index] = true; };
+  }))), grants);
+  await signOut(alice);
+  await expect.poll(() => bob.evaluate(() => (window as typeof window & { __cm102Closed?: boolean[] }).__cm102Closed),
+    { timeout: 5000 }).toEqual([true, true]);
+  await me(bob.context());
+});

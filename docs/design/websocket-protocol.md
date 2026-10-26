@@ -494,3 +494,22 @@ Removal checks participant roles rather than createdBy, deletes the membership a
 then sends ROOM_REMOVED with reason REMOVED to all sessions of the removed user. CM-058's existing
 live outbound guard blocks subsequent room and typing frames, including the removal announcement,
 for that user; their connection and other subscriptions remain usable.
+
+## M1 current-session revocation (CM-102 / SPEC-011, candidate implementation)
+
+The v0 deferral above is historical. For this owner-authorized M1 candidate, each issued
+ws-token is privately bound to the current server HTTP session and each authenticated
+transport inherits that binding. The public token response and Redis user-ID value,
+single-use getAndDelete and 60-second TTL are unchanged. Unknown local bindings reject
+CONNECT, including after restart; restart still requires relogin.
+
+POST /logout invalidates only the current HTTP session. Its servlet destruction callback
+revokes pending tokens and closes all of its transports; independent sessions of the same
+account are unaffected. Session-ID rotation also ends old bindings. Inbound SEND/SUBSCRIBE
+and queued outbound MESSAGE delivery require a still-valid bound session. A one-second
+local sweep closes sockets at the HTTP idle deadline without refreshing HTTP activity.
+Rejected CSRF logout does not trigger invalidation. No session/token IDs enter frames/logs.
+
+Verification: WsSessionRegistryTest; existing token/interceptor/CSRF tests; all 13 auth
+E2Es, including actual idle expiry and two raw transports that never run client logout.
+This is candidate-local evidence, not a deployed-state or real-provider smoke claim.
