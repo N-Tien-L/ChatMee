@@ -203,6 +203,9 @@ export const useChatRoomsStore = create<chatRoomState>((set, get) => ({
     setActiveRoom: (roomId) => set({ activeRoomId: roomId }),
 
     upsertRoom: (room) => {
+        // An unversioned room response must not undo a later hide/removal.
+        // Explicit add/activity and authoritative list snapshots can restore access.
+        if (get().endedRooms[room.id]) return;
         revision++;
         const existing = get().rooms.find(r => r.id === room.id);
         const stale = existing && (activityTime(existing) > activityTime(room) ||
@@ -314,6 +317,7 @@ export const useChatRoomsStore = create<chatRoomState>((set, get) => ({
                 const response = await chatRoomApi.getChatRoomById(roomId);
                 if (isCurrent(generation) && get().endedRooms[roomId] === ended && response.success) {
                     const changed = started !== revision;
+                    set(state => ({ endedRooms: withoutEnded(state.endedRooms, [roomId]) }));
                     get().upsertRoom(response.data);
                     if (changed) await fetchSnapshot(false);
                 }
@@ -326,7 +330,13 @@ export const useChatRoomsStore = create<chatRoomState>((set, get) => ({
         switch (event.type) {
             case "ROOM_ADDED":
             case "ROOM_UPDATED":
-                if (isRoom(payload.room)) get().upsertRoom(payload.room);
+                if (isRoom(payload.room)) {
+                    if (event.type === "ROOM_ADDED") {
+                        const roomId = payload.room.id;
+                        set(state => ({ endedRooms: withoutEnded(state.endedRooms, [roomId]) }));
+                    }
+                    get().upsertRoom(payload.room);
+                }
                 break;
             case "ROOM_REMOVED": {
                 const roomId = payload.roomId;
@@ -370,6 +380,7 @@ export const useChatRoomsStore = create<chatRoomState>((set, get) => ({
     },
 
     addRoom: (room) => {
+        set(state => ({ endedRooms: withoutEnded(state.endedRooms, [room.id]) }));
         get().upsertRoom(room);
     },
 

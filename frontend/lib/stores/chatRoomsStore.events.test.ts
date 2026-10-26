@@ -508,3 +508,14 @@ describe('CM-096 visibility and snapshot completion', () => {
         expect(find('a')?.unreadCount).toBe(1);
     });
 });
+
+it('upsertRoom_lateSnapshotAfterHide_doesNotResurrectRoom', () => {
+    vi.mocked(useAuthStore.getState).mockReturnValue({ user: { id: 'me' } } as never);
+    useChatRoomsStore.setState({ rooms: [], loading: false, endedRooms: {} });
+    const store = useChatRoomsStore.getState();
+    store.setRooms([room('hidden-dm', { roomType: RoomType.DIRECT_MESSAGE })]);
+    store.removeRoom('hidden-dm', 'HIDDEN');
+    store.upsertRoom(room('hidden-dm', { roomType: RoomType.DIRECT_MESSAGE, unreadCount: 4 }));
+    expect(ids()).toEqual([]);
+    expect(useChatRoomsStore.getState().endedRooms['hidden-dm']).toBe('HIDDEN');
+});
