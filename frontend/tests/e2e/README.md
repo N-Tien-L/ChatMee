@@ -238,3 +238,27 @@ a failed exit code; neither the reporter nor the workflow retries or suppresses 
 CM-100/101 remain separate production follow-ups. Adding CI does not make their failing
 acceptance tests green. See both M1 handoffs; remote GitHub CI remains pending until the
 owner separately authorizes a push/run. No release readiness follows from authoring CI.
+
+## CM-106 interactive synthetic preview
+
+From this dedicated checkout's frontend directory run `npm run preview:local`.
+Open http://127.0.0.1:3200/login, choose GitHub then synthetic Alice. Use a private
+window for Bob and another normal tab for Alice's shared session. No real provider
+login occurs; the idle timeout is 30 minutes.
+
+The launcher snapshots frontend source/config and backend classes into ignored
+`.local-preview/<run>/`, with separate build output, ports 3200/3201/8200/9200 and
+fresh owned containers. E2E retains 3100/3101/8100/9100 and separate data. Source
+edits/builds do not hot reload this snapshot. Installed locked node_modules are shared
+through a junction; do not run npm ci during preview. Stop with Ctrl+C in the launching
+terminal. Cleanup targets only owned children and Testcontainers resources. Existing
+occupied ports are preserved. No environment-file contents are read.
+
+Try two-user messaging, tab block/unblock and Inbox decline, report submit/cancel then
+another click, and current-session logout (same-cookie tabs end; an independent
+same-account login remains). Restarting creates fresh data. This synthetic preview
+and emulated viewport do not certify real providers or mobile keyboards. The rejected
+native CM-105 ordering prototype is excluded.
+
+`node --test tests/e2e/preview-only.test.mjs` checks fixed inputs and occupied-port
+preservation; full repository gates and browser smoke remain required.

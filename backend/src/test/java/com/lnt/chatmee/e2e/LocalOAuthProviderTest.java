@@ -59,6 +59,21 @@ class LocalOAuthProviderTest {
     }
 
     @Test
+    void preview_fixedCallback_redirectsOnlyToPreview() throws Exception {
+        String callback = "http://127.0.0.1:3200/login/oauth2/code/github";
+        try (var provider = new LocalOAuthProvider(0, callback)) {
+            var response = HttpClient.newHttpClient().send(HttpRequest.newBuilder(URI.create(
+                    "http://127.0.0.1:" + provider.port()
+                    + "/authorize?client_id=e2e-client&response_type=code&state=state&account=alice&redirect_uri="
+                    + URLEncoder.encode(callback, StandardCharsets.UTF_8))).build(), HttpResponse.BodyHandlers.discarding());
+            assertThat(response.statusCode()).isEqualTo(302);
+            assertThat(response.headers().firstValue("Location").orElseThrow()).startsWith(callback + "?code=");
+        }
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> new LocalOAuthProvider(0, "https://example.com/callback"))
+                .isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test
     void token_unknownCode_rejectsGrant() throws Exception {
         try (var provider = new LocalOAuthProvider(0)) {
             var response = HttpClient.newHttpClient().send(HttpRequest.newBuilder(

@@ -13,7 +13,8 @@ import org.testcontainers.containers.GenericContainer;
 /** Dedicated test-classpath entry point; no production auth or session replacements. */
 public final class E2eApplication {
     public static void main(String[] args) throws Exception {
-        if (args.length != 0) throw new IllegalArgumentException("E2E launcher accepts no target overrides");
+        boolean preview = args.length == 1 && "--preview".equals(args[0]);
+        if (args.length != 0 && !preview) throw new IllegalArgumentException("E2E launcher accepts no target overrides");
         if (System.getenv("E2E_BASE_URL") != null && !"http://127.0.0.1:3100".equals(System.getenv("E2E_BASE_URL")))
             throw new IllegalArgumentException("E2E refuses nonlocal target overrides");
         String dockerHost = System.getenv("DOCKER_HOST");
@@ -29,18 +30,30 @@ public final class E2eApplication {
             if (!java.net.InetAddress.getByName(mongo.getHost()).isLoopbackAddress()
                     || !java.net.InetAddress.getByName(redis.getHost()).isLoopbackAddress())
                 throw new IllegalArgumentException("E2E requires loopback container targets");
-            provider = new LocalOAuthProvider();
+            provider = preview ? new LocalOAuthProvider(9200, "http://127.0.0.1:3200/login/oauth2/code/github")
+                    : new LocalOAuthProvider();
             var runningProvider = provider;
             var environment = new StandardEnvironment();
             // No inherited Spring configuration, external config imports, credentials or service URLs.
             environment.getPropertySources().remove(StandardEnvironment.SYSTEM_ENVIRONMENT_PROPERTY_SOURCE_NAME);
             environment.getPropertySources().remove(StandardEnvironment.SYSTEM_PROPERTIES_PROPERTY_SOURCE_NAME);
-            environment.getPropertySources().addFirst(new MapPropertySource("isolated-e2e", Map.of(
+            var overrides = new java.util.HashMap<String, Object>(Map.of(
                     "spring.config.location", "classpath:/application.properties,classpath:/application-e2e.properties",
                     "spring.profiles.active", "e2e",
                     "spring.mongodb.uri", "mongodb://127.0.0.1:" + mongo.getMappedPort(27017) + "/chatmee_e2e",
                     "spring.data.redis.host", "127.0.0.1",
-                    "spring.data.redis.port", redis.getMappedPort(6379))));
+                    "spring.data.redis.port", redis.getMappedPort(6379)));
+            if (preview) {
+                overrides.put("server.port", 8200);
+                overrides.put("server.servlet.session.timeout", "30m");
+                overrides.put("app.client.url", "http://127.0.0.1:3200");
+                overrides.put("spring.security.oauth2.client.registration.github.redirect-uri",
+                        "http://127.0.0.1:3200/login/oauth2/code/github");
+                for (var endpoint : Map.of("authorization-uri", "authorize", "token-uri", "token", "user-info-uri", "userinfo").entrySet())
+                    overrides.put("spring.security.oauth2.client.provider.github." + endpoint.getKey(),
+                            "http://127.0.0.1:9200/" + endpoint.getValue());
+            }
+            environment.getPropertySources().addFirst(new MapPropertySource("isolated-e2e", overrides));
             var application = new SpringApplication(ChatmeeApplication.class);
             application.setEnvironment(environment);
             application.setAddCommandLineProperties(false);

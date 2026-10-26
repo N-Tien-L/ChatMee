@@ -20,12 +20,21 @@ public final class LocalOAuthProvider implements AutoCloseable {
     private final Map<String, Grant> codes = new ConcurrentHashMap<>();
     private final Map<String, Grant> tokens = new ConcurrentHashMap<>();
     private final HttpServer server;
+    private final String callback;
 
     public LocalOAuthProvider() throws IOException {
         this(9100);
     }
 
     LocalOAuthProvider(int port) throws IOException {
+        this(port, CALLBACK);
+    }
+
+    LocalOAuthProvider(int port, String callback) throws IOException {
+        if (!CALLBACK.equals(callback)
+                && !"http://127.0.0.1:3200/login/oauth2/code/github".equals(callback))
+            throw new IllegalArgumentException("Only fixed loopback fixture callbacks are supported");
+        this.callback = callback;
         server = HttpServer.create(new InetSocketAddress("127.0.0.1", port), 0);
         server.createContext("/authorize", this::authorize);
         server.createContext("/token", this::token);
@@ -40,7 +49,7 @@ public final class LocalOAuthProvider implements AutoCloseable {
         if (!"GET".equals(exchange.getRequestMethod())
                 || !"e2e-client".equals(query.get("client_id"))
                 || !"code".equals(query.get("response_type"))
-                || !CALLBACK.equals(query.get("redirect_uri"))
+                || !callback.equals(query.get("redirect_uri"))
                 || query.getOrDefault("state", "").isBlank()) {
             reply(exchange, 400, "text/plain", "Invalid authorization request");
             return;
@@ -59,7 +68,7 @@ public final class LocalOAuthProvider implements AutoCloseable {
             return;
         }
         if (account.equals("deny")) {
-            exchange.getResponseHeaders().add("Location", CALLBACK + "?error=access_denied&state="
+            exchange.getResponseHeaders().add("Location", callback + "?error=access_denied&state="
                     + URLEncoder.encode(query.get("state"), StandardCharsets.UTF_8));
             exchange.sendResponseHeaders(302, -1);
             exchange.close();
@@ -71,7 +80,7 @@ public final class LocalOAuthProvider implements AutoCloseable {
         }
         String code = UUID.randomUUID().toString();
         codes.put(code, new Grant(account + (fixture.isEmpty() ? "" : "-" + fixture), Instant.now().plusSeconds(60)));
-        exchange.getResponseHeaders().add("Location", CALLBACK + "?code=" + code + "&state="
+        exchange.getResponseHeaders().add("Location", callback + "?code=" + code + "&state="
                 + URLEncoder.encode(query.get("state"), StandardCharsets.UTF_8));
         exchange.sendResponseHeaders(302, -1);
         exchange.close();
@@ -84,7 +93,7 @@ public final class LocalOAuthProvider implements AutoCloseable {
         if (!"POST".equals(exchange.getRequestMethod())
                 || !basic.equals(exchange.getRequestHeaders().getFirst("Authorization"))
                 || !"authorization_code".equals(form.get("grant_type"))
-                || !CALLBACK.equals(form.get("redirect_uri"))) {
+                || !callback.equals(form.get("redirect_uri"))) {
             reply(exchange, 400, "application/json", "{\"error\":\"invalid_request\"}");
             return;
         }

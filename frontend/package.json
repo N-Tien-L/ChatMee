@@ -8,6 +8,7 @@
     "start": "next start",
     "lint": "eslint",
     "test": "vitest run",
+    "preview:local": "node tests/e2e/run-preview.mjs",
     "test:watch": "vitest",
     "test:e2e": "node --test tests/e2e/local-only.test.mjs tests/e2e/diagnostics.test.mjs && playwright test"
   },
