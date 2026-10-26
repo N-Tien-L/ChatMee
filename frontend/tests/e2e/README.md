@@ -177,3 +177,64 @@ and delayed stale snapshot compare badge/title with server state. No suite retri
 configured. New success checks use observable conditions. The 550 ms send pacing creates
 a workload below the unchanged 10 sends / 5 seconds limit; it is not used to assert success.
 See the ticket handoff for actual run results; coverage descriptions are not pass claims.
+
+## CM-098 CI and local parity
+
+`.github/workflows/e2e-ci.yml` is a separate read-only (`contents: read`) job on
+Ubuntu 24.04 (supported by the pinned Playwright runtime) with JDK 17, Node 22 and one Chromium worker. Existing backend/frontend CI
+workflows are unchanged. Checkout does not persist Git credentials. No deployment,
+production service target, real OAuth secret or paid testing service is used.
+
+The same command owns services in both CI and the dedicated local checkout:
+
+    npm ci
+    npx playwright install chromium
+    npm run test:e2e
+
+On Linux CI, `npx playwright install --with-deps chromium` also installs the browser's
+OS dependencies; the wrapper executable bit is set before running the same command.
+The launcher creates fresh loopback-only Testcontainers Mongo/Redis instances and the
+synthetic OAuth backend, builds and inspects the production frontend, then serves it.
+No shared Docker service/database cleanup is performed. Local Windows verification
+is not evidence that the Ubuntu/GitHub run passed; the handoff records exact versions
+and remote status.
+
+Before Playwright, the command runs the target guards and an intentional startup
+failure check. That check starts its own synthetic sentinel on 3100, launches the
+runner and requires exit 1 at `ports`, no owned children, sanitized diagnostics and a
+still-reachable sentinel. The launcher must neither reuse nor stop the existing server.
+The check itself exits successfully only when this expected failure contract holds.
+It closes only its own sentinel. Run just that check with:
+
+    node --test tests/e2e/diagnostics.test.mjs
+
+Service requests have two-second deadlines, readiness is bounded to three minutes,
+Docker preflight to fifteen seconds, build to three minutes and artifact check to thirty
+seconds. Playwright startup is bounded to five minutes, its whole run to twelve minutes,
+and the CI job to twenty minutes. Occupied ports and early child exits fail closed.
+Unix children each get a new owned process group; shutdown signals only those groups,
+waits up to six seconds, then bounds forced termination. Windows cleanup uses exact
+spawned PIDs and their child trees, never process names or whoever owns a port.
+Testcontainers shutdown hooks/resource reaper own container cleanup, including JVM
+termination; no prune, volume removal, shared-container lookup or database deletion
+is used. Cancellation can interrupt cleanup, so the ephemeral CI runner/reaper remains
+the last-resort boundary; no claim of crash-proof cleanup is made.
+
+Only these ignored JSON files are eligible for the failure artifact, retained seven days:
+
+- `e2e-diagnostics/startup.json`: allowlisted phase/status, owned child PID/exit metadata
+  and cleanup completion. No child stdout/stderr is persisted here.
+- `e2e-diagnostics/suite.json`: test ID/title, source basename/line, status/duration/retry
+  and a coarse error category, updated after each case and at suite completion.
+- `e2e-diagnostics/failure-check.json`: expected startup-failure exit code and sentinel
+  preservation result.
+
+No raw error messages, request/response bodies or headers, environment dumps, cookies,
+OAuth grants/tokens, browser storage, traces, videos or screenshots are uploaded.
+Playwright's normal synthetic console diagnostics stay distinct from this allowlist;
+its raw test-results directory is excluded from the artifact. A failed assertion remains
+a failed exit code; neither the reporter nor the workflow retries or suppresses it.
+
+CM-100/101 remain separate production follow-ups. Adding CI does not make their failing
+acceptance tests green. See both M1 handoffs; remote GitHub CI remains pending until the
+owner separately authorizes a push/run. No release readiness follows from authoring CI.

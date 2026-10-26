@@ -9,7 +9,8 @@ export default defineConfig({
   retries: 0,
   timeout: 120_000,
   expect: { timeout: 15_000 },
-  reporter: 'line',
+  reporter: [['line'], ['./tests/e2e/diagnostics-reporter.ts']],
+  globalTimeout: 12 * 60_000,
   use: {
     baseURL: assertLocalTarget(),
     actionTimeout: 15_000, navigationTimeout: 30_000,
