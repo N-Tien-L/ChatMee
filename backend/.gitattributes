@@ -1,2 +1,4 @@
 /mvnw text eol=lf
 *.cmd text eol=crlf
+# Preserve the already committed upstream Windows wrapper byte-for-byte.
+/mvnw.cmd -text
