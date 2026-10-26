@@ -51,3 +51,8 @@ CM-102: session binding/revocation. CM-103: presence filtering. CM-104: same-acc
 block/decline invalidation. CM-105: ordered receive with explicit safe rejection.
 Each ticket has its own branch/commit and tests. CM-106 covers a separate local-only
 synthetic preview so owner testing need not occupy E2E ports/data/build output.
+
+CM-103 lifecycle detail: PRESENCE_SCOPE_CHANGED with empty payload on existing
+/user/queue/events invalidates only affected accounts' filtered snapshot. Announce it
+after join/leave/removal to current members plus a departing member. Existing
+ROOM_REMOVED handles the captured deletion audience. It carries no subject identity or room metadata and adds no destination.

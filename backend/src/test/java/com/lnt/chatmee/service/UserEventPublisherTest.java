@@ -138,4 +138,19 @@ class UserEventPublisherTest {
         }
     }
 
+    @Test
+    void presenceScopeChanged_affectedAccounts_receivesEmptyPrivateInvalidation() {
+        var publisher = new UserEventPublisher(messaging);
+        publisher.presenceScopeChanged(Set.of("remaining", "departing"));
+        var users = ArgumentCaptor.forClass(String.class);
+        var events = ArgumentCaptor.forClass(UserEvent.class);
+        verify(messaging, times(2)).convertAndSendToUser(users.capture(), eq("/queue/events"), events.capture());
+        assertThat(users.getAllValues()).containsExactlyInAnyOrder("remaining", "departing");
+        assertThat(events.getAllValues()).allSatisfy(event -> {
+            assertThat(event.type()).isEqualTo("PRESENCE_SCOPE_CHANGED");
+            assertThat(event.payload()).isEqualTo(Map.of());
+        });
+        verifyNoMoreInteractions(messaging);
+    }
+
 }

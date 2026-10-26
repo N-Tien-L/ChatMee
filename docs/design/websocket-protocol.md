@@ -513,3 +513,17 @@ Rejected CSRF logout does not trigger invalidation. No session/token IDs enter f
 Verification: WsSessionRegistryTest; existing token/interceptor/CSRF tests; all 13 auth
 E2Es, including actual idle expiry and two raw transports that never run client logout.
 This is candidate-local evidence, not a deployed-state or real-provider smoke claim.
+
+## M1 presence visibility (CM-103 / SPEC-011, implementation scope)
+
+GET /api/v1/online-users and every /topic/presence delivery are restricted to self or
+users sharing a currently active room. Requested-only DMs are not shared membership;
+hiding an active DM does not revoke membership. Authorization is rechecked after outbound
+queuing and fails closed on malformed payload/database failure. Redis registry state is
+internal; its global data is not the subscriber audience.
+
+PRESENCE_SCOPE_CHANGED `{type, payload:{}, occurredAt}` uses existing /user/queue/events.
+Only accounts affected by join/leave/removal receive it (current members plus
+the departing member). Existing ROOM_REMOVED already invalidates the captured deletion audience. It contains no other account's
+presence/room details and asks the client to replace its authorized snapshot. Reconnect
+and room lifecycle refetch remain recovery paths; there is no new destination or polling.

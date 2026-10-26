@@ -29,6 +29,7 @@ vi.mock('./stompClient', () => ({ createStompClientFactory: () => vi.fn() }));
 afterEach(cleanup);
 beforeEach(() => {
     vi.clearAllMocks();
+    vi.mocked(chatRoomApi.getOnlineUsers).mockResolvedValue([]);
     localStorage.clear();
     useAuthStore.setState({ user: null, isAuthenticated: false, loading: false });
 });
@@ -127,4 +128,36 @@ describe('StompProvider', () => {
             expect(handleUserEvent).toHaveBeenCalledWith(envelope);
         });
     });
+});
+
+
+it('membershipEvents_newerFilteredSnapshot_cannotBeOverwrittenByOlderVisibility', async () => {
+    useAuthStore.setState({ isAuthenticated: true, user: { id: 'viewer', name: 'Viewer' } as never });
+    useChatRoomsStore.setState({ handleUserEvent: vi.fn().mockResolvedValue(undefined) });
+    useInboxStore.setState({ handleUserEvent: vi.fn() });
+    useChatStore.getState().setOnlineUsers(['previously-related']);
+    let resolve!: (users: string[]) => void;
+    vi.mocked(chatRoomApi.getOnlineUsers).mockReturnValueOnce(new Promise(done => { resolve = done; })).mockResolvedValue([]);
+    render(<StompProvider><p>x</p></StompProvider>);
+    const handler = (session.subscribe.mock.calls as unknown as [string, (frame: { body: string }) => void][])
+        .find(call => call[0] === '/user/queue/events')![1];
+    act(() => handler({ body: JSON.stringify({ type: 'ROOM_UPDATED', payload: {} }) }));
+    await act(async () => handler({ body: JSON.stringify({ type: 'ROOM_REMOVED', payload: { roomId: 'old' } }) }));
+    expect([...useChatStore.getState().onlineUsers]).toEqual([]);
+    await act(async () => resolve(['previously-related']));
+    expect([...useChatStore.getState().onlineUsers]).toEqual([]);
+});
+
+
+it('presenceScopeChanged_refetchesOnlyTheFilteredPresenceSnapshot', async () => {
+    useAuthStore.setState({ isAuthenticated: true, user: { id: 'viewer', name: 'Viewer' } as never });
+    useChatRoomsStore.setState({ handleUserEvent: vi.fn().mockResolvedValue(undefined) });
+    useInboxStore.setState({ handleUserEvent: vi.fn() });
+    vi.mocked(chatRoomApi.getOnlineUsers).mockResolvedValue(['new-related']);
+    render(<StompProvider><p>x</p></StompProvider>);
+    const handler = (session.subscribe.mock.calls as unknown as [string, (frame: { body: string }) => void][])
+        .find(call => call[0] === '/user/queue/events')![1];
+    await act(async () => handler({ body: JSON.stringify({ type: 'PRESENCE_SCOPE_CHANGED', payload: {} }) }));
+    expect(chatRoomApi.getOnlineUsers).toHaveBeenCalledTimes(1);
+    expect([...useChatStore.getState().onlineUsers]).toEqual(['new-related']);
 });

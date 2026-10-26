@@ -148,7 +148,7 @@ class SubscriptionRevocationIT {
         mvc.perform(delete("/api/v1/rooms/" + roomId).with(oauth2Login().oauth2User(principal(owner)))
                 .with(csrf().asHeader())).andExpect(status().isOk());
         publishRoomAndTyping("after-delete");
-        messaging.convertAndSend("/topic/presence", (Object) Map.of("marker", "connection-alive"));
+        messaging.convertAndSend("/topic/presence", (Object) Map.of("marker", "connection-alive", "userId", member.getId(), "online", true));
 
         for (BlockingQueue<JsonNode> queue : rooms) {
             JsonNode deleted = take(queue);
@@ -178,7 +178,7 @@ class SubscriptionRevocationIT {
         publishRoomAndTyping("revoked");
         messaging.convertAndSend(topic(otherRoom), (Object) Map.of("marker", "other-room"));
         messaging.convertAndSend(topic(otherRoom) + "/typing", (Object) Map.of("marker", "other-typing"));
-        messaging.convertAndSend("/topic/presence", (Object) Map.of("marker", "presence"));
+        messaging.convertAndSend("/topic/presence", (Object) Map.of("marker", "presence", "userId", member.getId(), "online", true));
         messaging.convertAndSendToUser(member.getId(), "/queue/errors", Map.of("marker", "private-error"));
 
         assertThat(take(other).path("marker").asString()).isEqualTo("other-room");
@@ -281,7 +281,9 @@ class SubscriptionRevocationIT {
         // Simple broker receipts are unsupported; an exact probe proves subscription readiness.
         long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(10);
         while (System.nanoTime() < deadline) {
-            if (userId == null) messaging.convertAndSend(destination, (Object) Map.of("subscriptionReady", probe));
+            if ("/topic/presence".equals(destination)) messaging.convertAndSend(destination,
+                    (Object) Map.of("subscriptionReady", probe, "userId", member.getId(), "online", true));
+            else if (userId == null) messaging.convertAndSend(destination, (Object) Map.of("subscriptionReady", probe));
             else messaging.convertAndSendToUser(userId, destination.substring("/user".length()), Map.of("subscriptionReady", probe));
             if (probe.equals(readiness.poll(100, TimeUnit.MILLISECONDS))) return received;
         }
