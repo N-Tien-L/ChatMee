@@ -1,3 +1,4 @@
+import { socketFaults, joinRoom, openRoom, sendStored, rooms } from './fixtures/journey';
 import { test, expect, createConversation, origin } from './fixtures/local-stack';
 import type { Page } from '@playwright/test';
 
@@ -114,7 +115,6 @@ test('unread_reconnectSnapshotDelayedAcrossActivity_keepsNewBadgeAndTitle', asyn
 });
 
 test('unread_twoPages_readThenReconnect_convergesToServerState', async ({ alice, bob }) => {
-  const { socketFaults, joinRoom, openRoom, sendStored, rooms } = await import('./fixtures/journey');
   const room = await createConversation(alice);
   await createConversation(alice); // both Alice pages keep the target room closed
   const mirror = await alice.context().newPage();

@@ -1,3 +1,4 @@
+import { socketFaults, joinRoom, sendStored, history, expectHistory, createUiConversation } from './fixtures/journey';
 import { setTimeout as pace } from 'node:timers/promises';
 import { test, expect, createConversation, me, origin } from './fixtures/local-stack';
 
@@ -61,7 +62,6 @@ test('reconnect_moreThanOnePage_recoversEveryPersistedMessageOnce', async ({ ali
 });
 
 test('chat_lostEchoAndFailedSend_resendMatchesPersistedHistory', async ({ alice, bob }) => {
-  const { socketFaults, joinRoom, sendStored, history, expectHistory, createUiConversation } = await import('./fixtures/journey');
   const fault = await socketFaults(alice);
   const room = await createUiConversation(alice);
   await joinRoom(bob, room);
@@ -96,7 +96,6 @@ for (const touch of [false, true]) {
     test.use({ viewport: touch ? { width: 360, height: 740 } : { width: 1280, height: 900 }, hasTouch: touch, contextOptions: { reducedMotion: 'reduce' } });
     test('chat_recoveryRetryContinue_preservesScrollAndPersistedHistory', async ({ alice, bob }) => {
       test.setTimeout(240_000);
-      const { socketFaults, joinRoom, sendStored, expectHistory, createUiConversation } = await import('./fixtures/journey');
       const fault = await socketFaults(alice);
       const room = await createUiConversation(alice);
       await joinRoom(bob, room);
