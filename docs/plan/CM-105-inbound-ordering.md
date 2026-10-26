@@ -1,19 +1,20 @@
 # CM-105: Preserve inbound order without swallowing rejection errors
-- Status: Authorized investigation/implementation; acceptance pending real wire tests.
+- Status: Complete locally at 40a3b88; release pending owner actions and remote CI.
 - Type: fix. Spec: SPEC-011 AC-011-6/7. Design: m1-session-and-privacy.md.
 
 ## Expected files
-backend security OrderedAuthChannelInterceptor.java, config WebSocketConfig.java;
-AuthChannelInterceptorTest.java and StompMessagingIT.java; focused new wrapper tests;
-design/websocket-protocol.md and evidence. No dependency/version/security relaxation.
+Final: WebSocketConfig.java; AuthChannelInterceptorTest.java; authenticated session/
+event compatibility fixtures in RoomMembershipIT.java and SubscriptionRevocationIT.java;
+ADR-0008; m1-session-and-privacy design and this ticket. No dependency/security relaxation.
+The native adapter files described below belong only to rejected prototype 1b27cca.
 
 ## Acceptance criteria
-- [ ] Subscribe immediately followed by send is processed in wire order.
-- [ ] Missing/invalid/reused token, forbidden subscription and unavailable Redis send sanitized ERROR and close.
-- [ ] Existing authorization and rate limits remain intact; token/native credentials never logged/reflected.
-- [ ] Complete gates pass; if the workaround fails wire tests, retain the explicit gap rather than claiming success.
+- [x] Subscribe immediately followed by send is processed in wire order.
+- [x] Missing/invalid/reused token, forbidden subscription and unavailable Redis send sanitized ERROR and close.
+- [x] Existing authorization and rate limits remain intact; token/native credentials never logged/reflected.
+- [x] Complete gates pass; if the workaround fails wire tests, retain the explicit gap rather than claiming success.
 
-## Safe adapter and failure fallback
+## Rejected prototype: safe adapter and failure fallback
 
 Also names WsSessionRegistry.closeSocket and WsSessionRegistryTest: if outbound ERROR
 cannot be queued, close only the rejected transport, not its HTTP session or other tabs.
@@ -24,7 +25,7 @@ private user-queue mutability failures, which must remain visible if not resolve
 
 ## Native prototype evidence (2026-10-26) — NOT ACCEPTED
 
-This branch deliberately preserves the native strategy and unchanged failing integration
+Branch fix/CM-105-inbound-ordering deliberately preserves the native strategy and unchanged failing integration
 assertions for review. Do not integrate or call CM-105 complete from its focused passes.
 
 - Unordered real-wire latch test RED: SEND overtook the held SUBSCRIBE.
@@ -55,4 +56,4 @@ this ticket, m1-session-and-privacy design. Integrated fixture compatibility:
 RoomMembershipIT must bind a valid synthetic HTTP/socket session before checking
 room denial; SubscriptionRevocationIT must assert both new scope invalidation and
 unchanged ROOM_REMOVED payload, no extra owner/room frames. No assertion disabled.
-Final verification pending.
+Final candidate verification:618 unit/slice +107 IT PASS,coverage PASS;frontend447 tests/lint/TypeScript/build PASS;full E2E30/30 PASS,no retry/skip. See V0.2-M1-HARDENING-REPORT.md for evidence and residual limits.
