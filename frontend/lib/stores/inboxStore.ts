@@ -38,8 +38,21 @@ const messageOf = (error: unknown, fallback: string) => (error instanceof Error 
 
 let inboxEpoch = 0;
 let inboxRequest = 0;
+// Only changes made while the current snapshot is pending are retained. A newer
+// fetch or logout replaces this overlay; events never discard unrelated rows.
+let pendingChanges: {
+    invitations: Map<string, InvitationResponse | null>;
+    requests: Map<string, DmRequestResponse | null>;
+} | undefined;
+
+function applyChanges<T extends { createdAt: string }>(rows: T[], changes: Map<string, T | null>, key: (row: T) => string): T[] {
+    return [...changes.values()].filter((row): row is T => row !== null)
+        .concat(rows.filter(row => !changes.has(key(row))))
+        .sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt));
+}
 export function resetInboxState(): void {
     inboxEpoch++; inboxRequest++;
+    pendingChanges = undefined;
     useInboxStore.setState({ invitations: [], requests: [], loading: false, error: null, isOpen: false, pending: [] });
 }
 
@@ -71,18 +84,22 @@ export const useInboxStore = create<InboxState>((set, get) => {
         fetchInbox: async () => {
             const epoch = inboxEpoch, request = ++inboxRequest;
             const current = () => epoch === inboxEpoch && request === inboxRequest;
+            const changes = { invitations: new Map<string, InvitationResponse | null>(),
+                requests: new Map<string, DmRequestResponse | null>() };
+            pendingChanges = changes;
             set({ loading: true, error: null });
             try {
                 const [invitations, requests] = await Promise.all([invitationApi.listMine(), dmRequestApi.listMine()]);
                 if (!current()) return;
                 set({
-                    invitations: invitations.success ? invitations.data : [],
-                    requests: requests.success ? requests.data : [],
+                    invitations: applyChanges(invitations.success ? invitations.data : [], changes.invitations, row => row.id),
+                    requests: applyChanges(requests.success ? requests.data : [], changes.requests, row => row.roomId),
                 });
             } catch (error) {
                 if (current()) set({ error: messageOf(error, "Could not load your inbox") });
             } finally {
                 if (current()) set({ loading: false });
+                if (pendingChanges === changes) pendingChanges = undefined;
             }
         },
 
@@ -92,13 +109,10 @@ export const useInboxStore = create<InboxState>((set, get) => {
                 try {
                     await invitationApi.accept(id);
                     if (!current()) return null;
-                    inboxRequest++;
-                    set({ loading: false });
+                    pendingChanges?.invitations.set(id, null);
                     set((state) => ({ invitations: state.invitations.filter((i) => i.id !== id) }));
                     await useChatRoomsStore.getState().fetchRooms();
                     if (!current()) return null;
-                    inboxRequest++;
-                    set({ loading: false });
                     toast.success(invitation ? `You joined ${invitation.room.name}` : "Invitation accepted");
                     return invitation?.room.id ?? null;
                 } catch (error) {
@@ -115,8 +129,7 @@ export const useInboxStore = create<InboxState>((set, get) => {
                 try {
                     await invitationApi.decline(id);
                     if (!current()) return;
-                    inboxRequest++;
-                    set({ loading: false });
+                    pendingChanges?.invitations.set(id, null);
                     set((state) => ({ invitations: state.invitations.filter((i) => i.id !== id) }));
                 } catch (error) {
                     if (!current()) return;
@@ -131,13 +144,10 @@ export const useInboxStore = create<InboxState>((set, get) => {
                 try {
                     await dmRequestApi.accept(roomId);
                     if (!current()) return null;
-                    inboxRequest++;
-                    set({ loading: false });
+                    pendingChanges?.requests.set(roomId, null);
                     set((state) => ({ requests: state.requests.filter((r) => r.roomId !== roomId) }));
                     await useChatRoomsStore.getState().fetchRooms();
                     if (!current()) return null;
-                    inboxRequest++;
-                    set({ loading: false });
                     return roomId;
                 } catch (error) {
                     if (!current()) return null;
@@ -153,8 +163,7 @@ export const useInboxStore = create<InboxState>((set, get) => {
                 try {
                     await dmRequestApi.decline(roomId);
                     if (!current()) return;
-                    inboxRequest++;
-                    set({ loading: false });
+                    pendingChanges?.requests.set(roomId, null);
                     set((state) => ({ requests: state.requests.filter((r) => r.roomId !== roomId) }));
                 } catch (error) {
                     if (!current()) return;
@@ -171,39 +180,39 @@ export const useInboxStore = create<InboxState>((set, get) => {
             switch (event.type) {
                 case "INVITATION_RECEIVED":
                     if (isInvitation(payload.invitation)) {
-                        inboxRequest++;
                         const invitation = payload.invitation;
-                        set((state) => ({ loading: false, invitations: [invitation, ...state.invitations.filter((i) => i.id !== invitation.id)] }));
+                        pendingChanges?.invitations.set(invitation.id, invitation);
+                        set((state) => ({ invitations: [invitation, ...state.invitations.filter((i) => i.id !== invitation.id)] }));
                     }
                     break;
                 case "INVITATION_CHANGED":
                     if (typeof payload.invitationId === "string") {
-                        inboxRequest++;
                         const id = payload.invitationId;
-                        set((state) => ({ loading: false, invitations: state.invitations.filter((i) => i.id !== id) }));
+                        pendingChanges?.invitations.set(id, null);
+                        set((state) => ({ invitations: state.invitations.filter((i) => i.id !== id) }));
                     }
                     break;
                 case "DM_REQUEST_RECEIVED":
                     // A second event for the same room carries the one allowed message: upsert by roomId.
                     if (isDmRequest(payload.request)) {
-                        inboxRequest++;
                         const request = payload.request;
-                        set((state) => ({ loading: false, requests: [request, ...state.requests.filter((r) => r.roomId !== request.roomId)] }));
+                        pendingChanges?.requests.set(request.roomId, request);
+                        set((state) => ({ requests: [request, ...state.requests.filter((r) => r.roomId !== request.roomId)] }));
                     }
                     break;
                 case "ROOM_ADDED":
                     // The DM request was accepted in another session (or by starting the same DM): it is no longer waiting.
                     if (isRecord(payload.room) && typeof payload.room.id === "string") {
-                        inboxRequest++;
                         const roomId = payload.room.id;
-                        set((state) => ({ loading: false, requests: state.requests.filter((r) => r.roomId !== roomId) }));
+                        pendingChanges?.requests.set(roomId, null);
+                        set((state) => ({ requests: state.requests.filter((r) => r.roomId !== roomId) }));
                     }
                     break;
                 case "ROOM_REMOVED":
                     if (typeof payload.roomId === "string") {
-                        inboxRequest++;
                         const roomId = payload.roomId;
-                        set((state) => ({ loading: false, requests: state.requests.filter((r) => r.roomId !== roomId) }));
+                        pendingChanges?.requests.set(roomId, null);
+                        set((state) => ({ requests: state.requests.filter((r) => r.roomId !== roomId) }));
                     }
                     break;
                 default:
