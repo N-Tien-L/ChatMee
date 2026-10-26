@@ -41,3 +41,7 @@ AGENTS forbids manual edits to components/ui. No dependency upgrade is pre-autho
 
 Do not hide the race with fixed delays, forced clicks, disabled tests or global retry.
 No Approved contract edit or feature expansion belongs to this investigation.
+
+Final CM-097 evidence: on `fc0de58`, both desktop and 360px cases reproduced the
+post-report click lock even after the observable body pointer-events check passed.
+This confirms the investigation remains open; see the CM-097 handoff for exact results.
