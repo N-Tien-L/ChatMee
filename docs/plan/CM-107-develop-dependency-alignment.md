@@ -22,10 +22,10 @@ Advisory remediation beyond these existing updates remains a separate follow-up.
 - This ticket and docs/plan/V0.2-DEVELOP-READINESS-REPORT.md.
 
 ## Acceptance Criteria
-- [ ] AC-1: Remote dependency declarations remain, candidate-only dropdown/Playwright/scripts remain, npm ci validates the lock.
+- [x] AC-1: Remote dependency declarations remain, candidate-only dropdown/Playwright/scripts remain, npm ci validates the lock.
 - [ ] AC-2: Wrapper files/pom match origin/develop exactly; read-only merge-tree preview has no conflicts.
 - [ ] AC-3: Backend verify and frontend lint/tsc/test/build/full isolated E2E pass on the named aligned revision.
-- [ ] AC-4: Record exact code/reporting revisions, environment, current remote CI status and owner-only actions honestly.
+- [x] AC-4: Record exact code/reporting revisions, environment, current remote CI status and owner-only actions honestly.
 
 ## Follow-ups
 Actual remote CI needs a published candidate and working read access. Prior prohibition
@@ -38,3 +38,22 @@ normalizes it back to LF on comparison/staging, making a byte-identical upstream
 checkout appear modified. Add a path-specific /mvnw.cmd -text attribute so the vendor
 file remains byte-for-byte equal to origin/develop. No wrapper logic is hand-edited,
 no Git configuration is changed, and other cmd files retain their existing rules.
+
+## Verification outcome (partial acceptance)
+- Code snapshot: 9bbe28d0eea61548c66949ea343cd874e9a7468e.
+- Backend mvnw.cmd verify PASS: 618 unit/slice +107 IT, no failures/errors/skips,
+  JaCoCo0.8.15, Maven3.10.0. Frontend lint/tsc/454 tests PASS.
+- Standalone frontend build compiled/typechecked/prerendered, then exited1 with
+  Next16.4.0 SecurityFatalError from its agent upgrade advisory nudge. This failed
+  command is retained; no environment preference or security check was disabled.
+- Separately required full npm run test:e2e PASS:30/30 in5.6m, retries0/skips0, at9bbe28d. Owned PID/port cleanup independently verified. Standalone build failure is retained; AC-3 is not complete.
+- Current ort preview still reports textual conflicts in package.json/package-lock.
+  This is not represented as a clean automatic merge. The two prepared resolutions
+  applied through an isolated temporary Git index produce tree
+  8e34b8165151eaa1c35f3fdb28b370d1c345ac77, identical to the candidate tree.
+  No working branch merge/rebase or merge commit occurred. AC-2's automatic-conflict
+  condition remains pending until an owner-authorized integration records resolution.
+- GitHub connector still401; existing GitHub CLI read access works. Candidate runs=[];
+  remote develop f0ecef5 has successful Backend/Frontend CI, which is not M1 CI evidence.
+- Owner asked to confirm a separate targeted security patch to next and
+  eslint-config-next16.4.3. No such patch has been applied without that confirmation.
