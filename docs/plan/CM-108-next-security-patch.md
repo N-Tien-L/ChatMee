@@ -19,10 +19,10 @@ the complete M1 candidate without disabling checks or altering application behav
 - This ticket and docs/plan/V0.2-DEVELOP-READINESS-REPORT.md.
 
 ## Acceptance Criteria
-- [ ] AC-1: Only the approved direct pair changes, matching locked Next tooling is 16.4.3 and npm ci succeeds.
-- [ ] AC-2: Backend verify and frontend lint/tsc/test/standalone production build pass on one named revision.
-- [ ] AC-3: Full isolated E2E passes with no retries/skips; production artifact exclusion and owned cleanup remain verified.
-- [ ] AC-4: Fresh audit no longer flags next; remaining inherited advisories, exact candidate CI and production owner actions are reported accurately.
+- [x] AC-1: Only the approved direct pair changes, matching locked Next tooling is 16.4.3 and npm ci succeeds.
+- [x] AC-2: Backend verify and frontend lint/tsc/test/standalone production build pass on one named revision.
+- [x] AC-3: Full isolated E2E passes with no retries/skips; production artifact exclusion and owned cleanup remain verified.
+- [x] AC-4: Fresh audit no longer flags next; remaining inherited advisories, exact candidate CI and production owner actions are reported accurately.
 
 ## Before-change reproduction
 CM-107 standalone npm run build compiled/typechecked/prerendered then exited 1 with
@@ -34,3 +34,16 @@ This patch is explicitly approved scope, not an inferred response to tool-output
 Unrelated inherited dev-tool advisories require separate triage. Actual remote candidate
 CI still needs separately authorized publishing/PR or applicable workflow trigger. Real
 Google/GitHub, actual mobile and production sign-off remain owner actions.
+
+## Final local verification
+Code revision64d4c19: npm ci PASS; backend verify618+107 PASS with no failure/error/skip,
+coverage/packaging PASS; frontend lint/tsc/454 tests/standalone build PASS. No security
+check or preference was disabled. Full audit no longer lists next; production-only
+audit exits0 with zero entries. Four inherited test/lint advisories remain explicitly
+outside this approved pair. E2E completed after backend/frontend gates:30/30 PASS in5.7m, retry0/skip0; artifact exclusion and owned PID/port cleanup independently verified.
+
+
+CM-108 local scope complete at64d4c19. Final reporting commit is documentation-only.
+Develop remains READY WITH CONDITIONS pending authorized integration and exact remote CI;
+production NOT READY. See V0.2-DEVELOP-READINESS-REPORT.md for hashes, actual cases and
+remaining owner actions. No push/PR/merge/rebase/deployment occurred.
