@@ -8,7 +8,8 @@ import { resetRoomMessageCache } from '@/hooks/useRoomMessage'
 import { useChatRoomsStore } from './chatRoomsStore'
 import { useChatStore } from './chatStore'
 import { useDiscoverRoomsStore } from './discoverRoomsStore'
-import { useUsersStore } from './usersStore'
+import { resetUserRequests } from './usersStore'
+import { resetInboxState } from './inboxStore'
 
 interface AuthState {
     user: UserResponse | null
@@ -39,8 +40,9 @@ function clearSessionCaches() {
         rooms: [], filteredRooms: [], searchQuery: "", roomTypeFilter: "ALL",
         error: null, usersCache: new Map(), isCreateRoomModalOpen: false,
     })
-    useChatStore.setState({ onlineUsers: new Set(), typingUsers: {} })
-    useUsersStore.setState({ users: [], filteredUsers: [], usersCache: new Map(), searchQuery: "", error: null })
+    useChatStore.setState({ onlineUsers: new Set(), typingUsers: {}, presenceLoaded: false })
+    resetUserRequests()
+    resetInboxState()
     useDiscoverRoomsStore.setState({ isOpen: false, query: "", results: [], page: 0, hasMore: false, error: null, joinError: null })
 }
 

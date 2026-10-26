@@ -31,6 +31,14 @@ public class UserEventPublisher {
         this.messagingTemplate = messagingTemplate;
     }
 
+    public void blocksChanged(String userId) {
+        send(userId, new UserEvent<>("ACCOUNT_STATE_CHANGED", Map.of("scope", "BLOCKS"), Instant.now()));
+    }
+
+    public void dmRequestsChanged(String userId) {
+        send(userId, new UserEvent<>("ACCOUNT_STATE_CHANGED", Map.of("scope", "DM_REQUESTS"), Instant.now()));
+    }
+
     public void presenceScopeChanged(Collection<String> userIds) {
         var event = new UserEvent<>("PRESENCE_SCOPE_CHANGED", Map.of(), Instant.now());
         userIds.forEach(userId -> send(userId, event));

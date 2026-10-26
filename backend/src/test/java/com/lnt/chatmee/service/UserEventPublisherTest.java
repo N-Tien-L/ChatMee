@@ -153,4 +153,18 @@ class UserEventPublisherTest {
         verifyNoMoreInteractions(messaging);
     }
 
+    @Test
+    void accountStateChanged_onlyActingAccount_receivesNonRevealingScope() {
+        var publisher = new UserEventPublisher(messaging);
+        publisher.blocksChanged("actor");
+        publisher.dmRequestsChanged("recipient");
+        var events = ArgumentCaptor.forClass(UserEvent.class);
+        verify(messaging).convertAndSendToUser(eq("actor"), eq("/queue/events"), events.capture());
+        verify(messaging).convertAndSendToUser(eq("recipient"), eq("/queue/events"), events.capture());
+        assertThat(events.getAllValues()).extracting(UserEvent::type).containsOnly("ACCOUNT_STATE_CHANGED");
+        assertThat(events.getAllValues().get(0).payload()).isEqualTo(Map.of("scope", "BLOCKS"));
+        assertThat(events.getAllValues().get(1).payload()).isEqualTo(Map.of("scope", "DM_REQUESTS"));
+        verifyNoMoreInteractions(messaging);
+    }
+
 }

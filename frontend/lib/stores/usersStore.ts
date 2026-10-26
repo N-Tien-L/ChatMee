@@ -33,6 +33,16 @@ const failure = (error: unknown, fallback: string) =>
     error instanceof Error && error.message ? error.message : fallback
 
 let searchTimeout: ReturnType<typeof setTimeout> | null = null;
+let userEpoch = 0;
+let searchRequest = 0;
+let blocksRequest = 0;
+export function resetUserRequests(): void {
+    userEpoch++; searchRequest++; blocksRequest++;
+    if (searchTimeout) clearTimeout(searchTimeout);
+    searchTimeout = null;
+    useUsersStore.setState({ users: [], filteredUsers: [], usersCache: new Map(), searchQuery: "",
+        loading: false, error: null, blockedUsers: null, blocksError: null });
+}
 
 export const useUsersStore = create<UsersState>((set, get) => ({
     // Initial state
@@ -71,9 +81,12 @@ export const useUsersStore = create<UsersState>((set, get) => ({
     },
 
     fetchUsers: async (query = "") => {
+        const epoch = userEpoch, request = ++searchRequest;
+        const current = () => epoch === userEpoch && request === searchRequest;
         try {
             set({ loading: true, error: null })
             const response = await userApi.searchUsers(query, 0, 50)
+            if (!current()) return;
             // Ignore responses for queries the user has already typed past.
             if (query !== get().searchQuery) return
 
@@ -84,14 +97,16 @@ export const useUsersStore = create<UsersState>((set, get) => ({
                 set({ error: response.message || 'Failed to fetch users' })
             }
         } catch (error) {
+            if (!current()) return;
             console.error('Failed to fetch users:', error)
             if (query === get().searchQuery) set({ error: 'Failed to fetch users' })
         } finally {
-            set({ loading: false })
+            if (current()) set({ loading: false })
         }
     },
 
     fetchUserById: async (id) => {
+        const epoch = userEpoch;
         try {
             // Check cache first
             const cached = get().getUserFromCache(id)
@@ -101,6 +116,7 @@ export const useUsersStore = create<UsersState>((set, get) => ({
 
             // Fetch from API if not in cache
             const response = await userApi.getUserById(id)
+            if (epoch !== userEpoch) return null;
             if (response.success) {
                 // Add to cache
                 get().addUserToCache(response.data)
@@ -110,26 +126,34 @@ export const useUsersStore = create<UsersState>((set, get) => ({
                 return null
             }
         } catch (error) {
+            if (epoch !== userEpoch) return null;
             console.error('Failed to fetch user by ID:', error)
             return null
         }
     },
 
     fetchBlocks: async () => {
+        const epoch = userEpoch, request = ++blocksRequest;
+        const current = () => epoch === userEpoch && request === blocksRequest;
         try {
             set({ blocksError: null })
             const response = await userApi.listBlocks()
+            if (!current()) return;
             if (response.success && Array.isArray(response.data)) set({ blockedUsers: response.data })
             else set({ blocksError: response.message || 'Could not load blocked people' })
         } catch (error) {
+            if (!current()) return;
             set({ blocksError: failure(error, 'Could not load blocked people') })
         }
     },
 
     blockUser: async (user) => {
+        const epoch = userEpoch;
         try {
             await userApi.blockUser(user.id)
+            if (epoch !== userEpoch) return false;
         } catch (error) {
+            if (epoch !== userEpoch) return false;
             toast.error(failure(error, `Could not block ${user.name}`))
             return false
         }
@@ -147,9 +171,12 @@ export const useUsersStore = create<UsersState>((set, get) => ({
     },
 
     unblockUser: async (user) => {
+        const epoch = userEpoch;
         try {
             await userApi.unblockUser(user.id)
+            if (epoch !== userEpoch) return false;
         } catch (error) {
+            if (epoch !== userEpoch) return false;
             toast.error(failure(error, `Could not unblock ${user.name}`))
             return false
         }

@@ -527,3 +527,13 @@ Only accounts affected by join/leave/removal receive it (current members plus
 the departing member). Existing ROOM_REMOVED already invalidates the captured deletion audience. It contains no other account's
 presence/room details and asks the client to replace its authorized snapshot. Reconnect
 and room lifecycle refetch remain recovery paths; there is no new destination or polling.
+
+## M1 same-account safety invalidation (CM-104 / SPEC-011)
+
+ACCOUNT_STATE_CHANGED `{type, payload:{scope:"BLOCKS"|"DM_REQUESTS"}, occurredAt}` uses
+existing /user/queue/events and is delivered only to the account making the decision.
+BLOCKS refreshes that account's rooms, Inbox, blocks and current user-search results;
+DM_REQUESTS refreshes its Inbox/rooms. Never notify the blocked account about who blocked
+it. Existing generic send refusal and sender ROOM_REMOVED remain authoritative. Missing
+events reconcile on reconnect. Refetch generations and logout cache reset must prevent
+old requests from repopulating private state in a subsequent session.

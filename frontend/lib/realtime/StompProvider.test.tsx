@@ -4,6 +4,7 @@ import { StompProvider } from './StompProvider';
 import { useAuthStore } from '@/lib/stores/authStore';
 import { useChatRoomsStore } from '@/lib/stores/chatRoomsStore';
 import { useChatStore } from '@/lib/stores/chatStore';
+import { useUsersStore } from '@/lib/stores/usersStore';
 import { useInboxStore } from '@/lib/stores/inboxStore';
 import { chatRoomApi } from '@/lib/api/chatRoomApi';
 
@@ -160,4 +161,25 @@ it('presenceScopeChanged_refetchesOnlyTheFilteredPresenceSnapshot', async () => 
     await act(async () => handler({ body: JSON.stringify({ type: 'PRESENCE_SCOPE_CHANGED', payload: {} }) }));
     expect(chatRoomApi.getOnlineUsers).toHaveBeenCalledTimes(1);
     expect([...useChatStore.getState().onlineUsers]).toEqual(['new-related']);
+});
+
+
+it.each(['BLOCKS', 'DM_REQUESTS'] as const)('accountStateChanged_%s_refetchesOnlyOwnAuthoritativeSafetyState', async scope => {
+    const fetchRooms = vi.fn().mockResolvedValue(undefined), fetchInbox = vi.fn().mockResolvedValue(undefined);
+    const fetchBlocks = vi.fn().mockResolvedValue(undefined), fetchUsers = vi.fn().mockResolvedValue(undefined);
+    useAuthStore.setState({ isAuthenticated: true, user: { id: 'actor', name: 'Actor' } as never });
+    useChatRoomsStore.setState({ fetchRooms, handleUserEvent: vi.fn().mockResolvedValue(undefined) });
+    useInboxStore.setState({ fetchInbox, handleUserEvent: vi.fn() });
+    useUsersStore.setState({ fetchBlocks, fetchUsers, searchQuery: 'current query' });
+    render(<StompProvider><p>x</p></StompProvider>);
+    const handler = (session.subscribe.mock.calls as unknown as [string, (frame: { body: string }) => void][])
+        .find(call => call[0] === '/user/queue/events')![1];
+    await act(async () => handler({ body: JSON.stringify({ type: 'ACCOUNT_STATE_CHANGED', payload: { scope } }) }));
+    expect(fetchRooms).toHaveBeenCalledTimes(1);
+    expect(fetchInbox).toHaveBeenCalledTimes(1);
+    expect(fetchBlocks).toHaveBeenCalledTimes(scope === 'BLOCKS' ? 1 : 0);
+    expect(fetchUsers).toHaveBeenCalledTimes(scope === 'BLOCKS' ? 1 : 0);
+    if (scope === 'BLOCKS') expect(fetchUsers).toHaveBeenCalledWith('current query');
+    handler({ body: JSON.stringify({ type: 'ACCOUNT_STATE_CHANGED', payload: { scope: 'unknown' } }) });
+    expect(fetchRooms).toHaveBeenCalledTimes(1);
 });

@@ -6,6 +6,7 @@ import axios from "axios";
 import { authApi } from "@/lib/api/authApi";
 import { chatRoomApi } from "@/lib/api/chatRoomApi";
 import { useAuthStore } from "@/lib/stores/authStore";
+import { useUsersStore } from "@/lib/stores/usersStore";
 import { useInboxStore } from "@/lib/stores/inboxStore";
 import { useChatRoomsStore } from "@/lib/stores/chatRoomsStore";
 import { PresenceMessage, useChatStore } from "@/lib/stores/chatStore";
@@ -86,6 +87,17 @@ export function StompProvider({ children }: { children: ReactNode }) {
         }
         void useChatRoomsStore.getState().handleUserEvent(event);
         useInboxStore.getState().handleUserEvent(event);
+        if (typeof event === "object" && event !== null && "type" in event && event.type === "ACCOUNT_STATE_CHANGED" &&
+            "payload" in event && typeof event.payload === "object" && event.payload !== null && "scope" in event.payload &&
+            ["BLOCKS", "DM_REQUESTS"].includes(String(event.payload.scope))) {
+            void useChatRoomsStore.getState().fetchRooms();
+            void useInboxStore.getState().fetchInbox();
+            if (event.payload.scope === "BLOCKS") {
+                const users = useUsersStore.getState();
+                void users.fetchBlocks();
+                void users.fetchUsers(users.searchQuery);
+            }
+        }
         if (typeof event === "object" && event !== null && "type" in event &&
             ["ROOM_ADDED", "ROOM_REMOVED", "ROOM_UPDATED", "PRESENCE_SCOPE_CHANGED"].includes(String(event.type))) refreshPresence.current?.();
     }), [session]);
