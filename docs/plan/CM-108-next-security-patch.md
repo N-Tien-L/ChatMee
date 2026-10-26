@@ -47,3 +47,12 @@ CM-108 local scope complete at64d4c19. Final reporting commit is documentation-o
 Develop remains READY WITH CONDITIONS pending authorized integration and exact remote CI;
 production NOT READY. See V0.2-DEVELOP-READINESS-REPORT.md for hashes, actual cases and
 remaining owner actions. No push/PR/merge/rebase/deployment occurred.
+
+## Later owner-authorized integration
+The owner subsequently authorized merging origin/develop into the private candidate,
+pushing it and opening draft PR #19. Merge00c3f46 preserves the entire tested tree;
+actual PR CI on synthetic merge65f66b4 passes backend618+107, frontend Node20/22,
+CodeQL and Linux E2E30/30. Develop integration conditions are cleared for review/merge.
+PR remains draft/unmerged; production is NOT READY. Historical patch-only scope and
+no-publish statements above describe the earlier snapshot. See the readiness report
+for exact objects, run links and remaining owner checks.
