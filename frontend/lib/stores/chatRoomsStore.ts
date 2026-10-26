@@ -85,6 +85,90 @@ const isLastMessage = (value: unknown): value is LastMessageSummary =>
 
 /** Room ids whose GET /rooms/{id} is in flight, so an event burst fetches each unknown room once. */
 const fetchingRooms = new Set<string>();
+// A session-wide bound, independent of room/message history size.
+const ACTIVITY_LIMIT = 512;
+const appliedActivity = new Set<string>();
+const reads = new Map<string, { promise: Promise<void>; head?: string; again: boolean }>();
+const failedReads = new Set<string>();
+let account: string | undefined;
+let epoch = 0;
+let revision = 0;
+let snapshot: Promise<void> | undefined;
+let publishingSnapshot = false;
+
+function resetReconciliation() {
+    epoch++;
+    revision++;
+    appliedActivity.clear();
+    reads.clear();
+    failedReads.clear();
+    fetchingRooms.clear();
+    snapshot = undefined;
+}
+function currentAccount() {
+    const id = useAuthStore.getState().user?.id;
+    if (id !== account) {
+        resetReconciliation();
+        account = id;
+    }
+    return epoch;
+}
+const isCurrent = (generation: number) => currentAccount() === generation;
+
+async function fetchSnapshot(retryReads: boolean): Promise<void> {
+    const generation = currentAccount();
+    if (retryReads) {
+        const state = useChatRoomsStore.getState();
+        const id = state.activeRoomId;
+        if (id && tabIsVisible()) void state.markRoomRead(id);
+    }
+    if (snapshot) return snapshot;
+    const work = (async () => {
+        useChatRoomsStore.setState({ loading: true, error: null });
+        try {
+            // Bound work under continuous traffic. A later event/connect/open can retry;
+            // never publish a known stale snapshot just because the bound was reached.
+            for (let attempt = 0; attempt < 3; attempt++) {
+                const started = revision;
+                const response = await chatRoomApi.getChatRooms();
+                if (!isCurrent(generation)) return;
+                if (!response.success) throw new Error('Room snapshot unavailable');
+                const rooms = await Promise.all(response.data.map(async room => ({
+                    ...room,
+                    ...(room.roomType === RoomType.DIRECT_MESSAGE
+                        ? { displayName: await useChatRoomsStore.getState().getDirectMessageDisplayName(room) } : {}),
+                })));
+                if (!isCurrent(generation)) return;
+                if (started !== revision) continue;
+                const state = useChatRoomsStore.getState();
+                // Pending read-at-now has no server completion yet. Preserve its optimistic
+                // count until completion/failure triggers an authoritative refresh.
+                publishingSnapshot = true;
+                try {
+                    state.setRooms(rooms.map(room => {
+                        const existing = state.rooms.find(r => r.id === room.id);
+                        return {
+                            ...room,
+                            ...(existing && activityTime(existing) > activityTime(room)
+                                ? { lastMessage: existing.lastMessage, lastActivityAt: existing.lastActivityAt } : {}),
+                            ...(reads.has(room.id) ? { unreadCount: existing?.unreadCount ?? room.unreadCount } : {}),
+                        };
+                    }));
+                } finally {
+                    publishingSnapshot = false;
+                }
+                return;
+            }
+            if (isCurrent(generation)) useChatRoomsStore.setState({ error: 'Room activity changed during refresh. Please retry.' });
+        } catch {
+            if (isCurrent(generation)) useChatRoomsStore.setState({ error: 'Failed to fetch chat rooms' });
+        } finally {
+            if (isCurrent(generation)) useChatRoomsStore.setState({ loading: false });
+        }
+    })();
+    snapshot = work;
+    try { await work; } finally { if (snapshot === work) snapshot = undefined; }
+}
 
 const withDisplayName = (room: ChatRoom): ChatRoom =>
     room.roomType === RoomType.DIRECT_MESSAGE && room.counterpart?.name
@@ -119,7 +203,18 @@ export const useChatRoomsStore = create<chatRoomState>((set, get) => ({
     setActiveRoom: (roomId) => set({ activeRoomId: roomId }),
 
     upsertRoom: (room) => {
-        const next = withDisplayName(room);
+        revision++;
+        const existing = get().rooms.find(r => r.id === room.id);
+        const stale = existing && (activityTime(existing) > activityTime(room) ||
+            (existing.lastMessage?.id !== room.lastMessage?.id && activityTime(existing) === activityTime(room)));
+        const pendingRead = reads.has(room.id);
+        const next = withDisplayName(stale ? { ...room, lastMessage: existing.lastMessage,
+            lastActivityAt: existing.lastActivityAt, unreadCount: existing.unreadCount }
+            : pendingRead ? { ...room, unreadCount: existing?.unreadCount ?? room.unreadCount } : room);
+        // Event/one-room snapshots have no request watermark. Preserve unread for
+        // existing rows and obtain a guarded list snapshot before changing counts.
+        if (existing) next.unreadCount = existing.unreadCount;
+        if (existing && (stale || existing.unreadCount !== room.unreadCount)) void fetchSnapshot(false);
         set((state) => ({
             rooms: state.rooms.some((r) => r.id === next.id)
                 ? state.rooms.map((r) => (r.id === next.id ? { ...r, ...next } : r))
@@ -130,6 +225,10 @@ export const useChatRoomsStore = create<chatRoomState>((set, get) => ({
     },
 
     removeRoom: (roomId, reason) => {
+        currentAccount();
+        revision++;
+        reads.delete(roomId);
+        failedReads.delete(roomId);
         set((state) => ({
             rooms: state.rooms.filter((room) => room.id !== roomId),
             activeRoomId: state.activeRoomId === roomId ? null : state.activeRoomId,
@@ -138,49 +237,90 @@ export const useChatRoomsStore = create<chatRoomState>((set, get) => ({
         get().applyFilters();
     },
 
-    markRoomRead: async (roomId) => {
-        const room = get().rooms.find((r) => r.id === roomId);
-        if (room && room.unreadCount) get().updateRoom(roomId, { unreadCount: 0 });
-        try {
-            await chatRoomApi.markRoomRead(roomId);
-        } catch {
-            // The marker is retried by the next open or refetch; the list keeps working.
+    markRoomRead: (roomId) => {
+        const generation = currentAccount();
+        const room = get().rooms.find(r => r.id === roomId);
+        const pending = reads.get(roomId);
+        if (pending) {
+            pending.again ||= pending.head !== room?.lastMessage?.id;
+            return pending.promise;
         }
+        revision++;
+        failedReads.delete(roomId);
+        if (room?.unreadCount) get().updateRoom(roomId, { unreadCount: 0 });
+        const entry = { promise: Promise.resolve(), head: room?.lastMessage?.id, again: false };
+        const work = (async () => {
+            try {
+                await chatRoomApi.markRoomRead(roomId);
+                if (!isCurrent(generation) || reads.get(roomId) !== entry) return;
+                revision++;
+                reads.delete(roomId);
+                if (entry.again && get().activeRoomId === roomId && tabIsVisible()) {
+                    await get().markRoomRead(roomId);
+                } else if (entry.head !== get().rooms.find(r => r.id === roomId)?.lastMessage?.id) {
+                    await fetchSnapshot(false);
+                }
+            } catch {
+                if (!isCurrent(generation) || reads.get(roomId) !== entry) return;
+                revision++;
+                reads.delete(roomId);
+                failedReads.add(roomId);
+                await fetchSnapshot(false);
+            }
+        })();
+        entry.promise = work;
+        reads.set(roomId, entry);
+        return work;
     },
 
     applyActivity: (roomId, lastMessage) => {
-        const currentUserId = useAuthStore.getState().user?.id;
-        const isOpenAndVisible = get().activeRoomId === roomId && tabIsVisible();
-        const fromMe = lastMessage.senderId === currentUserId;
-        set((state) => ({
-            rooms: state.rooms.map((room) =>
-                room.id === roomId
-                    ? {
-                          ...room,
-                          lastMessage,
-                          lastActivityAt: lastMessage.createdAt,
-                          unreadCount: fromMe || isOpenAndVisible ? room.unreadCount ?? 0 : (room.unreadCount ?? 0) + 1,
-                      }
-                    : room
-            ),
-        }));
-        get().applyFilters();
-        if (isOpenAndVisible && !fromMe) void get().markRoomRead(roomId);
+        currentAccount();
+        const room = get().rooms.find(r => r.id === roomId);
+        if (!room) return;
+        const key = JSON.stringify([roomId, lastMessage.id]);
+        if (lastMessage.id && (appliedActivity.has(key) || room.lastMessage?.id === lastMessage.id)) return;
+        // Unknown older/tied deliveries may be duplicates outside the bounded ledger.
+        // Only the server can determine their unread contribution.
+        if (!lastMessage.id || !Number.isFinite(Date.parse(lastMessage.createdAt)) ||
+            (room.lastMessage && Date.parse(lastMessage.createdAt) <= activityTime(room))) {
+            revision++;
+            if (get().activeRoomId === roomId && tabIsVisible() &&
+                lastMessage.senderId !== useAuthStore.getState().user?.id) void get().markRoomRead(roomId);
+            void fetchSnapshot(false);
+            return;
+        }
+        appliedActivity.add(key);
+        if (appliedActivity.size > ACTIVITY_LIMIT) appliedActivity.delete(appliedActivity.values().next().value!);
+        revision++;
+        const fromMe = lastMessage.senderId === useAuthStore.getState().user?.id;
+        const visible = get().activeRoomId === roomId && tabIsVisible();
+        get().updateRoom(roomId, {
+            lastMessage, lastActivityAt: lastMessage.createdAt,
+            unreadCount: fromMe || visible ? room.unreadCount ?? 0 : (room.unreadCount ?? 0) + 1,
+        });
+        if (visible && !fromMe) void get().markRoomRead(roomId);
     },
 
     handleUserEvent: async (event) => {
         if (!isRecord(event) || typeof event.type !== "string" || !isRecord(event.payload)) return;
+        const generation = currentAccount();
         const payload = event.payload;
         const fetchUnknown = async (roomId: string) => {
             if (fetchingRooms.has(roomId)) return;
             fetchingRooms.add(roomId);
+            const ended = get().endedRooms[roomId];
+            const started = revision;
             try {
                 const response = await chatRoomApi.getChatRoomById(roomId);
-                if (response.success) get().upsertRoom(response.data);
+                if (isCurrent(generation) && get().endedRooms[roomId] === ended && response.success) {
+                    const changed = started !== revision;
+                    get().upsertRoom(response.data);
+                    if (changed) await fetchSnapshot(false);
+                }
             } catch {
                 // The next reconnect refetch recovers the room.
             } finally {
-                fetchingRooms.delete(roomId);
+                if (isCurrent(generation)) fetchingRooms.delete(roomId);
             }
         };
         switch (event.type) {
@@ -209,6 +349,7 @@ export const useChatRoomsStore = create<chatRoomState>((set, get) => ({
                 if (get().rooms.some((r) => r.id === roomId)) {
                     get().applyActivity(roomId, payload.lastMessage);
                 } else {
+                    revision++;
                     await fetchUnknown(roomId);
                 }
                 break;
@@ -220,19 +361,16 @@ export const useChatRoomsStore = create<chatRoomState>((set, get) => ({
 
     getUnreadTotal: () => get().rooms.reduce((sum, room) => sum + (room.unreadCount ?? 0), 0),
     setRooms: (rooms) => {
+        currentAccount();
+        const listed = new Set(rooms.map(room => room.id));
+        for (const id of failedReads) if (!listed.has(id)) failedReads.delete(id);
+        for (const id of reads.keys()) if (!listed.has(id)) reads.delete(id);
         set((state) => ({ rooms, endedRooms: withoutEnded(state.endedRooms, rooms.map((room) => room.id)) }));
         get().applyFilters();
     },
 
     addRoom: (room) => {
-        // The ROOM_ADDED event can beat the create response, so the room may already be listed.
-        set((state) => ({
-            rooms: state.rooms.some((r) => r.id === room.id)
-                ? state.rooms.map((r) => (r.id === room.id ? { ...r, ...room } : r))
-                : [...state.rooms, room],
-            endedRooms: withoutEnded(state.endedRooms, [room.id]),
-        }));
-        get().applyFilters();
+        get().upsertRoom(room);
     },
 
     updateRoom: (id, updates) => {
@@ -261,32 +399,7 @@ export const useChatRoomsStore = create<chatRoomState>((set, get) => ({
         get().applyFilters();
     },
 
-    fetchRooms: async () => {
-        try {
-            set({ loading: true, error: null });
-            const response = await chatRoomApi.getChatRooms();
-
-            if (response.success) {
-                const roomsWithDisplayNames = await Promise.all(
-                    response.data.map(async (room: ChatRoom) => {
-                        if (room.roomType === RoomType.DIRECT_MESSAGE) {
-                            const displayName = await get().getDirectMessageDisplayName(room);
-                            return { ...room, displayName };
-                        }
-                        return room;
-                    })
-                );
-                get().setRooms(roomsWithDisplayNames);
-            } else {
-                set({ error: "Failed to fetch chat rooms" });
-            }
-        } catch (error) {
-            console.error("Failed to fetch chat rooms:", error);
-            set({ error: "Failed to fetch chat rooms" });
-        } finally {
-            set({ loading: false });
-        }
-    },
+    fetchRooms: () => fetchSnapshot(true),
 
     createRoom: async (request: CreateChatRoomRequest) => {
         try {
@@ -474,3 +587,11 @@ export const useChatRoomsStore = create<chatRoomState>((set, get) => ({
     openCreateRoomModal: (mode = "room") => set({ isCreateRoomModalOpen: true, createRoomModalMode: mode }),
     closeCreateRoomModal: () => set({ isCreateRoomModalOpen: false }),
 }));
+
+// Logout/cache clearing also invalidates A -> B -> A requests, even before the next event.
+useChatRoomsStore.subscribe((state, previous) => {
+    if (state.rooms !== previous.rooms && state.rooms.length === 0 && !publishingSnapshot) {
+        resetReconciliation();
+        useChatRoomsStore.setState({ loading: false });
+    }
+});
