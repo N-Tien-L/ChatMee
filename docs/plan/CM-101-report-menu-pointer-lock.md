@@ -1,6 +1,6 @@
 # CM-101: Investigate pointer lock after reporting from a message menu
 
-- Status: Open investigation; discovered by CM-097; no production fix in CM-097/098.
+- Status: Complete locally at candidate 40a3b88; release remains pending owner actions/remote CI.
 - Type: fix.
 - Spec: Approved SPEC-008 AC-008-10/11; SPEC-009 AC-009-20.
 - Priority: P1 if confirmed; intermittent in current browser evidence.
@@ -32,10 +32,10 @@ AGENTS forbids manual edits to components/ui. No dependency upgrade is pre-autho
 
 ## Acceptance criteria
 
-- [ ] Establish a deterministic failing reproduction or explicitly characterize the race.
-- [ ] Submit and cancel from the message menu restore pointer and keyboard interaction.
-- [ ] Copy/time/menu rights, report 202 and focus restoration remain intact at desktop/360px.
-- [ ] Retain the browser regression and pass full repository/E2E gates before closing.
+- [x] Establish a deterministic failing reproduction or explicitly characterize the race.
+- [x] Submit and cancel from the message menu restore pointer and keyboard interaction.
+- [x] Copy/time/menu rights, report 202 and focus restoration remain intact at desktop/360px.
+- [x] Retain the browser regression and pass full repository/E2E gates before closing.
 
 ## Follow-ups
 
@@ -67,3 +67,12 @@ shadcn edit or dependency change. The two Radix versions remain as locked.
   acceptance or real mobile-device smoke from the focused viewport cases.
 - Ignored logs: backend/target/cm101-{red-bounded,green,e2e,lint,tsc,vitest}.log and
   cm100-101-{verify,full-e2e,build}.log. Temporary CM-100 probes are absent.
+
+## Final candidate verification (2026-10-26)
+
+Candidate 40a3b88: backend verify 618 unit/slice +107 IT PASS, coverage/packaging PASS;
+frontend lint/strict TypeScript/447 tests/build PASS; exact npm run test:e2e 30/30 PASS,
+no retries/skips. See [hardening report](V0.2-M1-HARDENING-REPORT.md) for per-AC,
+commands, evidence and boundaries. Historical pending statements above refer to those
+intermediate runs; this final result supersedes their local gate state only.
+Remote CI, real providers/physical mobile and owner release sign-off remain pending.

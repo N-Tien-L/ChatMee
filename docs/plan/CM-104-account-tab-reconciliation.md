@@ -1,5 +1,5 @@
 # CM-104: Reconcile block and decline across the account's connected tabs
-- Status: Authorized; implementation pending.
+- Status: Complete locally at candidate 40a3b88; release remains pending owner actions/remote CI.
 - Type: fix. Spec: SPEC-011 AC-011-5/7. Design: m1-session-and-privacy.md.
 
 ## Expected files
@@ -10,10 +10,10 @@ frontend/tests/e2e/tab-safety.spec.ts; design/websocket-protocol.md.
 Use existing room/inbox/block refetch actions; no dependency/new destination.
 
 ## Acceptance criteria
-- [ ] Block/unblock invalidates only the blocker's own sessions; blocked-account UI receives no revealing event.
-- [ ] Recipient decline removes the stale request from its other tabs via authoritative refetch.
-- [ ] Existing block enforcement, generic errors and sender removal notification remain intact.
-- [ ] Complete gates and two-page E2E pass; reconnect still reconciles missed events.
+- [x] Block/unblock invalidates only the blocker's own sessions; blocked-account UI receives no revealing event.
+- [x] Recipient decline removes the stale request from its other tabs via authoritative refetch.
+- [x] Existing block enforcement, generic errors and sender removal notification remain intact.
+- [x] Complete gates and two-page E2E pass; reconnect still reconciles missed events.
 
 ## Refetch/session boundary scope
 
@@ -42,3 +42,12 @@ This is private cache hygiene for these invalidations, not new messaging functio
   prior two-tab RED is in cm103-presence-and-cm104-red.log.
 - Full integrated gates remain required after CM-105. No real provider/device smoke,
   remote CI, release operation or new dependency is claimed.
+
+## Final candidate verification (2026-10-26)
+
+Candidate 40a3b88: backend verify 618 unit/slice +107 IT PASS, coverage/packaging PASS;
+frontend lint/strict TypeScript/447 tests/build PASS; exact npm run test:e2e 30/30 PASS,
+no retries/skips. See [hardening report](V0.2-M1-HARDENING-REPORT.md) for per-AC,
+commands, evidence and boundaries. Historical pending statements above refer to those
+intermediate runs; this final result supersedes their local gate state only.
+Remote CI, real providers/physical mobile and owner release sign-off remain pending.
