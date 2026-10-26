@@ -82,6 +82,14 @@ for (const touch of [false, true]) {
       expect((await reported).status()).toBe(202);
       await expect(dialog).toHaveCount(0);
       await expect(alice.locator('body')).not.toHaveCSS('pointer-events', 'none');
+      await expect(trigger).toBeFocused();
+      // Cancel must release the same layers and restore the same keyboard target.
+      if (touch) await trigger.tap(); else await trigger.press('Enter');
+      await alice.getByRole('menuitem', { name: 'Report message' }).click();
+      await expect(dialog).toBeVisible();
+      await dialog.getByRole('button', { name: 'Cancel', exact: true }).click();
+      await expect(dialog).toHaveCount(0);
+      await expect(trigger).toBeFocused();
       await noOverflow(alice);
       // Own-message menu must retain Copy/time and omit reporting one's own message.
       const own = alice.getByRole('log').getByRole('button', { name: 'More actions', exact: true }).first();

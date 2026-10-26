@@ -136,6 +136,7 @@ const ChatRoomView: React.FC<{ roomId: string; onDeleted: () => void }> = ({
   const [newMessage, setNewMessage] = useState("");
   const [showInfo, setShowInfo] = useState(false);
   const [report, setReport] = useState<ReportTarget | null>(null);
+  const reportTrigger = useRef<HTMLElement | null>(null);
   const unblockUser = useUsersStore((state) => state.unblockUser);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
@@ -318,7 +319,10 @@ const ChatRoomView: React.FC<{ roomId: string; onDeleted: () => void }> = ({
           loadingOlder={loadingOlder}
           olderError={olderError}
           onLoadOlder={loadOlder}
-          onReport={(message) => setReport({ type: "MESSAGE", id: message.id, label: `message from ${message.senderName || "this member"}` })}
+          onReport={(message) => {
+            reportTrigger.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+            setReport({ type: "MESSAGE", id: message.id, label: `message from ${message.senderName || "this member"}` });
+          }}
           directWith={
             currentRoom.roomType === RoomType.DIRECT_MESSAGE && currentRoom.counterpart
               ? { name: currentRoom.counterpart.name, avatarUrl: currentRoom.counterpart.avatarUrl }
@@ -338,7 +342,7 @@ const ChatRoomView: React.FC<{ roomId: string; onDeleted: () => void }> = ({
           onUnblock={() => currentRoom.counterpart && void unblockUser(currentRoom.counterpart)}
         />
       )}
-      <ReportDialog target={report} onClose={() => setReport(null)} />
+      <ReportDialog target={report} onClose={() => setReport(null)} onRestoreFocus={() => reportTrigger.current?.focus()} />
 
       <MessageInput
         value={newMessage}

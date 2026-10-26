@@ -45,3 +45,25 @@ No Approved contract edit or feature expansion belongs to this investigation.
 Final CM-097 evidence: on `fc0de58`, both desktop and 360px cases reproduced the
 post-report click lock even after the observable body pointer-events check passed.
 This confirms the investigation remains open; see the CM-097 handoff for exact results.
+
+## CM-101 implementation evidence (2026-10-26)
+
+Owner authorized this fix after CM-099. Real Radix menu+dialog tests reproduced two
+competing focus traps; the initial unbounded run overflowed and only its exact owned
+Vitest process tree was stopped. A test-only capture guard then bounded focus events:
+submit/cancel both RED (43/42 transitions, limit 30), without changing product behavior.
+
+Open Report from the menu's close-auto-focus lifecycle after its layer unmounts. Focus
+the origin first and restore that message on dialog close. No timeout, forced click,
+shadcn edit or dependency change. The two Radix versions remain as locked.
+
+- Submit/cancel + existing report component tests: 9 PASS.
+- All five real-stack desktop/360px mobile tests: PASS, including actual report 202,
+  cancel, restored focus and the original next own-menu click.
+- Full frontend lint / TypeScript / 440 unit tests: PASS; existing warnings retained.
+- Backend verify: 586 unit/slice + 106 ITs PASS, coverage PASS.
+- Complete combined E2E and independent production build are running; their final
+  evidence will be recorded in the subsequent hardening handoff. Do not infer release
+  acceptance or real mobile-device smoke from the focused viewport cases.
+- Ignored logs: backend/target/cm101-{red-bounded,green,e2e,lint,tsc,vitest}.log and
+  cm100-101-{verify,full-e2e,build}.log. Temporary CM-100 probes are absent.

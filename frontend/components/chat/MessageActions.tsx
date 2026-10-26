@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import toast from "react-hot-toast";
 import { Copy, Flag } from "lucide-react";
 import type { Message } from "@/lib/types";
@@ -29,6 +29,8 @@ interface MessageActionsProps {
  */
 export function MessageActions({ message, timeLabel, onReport, className = "", children }: MessageActionsProps) {
   const [open, setOpen] = useState(false);
+  const triggerRef = useRef<HTMLDivElement>(null);
+  const reportAfterClose = useRef(false);
 
   const copy = async () => {
     try {
@@ -43,6 +45,7 @@ export function MessageActions({ message, timeLabel, onReport, className = "", c
     <DropdownMenu open={open} onOpenChange={setOpen}>
       <DropdownMenuTrigger asChild>
         <div
+          ref={triggerRef}
           role="button"
           tabIndex={0}
           aria-label="More actions"
@@ -55,7 +58,18 @@ export function MessageActions({ message, timeLabel, onReport, className = "", c
           {children}
         </div>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align={message.isOwn ? "end" : "start"} className="min-w-40">
+      <DropdownMenuContent
+        align={message.isOwn ? "end" : "start"}
+        className="min-w-40"
+        onCloseAutoFocus={(event) => {
+          if (!reportAfterClose.current) return;
+          // The menu's focus/pointer layer must unmount before the modal opens.
+          event.preventDefault();
+          reportAfterClose.current = false;
+          triggerRef.current?.focus();
+          onReport?.(message);
+        }}
+      >
         <DropdownMenuLabel className="font-mono text-[11px] font-normal text-muted-foreground">
           {timeLabel}
         </DropdownMenuLabel>
@@ -67,7 +81,7 @@ export function MessageActions({ message, timeLabel, onReport, className = "", c
         {onReport && !message.isOwn && message.id && (
           <DropdownMenuItem
             className="text-destructive focus:bg-destructive/10 focus:text-destructive"
-            onSelect={() => onReport(message)}
+            onSelect={() => { reportAfterClose.current = true; }}
           >
             <Flag aria-hidden="true" />
             Report message
