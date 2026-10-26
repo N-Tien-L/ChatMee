@@ -49,6 +49,7 @@ class RoomMembershipIT {
     @Autowired private ParticipantRepository participantRepository;
     @Autowired private UserRepository userRepository;
     @Autowired private MongoTemplate mongoTemplate;
+    @Autowired private com.lnt.chatmee.security.WsSessionRegistry wsSessions;
 
     private ExecutorService pool;
 
@@ -172,20 +173,32 @@ class RoomMembershipIT {
     }
 
     @Test
-    void softDelete_orphanMembership_deniesMessageAndStompAuthorization() {
+    void softDelete_orphanMembership_deniesMessageAndStompAuthorization() throws Exception {
         ChatRoom room = room(10, 0);
         chatRoomRepository.softDelete(room.getId(), LocalDateTime.now());
         // Reproduce the post-delete insert window of a join that already reserved its seat.
         participantService.createParticipant(room.getId(), "user-0", Role.MEMBER);
         assertThat(participantRepository.existsByChatRoomIdAndUserId(room.getId(), "user-0")).isTrue();
         assertThat(participantService.isUserParticipant(room.getId(), "user-0")).isFalse();
+        // Session authentication must succeed before the unchanged orphan-membership denial.
+        var socket = org.mockito.Mockito.mock(org.springframework.web.socket.WebSocketSession.class);
+        org.mockito.Mockito.when(socket.getId()).thenReturn("membership-socket");
+        var transport = wsSessions.decorate(new org.springframework.web.socket.handler.AbstractWebSocketHandler() {});
+        transport.afterConnectionEstablished(socket);
+        wsSessions.registerToken("membership-token", "user-0", new org.springframework.mock.web.MockHttpSession());
+        wsSessions.bindToken("membership-token", "user-0", "membership-socket");
+        try {
         for (String suffix : List.of("", "/typing")) {
             var headers = org.springframework.messaging.simp.stomp.StompHeaderAccessor.create(
                 org.springframework.messaging.simp.stomp.StompCommand.SUBSCRIBE);
+            headers.setSessionId("membership-socket");
             headers.setUser(() -> "user-0"); headers.setDestination("/topic/rooms/" + room.getId() + suffix);
             var frame = org.springframework.messaging.support.MessageBuilder.createMessage(new byte[0], headers.getMessageHeaders());
             assertThatThrownBy(() -> authChannelInterceptor.preSend(frame, null))
                 .isInstanceOf(org.springframework.security.access.AccessDeniedException.class);
+        }
+        } finally {
+            transport.afterConnectionClosed(socket, org.springframework.web.socket.CloseStatus.NORMAL);
         }
         var request = new com.lnt.chatmee.dto.request.ChatMessageRequest();
         request.setRoomId(room.getId()); request.setContent("Blocked");

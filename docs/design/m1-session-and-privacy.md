@@ -56,3 +56,9 @@ CM-103 lifecycle detail: PRESENCE_SCOPE_CHANGED with empty payload on existing
 /user/queue/events invalidates only affected accounts' filtered snapshot. Announce it
 after join/leave/removal to current members plus a departing member. Existing
 ROOM_REMOVED handles the captured deletion audience. It carries no subject identity or room metadata and adds no destination.
+
+## CM-105 owner decision
+ADR-0008 selects core/max=1 inbound worker with existing FIFO capacity100 for small
+M1 usage. Original rejection path and outbound pool remain. Native prototype excluded
+after three multi-session IT regressions. Slow inbound work blocks other sessions;
+future concurrency requires a separate tested compatibility decision.

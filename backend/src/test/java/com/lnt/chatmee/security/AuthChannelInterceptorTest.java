@@ -243,10 +243,49 @@ class AuthChannelInterceptorTest {
         private int port;
         @MockitoBean
         private WsTokenService wireTokens;
+        @Autowired @org.springframework.beans.factory.annotation.Qualifier("clientInboundChannel")
+        private ExecutorSubscribableChannel wireInbound;
         @MockitoBean
         private ParticipantService wireParticipants;
         @Autowired
         private SimpMessagingTemplate wireMessaging;
+
+        @Test
+        void receiveOrder_subscribeBlocked_sendCannotOvertakeIt() throws Exception {
+            when(wireTokens.consumeToken("ordered-token")).thenReturn("ordered-user");
+            when(wireParticipants.isUserParticipant("ordered-room", "ordered-user")).thenReturn(true);
+            var entered = new java.util.concurrent.CountDownLatch(1);
+            var release = new java.util.concurrent.CountDownLatch(1);
+            var sent = new java.util.concurrent.CountDownLatch(1);
+            var probe = new org.springframework.messaging.support.ExecutorChannelInterceptor() {
+                @Override public Message<?> beforeHandle(Message<?> message, org.springframework.messaging.MessageChannel channel,
+                        org.springframework.messaging.MessageHandler handler) {
+                    String destination = org.springframework.messaging.simp.SimpMessageHeaderAccessor.getDestination(message.getHeaders());
+                    if ("/topic/rooms/ordered-room".equals(destination)) {
+                        entered.countDown();
+                        try { if (!release.await(5, TimeUnit.SECONDS)) throw new AssertionError("Subscription release deadline"); }
+                        catch (InterruptedException interrupted) { Thread.currentThread().interrupt(); return null; }
+                    } else if ("/app/presence".equals(destination)) sent.countDown();
+                    return message;
+                }
+            };
+            WebSocketStompClient client = client();
+            StompSession session = null;
+            wireInbound.addInterceptor(probe);
+            try {
+                session = authenticatedSession(client, "ordered-token");
+                session.subscribe("/topic/rooms/ordered-room", new StompSessionHandlerAdapter() {});
+                session.send("/app/presence", "{}".getBytes(StandardCharsets.UTF_8));
+                assertTrue(entered.await(5, TimeUnit.SECONDS), "Subscribe must reach the held real handler");
+                assertFalse(sent.await(1, TimeUnit.SECONDS), "SEND overtook the held SUBSCRIBE");
+                release.countDown();
+                assertTrue(sent.await(5, TimeUnit.SECONDS), "SEND must continue after SUBSCRIBE is released");
+            } finally {
+                release.countDown(); wireInbound.removeInterceptor(probe);
+                if (session != null && session.isConnected()) session.disconnect();
+                client.stop();
+            }
+        }
 
         @Test
         void sendToUser_twoAuthenticatedSubscribers_deliversOnlyToTargetUser() throws Exception {

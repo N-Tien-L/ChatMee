@@ -330,8 +330,12 @@ class SubscriptionRevocationIT {
             .with(oauth2Login().oauth2User(principal(owner))).with(csrf().asHeader()))
             .andExpect(status().isNoContent());
         for (var queue : events) {
-            var event = take(queue);
-            assertThat(event.path("type").asString()).isEqualTo("ROOM_REMOVED");
+            var delivered = List.of(take(queue), take(queue));
+            assertThat(delivered.stream().map(value -> value.path("type").asString()).toList())
+                .containsExactlyInAnyOrder("PRESENCE_SCOPE_CHANGED", "ROOM_REMOVED");
+            var scope = delivered.stream().filter(value -> "PRESENCE_SCOPE_CHANGED".equals(value.path("type").asString())).findFirst().orElseThrow();
+            assertThat(scope.path("payload").isEmpty()).isTrue();
+            var event = delivered.stream().filter(value -> "ROOM_REMOVED".equals(value.path("type").asString())).findFirst().orElseThrow();
             assertThat(event.path("payload").path("reason").asString()).isEqualTo("REMOVED");
             assertThat(event.path("payload").path("roomId").asString()).isEqualTo(roomId);
         }
@@ -342,6 +346,9 @@ class SubscriptionRevocationIT {
         publishRoomAndTyping("after-removal");
         assertThat(take(room).path("marker").asString()).isEqualTo("after-removal");
         for (var queue : revoked) assertSilent(queue);
+        var scopeChanged = take(ownerEvents);
+        assertThat(scopeChanged.path("type").asString()).isEqualTo("PRESENCE_SCOPE_CHANGED");
+        assertThat(scopeChanged.path("payload").isEmpty()).isTrue();
         assertSilent(ownerEvents);
         assertThat(participants.isUserParticipant(roomId, member.getId())).isFalse();
         for (var session : sessions) assertThat(session.isConnected()).isTrue();

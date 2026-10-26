@@ -50,9 +50,10 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
     @Override
     public void configureClientInboundChannel(ChannelRegistration registration) {
         registration.interceptors(authChannelInterceptor, new StompMdcInterceptor());
+        // ADR-0008: serialize inbound handler work for the small M1 audience.
         registration.taskExecutor()
-                .corePoolSize(4)
-                .maxPoolSize(16)
+                .corePoolSize(1)
+                .maxPoolSize(1)
                 .queueCapacity(100);
     }
 
