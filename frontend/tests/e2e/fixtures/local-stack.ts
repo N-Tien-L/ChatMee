@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { test as base, expect, type BrowserContext, type Page } from '@playwright/test';
 import { assertLocalTarget } from '../local-only.mjs';
 
@@ -36,27 +37,31 @@ export async function createConversation(page: Page) {
   await expect(page.getByText('On air', { exact: true })).toBeVisible();
   return id;
 }
+// A test owns its synthetic identity pair, including quotas and unread state.
+async function allowLocal(context: BrowserContext, namespace: string) {
+  await context.route('**/*', route => {
+    const url = new URL(route.request().url());
+    if (!['http://127.0.0.1:3100', 'http://127.0.0.1:9100'].includes(url.origin)) return route.abort();
+    if (url.origin === 'http://127.0.0.1:9100' && url.pathname === '/authorize') {
+      url.searchParams.set('fixture', namespace);
+      return route.continue({ url: url.toString() });
+    }
+    return route.continue();
+  });
+}
+const namespaceFor = (testId: string) => createHash('sha256').update(testId).digest('hex').slice(0, 16);
 export const test = base.extend<{ alice: Page; bob: Page }>({
-  // Reject browser network traffic outside the test listeners, including redirects.
-  context: async ({ context }, provide) => {
-    await context.route('**/*', route => {
-      const url = new URL(route.request().url());
-      return ['http://127.0.0.1:3100', 'http://127.0.0.1:9100'].includes(url.origin)
-        ? route.continue() : route.abort();
-    });
+  context: async ({ context }, provide, info) => {
+    await allowLocal(context, namespaceFor(info.testId));
     await provide(context);
   },
   alice: async ({ page }, provide) => {
     await login(page, 'Alice');
     await provide(page);
   },
-  bob: async ({ browser }, provide) => {
+  bob: async ({ browser }, provide, info) => {
     const context = await browser.newContext({ baseURL: origin, serviceWorkers: 'block' });
-    await context.route('**/*', route => {
-      const url = new URL(route.request().url());
-      return ['http://127.0.0.1:3100', 'http://127.0.0.1:9100'].includes(url.origin)
-        ? route.continue() : route.abort();
-    });
+    await allowLocal(context, namespaceFor(info.testId));
     try {
       const page = await context.newPage();
       await login(page, 'Bob');

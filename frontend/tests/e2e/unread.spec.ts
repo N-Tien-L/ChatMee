@@ -112,3 +112,31 @@ test('unread_reconnectSnapshotDelayedAcrossActivity_keepsNewBadgeAndTitle', asyn
   await expect(alice).toHaveTitle('(1) ChatMee');
   expect((await roomState(alice, room)).unreadCount).toBe(1);
 });
+
+test('unread_twoPages_readThenReconnect_convergesToServerState', async ({ alice, bob }) => {
+  const { socketFaults, joinRoom, openRoom, sendStored, rooms } = await import('./fixtures/journey');
+  const room = await createConversation(alice);
+  await createConversation(alice); // both Alice pages keep the target room closed
+  const mirror = await alice.context().newPage();
+  try {
+    const fault = await socketFaults(mirror);
+    await mirror.goto('/dashboard');
+    await expect(mirror.getByText('On air', { exact: true })).toBeVisible();
+    await joinRoom(bob, room);
+    await sendStored(bob, room, 'CM-097 two-page unread');
+    for (const page of [alice, mirror]) {
+      await expect(page).toHaveTitle('(1) ChatMee');
+      await expect(page.getByLabel('1 unread messages', { exact: true })).toBeVisible();
+      expect((await rooms(page)).find(value => value.id === room)?.unreadCount).toBe(1);
+    }
+    await openRoom(alice, room);
+    await expect.poll(async () => (await rooms(alice)).find(value => value.id === room)?.unreadCount).toBe(0);
+    await expect(alice).toHaveTitle('ChatMee');
+    // No cross-tab read event is promised. A real socket reconnect refetches the authority.
+    fault.cut();
+    await expect.poll(() => fault.frames.filter(frame => frame.startsWith('CONNECTED')).length).toBeGreaterThan(1);
+    await expect(mirror).toHaveTitle('ChatMee');
+    await expect(mirror.getByLabel(/unread messages/)).toHaveCount(0);
+    expect((await rooms(mirror)).find(value => value.id === room)?.unreadCount).toBe(0);
+  } finally { await mirror.close(); }
+});

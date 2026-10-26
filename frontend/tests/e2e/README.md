@@ -54,7 +54,7 @@ OAuth error callback. It is a GitHub-shaped OAuth fixture, not OIDC or a real Gi
 fixtures/local-stack.ts supplies isolated alice and bob browser contexts with distinct
 synthetic accounts and real server sessions. No storageState file, session injection,
 identity header or application bypass endpoint is used. Data is fresh per suite run;
-contexts are fresh per test. Later CM-097 tests can reuse these fixtures.
+contexts are fresh per test. CM-097 namespaces both synthetic accounts by test ID through the provider authorization page; each case owns separate identities, quotas and unread state. Namespaces accept exactly sixteen lowercase hexadecimal characters, and provider unit tests verify that account IDs differ across namespaces. OAuth state, code exchange, callback and sessions remain real.
 
 ## Cases and fault labels
 
@@ -142,3 +142,38 @@ assertions wait on observable persistence, socket/UI state and message IDs.
 Browser execution still requires the Docker-enabled CM-094 stack. Test collection
 or unit passes do not establish that this full-stack case passed. See the CM-095
 handoff for current results; CM-097 owns the wider two-user/mobile journey suite.
+
+## CM-097 two-user and mobile coverage
+
+`dm-journey.spec.ts` performs one complete Alice/Bob DM lifecycle through user search,
+request preview, Inbox accept and two-way messaging. It attempts a second request SEND
+on the authenticated transport and checks the actual server error and unchanged history.
+Both pair-creation directions must return the same room. Blocker read-only state, generic
+blocked-sender failure, unblock, hide, persisted-message unhide and unread/title are
+compared with fresh REST room lists and history. Each test owns a separate synthetic pair and uniquely named rooms, avoiding destructive
+fixture reset and cross-test rate-limit/unread contamination. Each launcher run also
+starts fresh container data; reusing an existing server is refused.
+
+`mobile.spec.ts` runs at desktop size and 360 x 740 with touch emulation and reduced
+motion. It checks overflow, input focus and accessible instructions, synthetic IME Enter,
+Shift+Enter/newline and Enter/send, received-message Copy/Report/time, clipboard contents,
+own-message menu rights, mobile back navigation and browser Back restoration. Reporting
+expects the real backend's 202. Synthetic composition events and viewport emulation do
+not establish actual operating-system IME or virtual-keyboard behavior; CM-099 retains
+physical-device smoke.
+
+`reconnect.spec.ts` retains CM-095's 105-message real persistence gap. Added cases drop
+only a sender echo or an outgoing SEND, wait for the real ten-second failed state, then
+Resend with the unchanged client ID and require exact DOM/server history agreement.
+Desktop/touch recovery cases interrupt only the socket, retain a scrolled message anchor,
+then request smaller real server pages (`limit=1`) to exercise the ten-request recovery
+budget. One explicit 503 page produces Retry; remaining real pages produce Continue.
+The final DOM IDs, text, uniqueness and scroll offset must match persisted history.
+These socket/echo/SEND/503 injections are simulated faults; login, service state,
+authorization, successful message writes, successful history responses and UI are real.
+
+CM-096's `unread.spec.ts` remains part of the same command: duplicate SEND, failed read
+and delayed stale snapshot compare badge/title with server state. No suite retries are
+configured. New success checks use observable conditions. The 550 ms send pacing creates
+a workload below the unchanged 10 sends / 5 seconds limit; it is not used to assert success.
+See the ticket handoff for actual run results; coverage descriptions are not pass claims.

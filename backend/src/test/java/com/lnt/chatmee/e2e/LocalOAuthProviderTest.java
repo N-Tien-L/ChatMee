@@ -16,10 +16,11 @@ class LocalOAuthProviderTest {
             var client = HttpClient.newHttpClient();
             String callback = "http://127.0.0.1:3100/login/oauth2/code/github";
             String root = "http://127.0.0.1:" + provider.port();
+            for (String fixture : new String[] {"", "0123456789abcdef", "fedcba9876543210"})
             for (String account : new String[] {"alice", "bob"}) {
                 var authorize = client.send(HttpRequest.newBuilder(URI.create(root
                         + "/authorize?client_id=e2e-client&response_type=code&state=synthetic-state&redirect_uri="
-                        + URLEncoder.encode(callback, StandardCharsets.UTF_8) + "&account=" + account)).build(),
+                        + URLEncoder.encode(callback, StandardCharsets.UTF_8) + "&account=" + account + "&fixture=" + fixture)).build(),
                         HttpResponse.BodyHandlers.ofString());
                 assertThat(authorize.statusCode()).isEqualTo(302);
                 var redirect = URI.create(authorize.headers().firstValue("Location").orElseThrow());
@@ -38,7 +39,8 @@ class LocalOAuthProviderTest {
                 var info = client.send(HttpRequest.newBuilder(URI.create(root + "/userinfo"))
                         .header("Authorization", "Bearer " + bearer).build(), HttpResponse.BodyHandlers.ofString());
                 assertThat(info.statusCode()).isEqualTo(200);
-                assertThat(info.body().contains("e2e-" + account)).isTrue();
+                assertThat(new tools.jackson.databind.ObjectMapper().readTree(info.body()).get("id").asText())
+                        .isEqualTo("e2e-" + account + (fixture.isEmpty() ? "" : "-" + fixture));
                 assertThat(client.send(request, HttpResponse.BodyHandlers.discarding()).statusCode()).isEqualTo(400);
             }
         }

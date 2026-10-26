@@ -45,6 +45,11 @@ public final class LocalOAuthProvider implements AutoCloseable {
             reply(exchange, 400, "text/plain", "Invalid authorization request");
             return;
         }
+        String fixture = query.getOrDefault("fixture", "");
+        if (!fixture.isEmpty() && !fixture.matches("[a-f0-9]{16}")) {
+            reply(exchange, 400, "text/plain", "Invalid synthetic fixture namespace");
+            return;
+        }
         String account = query.get("account");
         if (account == null) {
             String base = "/authorize?" + exchange.getRequestURI().getRawQuery().replace("&", "&amp;").replace("\"", "&quot;").replace("<", "&lt;");
@@ -65,7 +70,7 @@ public final class LocalOAuthProvider implements AutoCloseable {
             return;
         }
         String code = UUID.randomUUID().toString();
-        codes.put(code, new Grant(account, Instant.now().plusSeconds(60)));
+        codes.put(code, new Grant(account + (fixture.isEmpty() ? "" : "-" + fixture), Instant.now().plusSeconds(60)));
         exchange.getResponseHeaders().add("Location", CALLBACK + "?code=" + code + "&state="
                 + URLEncoder.encode(query.get("state"), StandardCharsets.UTF_8));
         exchange.sendResponseHeaders(302, -1);

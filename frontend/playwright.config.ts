@@ -9,9 +9,10 @@ export default defineConfig({
   retries: 0,
   timeout: 120_000,
   expect: { timeout: 15_000 },
-  reporter: 'list',
+  reporter: 'line',
   use: {
     baseURL: assertLocalTarget(),
+    actionTimeout: 15_000, navigationTimeout: 30_000,
     trace: 'off', screenshot: 'off', video: 'off',
     serviceWorkers: 'block',
   },
