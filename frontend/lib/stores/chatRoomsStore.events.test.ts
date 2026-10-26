@@ -519,3 +519,33 @@ it('upsertRoom_lateSnapshotAfterHide_doesNotResurrectRoom', () => {
     expect(ids()).toEqual([]);
     expect(useChatRoomsStore.getState().endedRooms['hidden-dm']).toBe('HIDDEN');
 });
+
+
+it('fetchRooms_concurrentColdEntryCall_doesNotRestartReadDuringSnapshot', async () => {
+    vi.clearAllMocks();
+    vi.mocked(useAuthStore.getState).mockReturnValue({ user: { id: 'me' } } as never);
+    setVisibility('visible');
+    useChatRoomsStore.setState({ rooms: [], filteredRooms: [], loading: false, error: null, endedRooms: {}, activeRoomId: 'cold' });
+    const store = useChatRoomsStore.getState();
+    const initialRead = deferred<void>();
+    const first = deferred<Awaited<ReturnType<typeof chatRoomApi.getChatRooms>>>();
+    const second = deferred<Awaited<ReturnType<typeof chatRoomApi.getChatRooms>>>();
+    vi.mocked(chatRoomApi.markRoomRead).mockReturnValueOnce(initialRead.promise).mockResolvedValue(undefined);
+    vi.mocked(chatRoomApi.getChatRooms).mockReturnValueOnce(first.promise).mockReturnValueOnce(second.promise)
+        .mockResolvedValue({ success: true, data: [room('cold')] } as never);
+    // ChatRoomsList's mount marks the selected room, Dashboard starts the list fetch.
+    const read = store.markRoomRead('cold');
+    const dashboard = store.fetchRooms();
+    initialRead.resolve();
+    await read;
+    first.resolve({ success: true, data: [room('cold')] } as never);
+    await vi.waitFor(() => expect(chatRoomApi.getChatRooms).toHaveBeenCalledTimes(2));
+    // StompProvider's first onConnected arrives while the retry is in flight.
+    const connected = store.fetchRooms();
+    second.resolve({ success: true, data: [room('cold')] } as never);
+    await Promise.all([dashboard, connected]);
+    expect(chatRoomApi.markRoomRead).toHaveBeenCalledTimes(1);
+    expect(chatRoomApi.getChatRooms).toHaveBeenCalledTimes(2);
+    expect(find('cold')).toBeDefined();
+    expect(useChatRoomsStore.getState().error).toBeNull();
+});

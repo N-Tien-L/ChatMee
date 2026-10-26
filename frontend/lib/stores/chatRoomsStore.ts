@@ -117,12 +117,14 @@ const isCurrent = (generation: number) => currentAccount() === generation;
 
 async function fetchSnapshot(retryReads: boolean): Promise<void> {
     const generation = currentAccount();
+    // Dashboard and onConnected share the same refresh, including its read work.
+    // Starting another read here would invalidate the snapshot each caller is awaiting.
+    if (snapshot) return snapshot;
     if (retryReads) {
         const state = useChatRoomsStore.getState();
         const id = state.activeRoomId;
         if (id && tabIsVisible()) void state.markRoomRead(id);
     }
-    if (snapshot) return snapshot;
     const work = (async () => {
         useChatRoomsStore.setState({ loading: true, error: null });
         try {

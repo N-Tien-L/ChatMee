@@ -47,3 +47,21 @@ No backend, Approved contract, new endpoint, dependency or shadcn edit is pre-au
 
 No production fix is included in CM-097/098. Do not weaken the browser assertion,
 automatically reload until green, or assert this issue resolved from an unrelated pass.
+
+## CM-100 implementation evidence (2026-10-26)
+
+Owner authorized this fix in the follow-up after CM-099. A targeted instrumented run of
+both retained duplicate/snapshot unread cases failed before their intended assertions.
+Metadata showed Dashboard and first onConnected sharing a snapshot but starting separate
+read PUTs; each read start/completion invalidated another snapshot attempt.
+
+`fetchRooms_concurrentColdEntryCall_doesNotRestartReadDuringSnapshot` then reproduced
+that exact two-caller sequence in 64 ms: RED, two read calls instead of one. Coalescing an
+existing snapshot before starting its read work makes it GREEN without increasing the
+three-attempt limit or removing any stale-generation guard. Temporary probes were removed.
+
+- Focused CM-095/096/100 regressions: 6 files / 111 tests PASS.
+- Original 105-message reconnect plus all four unread E2Es: 5 PASS, no retry, isolated stack.
+- Logs: ignored `backend/target/cm100-{red,green,e2e,diagnosis-instrumented}.log`.
+- Full candidate gates and complete E2E remain pending the separate CM-101 fix. This is
+  an implementation commit, not a release-readiness or full ticket-completion claim.
