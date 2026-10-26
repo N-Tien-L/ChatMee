@@ -38,17 +38,17 @@ ROOM_REMOVED and generic block/cooldown failures. This is best-effort invalidati
 not durable replay; reconnect remains authoritative.
 
 ## Inbound ordering and safe rejection
-Enable preserveReceiveOrder only together with an OrderedAuthChannelInterceptor that
-invokes the existing authorization interceptor, converts authentication/authorization
-rejections to a sanitized session-targeted STOMP ERROR and returns null. This avoids
-relying on propagation through the ordered channel decorator, which previously swallowed
-rejections. The transport's ERROR handling closes the connection. Preserve rate limits,
-identity/room checks and outbound reauthorization. Real wire tests must prove ERROR,
-close and subscribe-before-send behavior before considering the ordering gap closed.
+The final owner-selected strategy is ADR-0008: core/max=1 inbound worker with
+FIFO capacity 100, preserving the existing authorization interceptor and ERROR/close
+path. A held SUBSCRIBE must complete before a following SEND is handled. Slow inbound
+work blocks every session, so this is limited to M1's small single-process audience.
+The native preserveReceiveOrder flag and OrderedAuthChannelInterceptor adapter were
+rejected after multi-session private-queue failures; neither is part of this candidate.
+Real wire tests cover order, safe rejection and the original multi-session contracts.
 
 ## Ticket boundaries
 CM-102: session binding/revocation. CM-103: presence filtering. CM-104: same-account
-block/decline invalidation. CM-105: ordered receive with explicit safe rejection.
+block/decline invalidation. CM-105: one inbound worker with the existing safe rejection path.
 Each ticket has its own branch/commit and tests. CM-106 covers a separate local-only
 synthetic preview so owner testing need not occupy E2E ports/data/build output.
 

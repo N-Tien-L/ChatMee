@@ -537,3 +537,15 @@ DM_REQUESTS refreshes its Inbox/rooms. Never notify the blocked account about wh
 it. Existing generic send refusal and sender ROOM_REMOVED remain authoritative. Missing
 events reconcile on reconnect. Refetch generations and logout cache reset must prevent
 old requests from repopulating private state in a subsequent session.
+
+
+## M1 inbound ordering (CM-105 / SPEC-011 / ADR-0008)
+
+For this candidate, the client inbound executor has one core/maximum worker and the
+existing FIFO capacity of 100. Handler work for a SUBSCRIBE precedes a following SEND.
+The original authentication/authorization ERROR and close handling remains in place.
+The historical receive-order deferral above is superseded for this small, single-process
+M1 audience. The native preserveReceiveOrder flag and adapter prototype are excluded.
+Slow controller/database work can block every inbound session; this is not a throughput
+or multi-instance guarantee. AuthChannelInterceptorTest.WireConnect's held-subscription
+test and the original multi-session STOMP/private-error/revocation ITs verify the choice.
