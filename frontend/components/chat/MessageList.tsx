@@ -20,6 +20,7 @@ const GROUP_WINDOW_MS = 5 * 60 * 1000;
 const TIME_BREAK_MS = 60 * 60 * 1000;
 
 interface MessageListProps {
+  recovering?: boolean;
   messages: Message[];
   onlineUsers: Set<string>;
   /** False until the first presence snapshot: the dots stay neutral instead of "offline" (SPEC-005 AC-005-6). */
@@ -82,6 +83,15 @@ function OwnBubble({ status, className, children }: { status: Message["status"];
 
 const MessageList: React.FC<MessageListProps> = (props) => {
   const { messages, messagesEndRef, hasMore = false, loadingOlder = false, olderError = null, onLoadOlder, loading = false, error = null } = props;
+  const visibleAnchor = useRef<{ id: string; offset: number } | null>(null);
+  const rememberAnchor = useCallback(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    const top = el.getBoundingClientRect().top;
+    const row = Array.from(el.querySelectorAll<HTMLElement>("[data-message-id]"))
+      .find(node => node.getBoundingClientRect().bottom > top);
+    visibleAnchor.current = row ? { id: row.dataset.messageId!, offset: row.getBoundingClientRect().top - top } : null;
+  }, []);
   const scrollRef = useRef<HTMLDivElement>(null);
   const edgesRef = useRef<{ first?: string; last?: string; scrollHeight: number }>({ scrollHeight: 0 });
   // Read at the moment a message arrives, before the list grows, so content growth alone never counts as scrolling away.
@@ -103,14 +113,21 @@ const MessageList: React.FC<MessageListProps> = (props) => {
     const previous = edgesRef.current;
     const first = messages[0]?.id;
     const last = messages[messages.length - 1]?.id;
-    if (el && previous.last !== undefined && last === previous.last && first !== previous.first) {
+    const anchor = visibleAnchor.current;
+    const row = el && anchor && Array.from(el.querySelectorAll<HTMLElement>("[data-message-id]"))
+      .find(node => node.dataset.messageId === anchor.id);
+    if (el && row && anchor && !atBottomRef.current &&
+        !(messages[messages.length - 1]?.isOptimistic && messages[messages.length - 1]?.isOwn)) {
+      el.scrollTop += row.getBoundingClientRect().top - el.getBoundingClientRect().top - anchor.offset;
+      if (last !== previous.last) setUnseenCount(count => count + 1);
+    } else if (el && previous.last !== undefined && last === previous.last && first !== previous.first) {
       // An older page was prepended: keep the message the user was reading where it was.
       el.scrollTop += el.scrollHeight - previous.scrollHeight;
     } else if (last !== previous.last) {
       if (previous.last === undefined) {
         // A first load jumps straight to the bottom, so its scroll never passes the load-older threshold.
         scrollToBottom("auto");
-      } else if (messages[messages.length - 1]?.isOwn || atBottomRef.current) {
+      } else if ((messages[messages.length - 1]?.isOwn && !props.recovering) || atBottomRef.current) {
         scrollToBottom("smooth");
       } else {
         const index = messages.findIndex((m) => m.id === previous.last);
@@ -119,7 +136,8 @@ const MessageList: React.FC<MessageListProps> = (props) => {
       }
     }
     edgesRef.current = { first, last, scrollHeight: el?.scrollHeight ?? 0 };
-  }, [messages, scrollToBottom]);
+    rememberAnchor();
+  }, [messages, scrollToBottom, rememberAnchor, props.recovering]);
 
   // When the loaded page does not fill the viewport there is nothing to scroll, so offer the button.
   useLayoutEffect(() => {
@@ -131,6 +149,7 @@ const MessageList: React.FC<MessageListProps> = (props) => {
     const el = scrollRef.current;
     if (!el) return;
     atBottomRef.current = isNearBottom(el);
+    rememberAnchor();
     if (atBottomRef.current) setUnseenCount(0);
     if (!onLoadOlder || !hasMore || loadingOlder || olderError) return;
     if (el.scrollTop <= LOAD_OLDER_THRESHOLD_PX) onLoadOlder();
@@ -337,7 +356,7 @@ const MessageListContent: React.FC<MessageListContentProps> = ({
           const pending = message.isOwn && message.status === "sending";
 
           return (
-            <div key={message.id}>
+            <div key={message.id} data-message-id={message.id}>
               {showDate && (
                 <div className="flex justify-center my-4">
                   <span className="rounded-full bg-card px-3 py-1 font-mono text-[11px] uppercase tracking-[0.12em] text-muted-foreground shadow-sm ring-1 ring-border">

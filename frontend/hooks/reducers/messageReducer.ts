@@ -52,6 +52,7 @@ export function messageReducer(state: MessageState, action: MessageAction): Mess
             return {
                 ...state,
                 loading: false,
+                loadingOlder: false,
                 error: null,
                 messages: mergeResyncedMessages(state.messages, action.payload.messages, action.payload.userId),
                 hasMoreMessages: action.payload.hasMore,
@@ -147,6 +148,7 @@ export function messageReducer(state: MessageState, action: MessageAction): Mess
             return {
                 ...state,
                 loading: false,
+                loadingOlder: false,
                 error: null,
                 messages: mergeResyncedMessages(state.messages, action.payload.messages, action.payload.userId),
             };

@@ -127,3 +127,18 @@ artifacts. Production artifact checks and local tests do not certify deployed OA
 CM-094 stops at this harness. CM-095 owns multi-page recovery, CM-096 unread fixes,
 CM-097 broader two-user/mobile coverage, CM-098 CI, and CM-099 release evidence.
 Do not weaken assertions or production authorization to make a new browser failure pass.
+
+
+## CM-095 reconnect recovery case
+
+`reconnect.spec.ts` cuts only Alice's proxied WebSocket (explicit simulated outage),
+keeps her real HTTP session alive and sends 105 messages as Bob through the unchanged
+local STOMP/persistence path, paced below the existing send limit. On reconnection,
+the DOM server IDs must equal a complete cursor walk of persisted history, including
+order and uniqueness. OAuth, memberships and REST responses are not mocked.
+The case has a 240-second bound; pacing creates the allowed send workload, while
+assertions wait on observable persistence, socket/UI state and message IDs.
+
+Browser execution still requires the Docker-enabled CM-094 stack. Test collection
+or unit passes do not establish that this full-stack case passed. See the CM-095
+handoff for current results; CM-097 owns the wider two-user/mobile journey suite.
