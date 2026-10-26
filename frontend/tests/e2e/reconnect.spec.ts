@@ -67,6 +67,7 @@ test('chat_lostEchoAndFailedSend_resendMatchesPersistedHistory', async ({ alice,
   await joinRoom(bob, room);
   fault.dropEcho = 'CM-097 saved without echo';
   await sendStored(alice, room, fault.dropEcho, 'history');
+  await expect.poll(() => fault.droppedEchoes).toBeGreaterThan(0);
   await expect(bob.getByRole('log').getByText(fault.dropEcho, { exact: true })).toBeVisible();
   await expect(alice.getByRole('button', { name: 'Resend', exact: true })).toBeVisible({ timeout: 20_000 });
   const first = fault.sends.at(-1)!;

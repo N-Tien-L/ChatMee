@@ -69,11 +69,12 @@ export async function expectHistory(page: Page, room: string) {
 }
 // Transport-only simulation. Successful HTTP responses and persisted message rows stay real.
 export async function socketFaults(page: Page) {
-  const control = { offline: false, dropSend: false, dropEcho: '', sends: [] as string[], frames: [] as string[],
+  const control = { connected: false, droppedEchoes: 0, offline: false, dropSend: false, dropEcho: '', sends: [] as string[], frames: [] as string[],
     cut: (): void => { throw new Error('Socket not connected'); }, inject: (frame: string): void => { throw new Error('Socket not connected: ' + Boolean(frame)); } };
   await page.routeWebSocket('ws://127.0.0.1:8100/ws', socket => {
     if (control.offline) { socket.close(); return; }
     const server: WebSocketRoute = socket.connectToServer();
+    control.connected = true;
     control.cut = () => { socket.close(); server.close(); };
     control.inject = frame => server.send(frame);
     socket.onMessage(frame => {
@@ -87,10 +88,17 @@ export async function socketFaults(page: Page) {
     server.onMessage(frame => {
       const text = String(frame);
       control.frames.push(text);
-      if (control.dropEcho && text.startsWith('MESSAGE') && text.includes('"content":' + JSON.stringify(control.dropEcho))) return;
+      if (control.dropEcho && text.startsWith('MESSAGE') && text.includes('"content":' + JSON.stringify(control.dropEcho))) { control.droppedEchoes++; return; }
       socket.send(frame);
     });
   });
+  // Routes only intercept sockets created AFTER registration. Reload the already
+  // signed-in page so the simulation cannot silently leave its existing socket untouched.
+  if (page.url().startsWith(origin)) {
+    await page.reload();
+    await expect.poll(() => control.connected).toBe(true);
+    await expect(page.getByText('On air', { exact: true })).toBeVisible();
+  }
   return control;
 }
 export function anotherSend(frame: string, content: string) {
