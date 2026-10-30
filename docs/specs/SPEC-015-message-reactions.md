@@ -19,8 +19,10 @@ event and field.
 
 ## 4. Acceptance criteria
 - AC-015-1: Policy: one reaction per user per message. `PUT .../reaction {emoji}` sets it and
-  replaces any previous one; repeating the same emoji is a no-op; `DELETE .../reaction`
-  removes it and is idempotent. -> Test: `react_replaceExisting_keepsOne`, `react_sameEmoji_idempotent`, `react_delete_idempotent`
+  replaces any previous one (a different emoji changes the reaction, never adds a second);
+  repeating the same PUT is idempotent. `DELETE .../reaction` removes it and is idempotent.
+  In the UI, selecting the emoji the user already has undoes it (the client sends DELETE);
+  selecting another emoji changes it (PUT). -> Test: `react_replaceExisting_keepsOne`, `react_sameEmoji_idempotent`, `react_delete_idempotent`; UI `reactions_reselectSame_removes`, `reactions_selectOther_changes`
 - AC-015-2: Storage is a `reactions` collection `{messageId, roomId, userId, emoji, createdAt}`
   with a unique index on `(messageId, userId)`. The index is declared on the entity; no
   destructive migration. (The plan's `(messageId, userId, emoji)` index is narrowed because
@@ -78,5 +80,4 @@ Three REST endpoints under `/api/v1/rooms/{roomId}/messages/{messageId}/`, the
 `websocket-protocol.md` (event shape, ignored by old clients) and `data-model.md`.
 
 ## 9. Open questions
-- OQ-A: Confirm one-reaction-per-user (AC-015-1) and the narrowed unique index (AC-015-2).
-- OQ-B: Should reactions be allowed on a user's own messages? Proposed: yes.
+- Resolved (owner, 2026-10-31): one reaction per user confirmed, including toggle-off on re-select and change on a different pick; the `(messageId, userId)` unique index is confirmed; reacting to one's own messages is allowed. No open questions.
