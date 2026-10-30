@@ -44,6 +44,10 @@ changes. This spec amends SPEC-004 and SPEC-008 additively; their text stays as 
 - AC-014-8: Tapping a quote scrolls to and highlights a loaded original. If it is not loaded,
   the client loads the context window as a detached segment (never presented as continuous
   with the live tail, per CM-095) and offers "Jump to latest". -> Test: `reply_jumpUnloaded_loadsDetachedSegment`; E2E `reply.spec.ts` (reply to a message more than 100 back)
+- AC-014-10: On touch devices, swiping a message right (past a threshold) starts a reply to it,
+  with the same chip as the Reply action; it must not conflict with scrolling or the tap-to-open
+  actions menu, and a Reply action stays available for non-touch and assistive use.
+  -> Test: `reply_swipeRight_startsReply`, `reply_verticalScroll_doesNotTrigger`
 - AC-014-9: Replying counts against the existing send rate limit; no new STOMP destination.
   -> Test: `sendMessage_replyRateLimited`
 
@@ -74,5 +78,4 @@ Snapshot preview is capped at 120 characters to bound message size.
 `docs/design/data-model.md` (`messages.replyTo` subdocument).
 
 ## 9. Open questions
-- OQ-A: Redact the preview when the target is deleted (proposed, AC-014-5), or keep the snapshot text?
-- OQ-B: Swipe-right-to-reply on touch: in scope or later? Proposed: optional in CM-115.
+- Resolved (owner, 2026-10-31): redact the preview when the target is deleted (AC-014-5); swipe-to-reply is in scope (AC-014-10). No open questions.
