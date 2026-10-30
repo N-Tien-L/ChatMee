@@ -1,5 +1,5 @@
 # SPEC-014: Contextual reply to a message
-- Status: Draft (awaiting owner Approval; no implementation before it is Approved)
+- Status: Approved (owner, 2026-10-31); implementation and test evidence pending.
 - Owner: @N-Tien-L · Created: 2026-10-30 · Related: SPEC-004, SPEC-008, ADR-0005; design/websocket-protocol.md, design/data-model.md; plan/V0.2-PLAN.md (M3); tickets CM-113 (spec), CM-114 (backend), CM-115 (frontend)
 
 ## 1. Goal
