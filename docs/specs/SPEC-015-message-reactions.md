@@ -1,5 +1,5 @@
 # SPEC-015: Message reactions
-- Status: Draft (awaiting owner Approval; no implementation before it is Approved)
+- Status: Approved (owner, 2026-10-31); implementation and test evidence pending.
 - Owner: @N-Tien-L · Created: 2026-10-30 · Related: SPEC-004, SPEC-007, SPEC-009, SPEC-014; design/websocket-protocol.md, design/data-model.md; plan/V0.2-PLAN.md (M4); tickets CM-116 (spec), CM-117 (backend), CM-118 (frontend)
 
 ## 1. Goal
