@@ -1,5 +1,5 @@
 # SPEC-013: Per-room message drafts
-- Status: Draft (awaiting owner Approval; no implementation may start before it is Approved)
+- Status: Approved (owner, 2026-10-31); implementation and test evidence pending.
 - Owner: @N-Tien-L · Created: 2026-10-30 · Related: SPEC-004, SPEC-008, SPEC-011; plan/V0.2-PLAN.md (M2, OQ-04); ticket CM-111 (spec) / CM-112 (implementation)
 
 ## 1. Goal
