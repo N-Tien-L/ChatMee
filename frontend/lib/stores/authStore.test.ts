@@ -4,6 +4,7 @@ import toast from 'react-hot-toast';
 import { useAuthStore } from './authStore';
 import { useChatRoomsStore } from './chatRoomsStore';
 import { useChatStore } from './chatStore';
+import { useDraftStore } from './draftStore';
 import { authApi } from '../api/authApi';
 import { resetRoomMessageCache } from '@/hooks/useRoomMessage';
 
@@ -93,5 +94,25 @@ describe('authStore.checkAuthStatus (CM-084 G1)', () => {
         vi.mocked(authApi.getCurrentUser).mockRejectedValue(axiosFailure(401));
         await useAuthStore.getState().checkAuthStatus();
         expect(useAuthStore.getState()).toMatchObject({ isAuthenticated: false, unreachable: false });
+    });
+});
+
+describe('authStore drafts', () => {
+    it('draft_logout_clearsAccountNamespace', async () => {
+        vi.mocked(authApi.logout).mockResolvedValue(undefined);
+        useDraftStore.getState().save('u1', 'r1', 'unsent');
+        await useAuthStore.getState().logout();
+        expect(sessionStorage.length).toBe(0);
+        expect(useDraftStore.getState().texts).toEqual({});
+    });
+
+    it('draft_checkAuthStatus_otherAccount_purgesPreviousDrafts', async () => {
+        useDraftStore.getState().save('u1', 'r1', 'old account');
+        vi.mocked(authApi.getCurrentUser).mockResolvedValue({
+            success: true,
+            data: { authenticated: true, user: { id: 'u2', name: 'Bo' } },
+        } as never);
+        await useAuthStore.getState().checkAuthStatus();
+        expect(sessionStorage.getItem('chatmee:draft:v1:u1:r1')).toBeNull();
     });
 });

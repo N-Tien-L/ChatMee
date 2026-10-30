@@ -3,6 +3,7 @@ import { ChatRoom, RoomType } from "@/lib/types";
 import { MoreVertical, Lock, Trash2, UserMinus, Info, EyeOff } from "lucide-react";
 import { useAuthStore } from "@/lib/stores/authStore";
 import { useChatRoomsStore } from "@/lib/stores/chatRoomsStore";
+import { useDraftStore } from "@/lib/stores/draftStore";
 import { ConfirmDialog } from "@/components/common/ConfirmDialog";
 import { RelativeTime } from "@/components/common/RelativeTime";
 import { RoomAvatar } from "@/components/common/RoomAvatar";
@@ -49,6 +50,8 @@ const ChatRoomListItem: React.FC<ChatRoomListItemProps> = ({
   const isDirect = room.roomType === RoomType.DIRECT_MESSAGE;
   const isPending = room.state === "REQUESTED";
   const unread = room.unreadCount ?? 0;
+  // Both hints show: the unread badge stays and the preview line shows the draft (SPEC-013 AC-013-11).
+  const draft = useDraftStore((state) => state.texts[room.id]);
   const hideRoom = useChatRoomsStore((state) => state.hideRoom);
   // Actions follow the caller's participant role, never `createdBy` (SPEC-009 AC-009-25).
   // A DM is never deleted, only hidden for the caller (SPEC-009 AC-009-21/22).
@@ -153,7 +156,13 @@ const ChatRoomListItem: React.FC<ChatRoomListItemProps> = ({
                 unread > 0 ? "text-foreground font-medium" : "text-muted-foreground"
               }`}
             >
-              {previewText(room, user?.id)}
+              {draft?.trim() ? (
+                <>
+                  <span className="text-destructive">Draft:</span> {draft.trim()}
+                </>
+              ) : (
+                previewText(room, user?.id)
+              )}
             </p>
             <div className="flex items-center gap-1 flex-shrink-0">
               {isPending && (
