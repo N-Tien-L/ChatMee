@@ -129,10 +129,14 @@ const ChatRoomView: React.FC<{ roomId: string; onDeleted: () => void }> = ({
     hasMoreMessages,
     loadingOlder,
     olderError,
+    recovery,
+    recoveryError,
+    continueRecovery,
   } = useRoomMessages(roomId, { onRoomDeleted: handleRoomDeleted });
   const [newMessage, setNewMessage] = useState("");
   const [showInfo, setShowInfo] = useState(false);
   const [report, setReport] = useState<ReportTarget | null>(null);
+  const reportTrigger = useRef<HTMLElement | null>(null);
   const unblockUser = useUsersStore((state) => state.unblockUser);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
@@ -283,10 +287,23 @@ const ChatRoomView: React.FC<{ roomId: string; onDeleted: () => void }> = ({
       />
       <RoomPanel roomId={roomId} isOpen={showInfo} onClose={() => setShowInfo(false)} />
 
+      {recovery && recovery !== "idle" && (
+        <div role="status" aria-live="polite" className="mx-3 mb-2 flex flex-wrap items-center gap-2 rounded-md border px-3 py-2 text-sm sm:mx-7">
+          <span className="flex-1">{recovery === "loading" ? "Recovering missed messages… Conversation may be incomplete."
+            : recovery === "stopped" ? recoveryError
+            : `Conversation recovery incomplete. ${recoveryError ?? "More messages remain."}`}</span>
+          {(recovery === "incomplete" || recovery === "error") && (
+            <Button size="sm" variant="outline" onClick={continueRecovery}>
+              {recovery === "error" ? "Retry recovery" : "Continue recovery"}
+            </Button>
+          )}
+        </div>
+      )}
       {/* MessageList owns the scroll container (load older on scroll to top, CM-044). */}
       <div className="flex-1 min-h-0">
         <MessageList
           messages={messages}
+          recovering={!!recovery && recovery !== "idle"}
           onlineUsers={onlineUsers}
           presenceKnown={presenceLoaded}
           formatDate={formatDate}
@@ -302,7 +319,10 @@ const ChatRoomView: React.FC<{ roomId: string; onDeleted: () => void }> = ({
           loadingOlder={loadingOlder}
           olderError={olderError}
           onLoadOlder={loadOlder}
-          onReport={(message) => setReport({ type: "MESSAGE", id: message.id, label: `message from ${message.senderName || "this member"}` })}
+          onReport={(message) => {
+            reportTrigger.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+            setReport({ type: "MESSAGE", id: message.id, label: `message from ${message.senderName || "this member"}` });
+          }}
           directWith={
             currentRoom.roomType === RoomType.DIRECT_MESSAGE && currentRoom.counterpart
               ? { name: currentRoom.counterpart.name, avatarUrl: currentRoom.counterpart.avatarUrl }
@@ -322,7 +342,7 @@ const ChatRoomView: React.FC<{ roomId: string; onDeleted: () => void }> = ({
           onUnblock={() => currentRoom.counterpart && void unblockUser(currentRoom.counterpart)}
         />
       )}
-      <ReportDialog target={report} onClose={() => setReport(null)} />
+      <ReportDialog target={report} onClose={() => setReport(null)} onRestoreFocus={() => reportTrigger.current?.focus()} />
 
       <MessageInput
         value={newMessage}

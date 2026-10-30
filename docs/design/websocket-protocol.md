@@ -494,3 +494,58 @@ Removal checks participant roles rather than createdBy, deletes the membership a
 then sends ROOM_REMOVED with reason REMOVED to all sessions of the removed user. CM-058's existing
 live outbound guard blocks subsequent room and typing frames, including the removal announcement,
 for that user; their connection and other subscriptions remain usable.
+
+## M1 current-session revocation (CM-102 / SPEC-011, candidate implementation)
+
+The v0 deferral above is historical. For this owner-authorized M1 candidate, each issued
+ws-token is privately bound to the current server HTTP session and each authenticated
+transport inherits that binding. The public token response and Redis user-ID value,
+single-use getAndDelete and 60-second TTL are unchanged. Unknown local bindings reject
+CONNECT, including after restart; restart still requires relogin.
+
+POST /logout invalidates only the current HTTP session. Its servlet destruction callback
+revokes pending tokens and closes all of its transports; independent sessions of the same
+account are unaffected. Session-ID rotation also ends old bindings. Inbound SEND/SUBSCRIBE
+and queued outbound MESSAGE delivery require a still-valid bound session. A one-second
+local sweep closes sockets at the HTTP idle deadline without refreshing HTTP activity.
+Rejected CSRF logout does not trigger invalidation. No session/token IDs enter frames/logs.
+
+Verification: WsSessionRegistryTest; existing token/interceptor/CSRF tests; all 13 auth
+E2Es, including actual idle expiry and two raw transports that never run client logout.
+This is candidate-local evidence, not a deployed-state or real-provider smoke claim.
+
+## M1 presence visibility (CM-103 / SPEC-011, implementation scope)
+
+GET /api/v1/online-users and every /topic/presence delivery are restricted to self or
+users sharing a currently active room. Requested-only DMs are not shared membership;
+hiding an active DM does not revoke membership. Authorization is rechecked after outbound
+queuing and fails closed on malformed payload/database failure. Redis registry state is
+internal; its global data is not the subscriber audience.
+
+PRESENCE_SCOPE_CHANGED `{type, payload:{}, occurredAt}` uses existing /user/queue/events.
+Only accounts affected by join/leave/removal receive it (current members plus
+the departing member). Existing ROOM_REMOVED already invalidates the captured deletion audience. It contains no other account's
+presence/room details and asks the client to replace its authorized snapshot. Reconnect
+and room lifecycle refetch remain recovery paths; there is no new destination or polling.
+
+## M1 same-account safety invalidation (CM-104 / SPEC-011)
+
+ACCOUNT_STATE_CHANGED `{type, payload:{scope:"BLOCKS"|"DM_REQUESTS"}, occurredAt}` uses
+existing /user/queue/events and is delivered only to the account making the decision.
+BLOCKS refreshes that account's rooms, Inbox, blocks and current user-search results;
+DM_REQUESTS refreshes its Inbox/rooms. Never notify the blocked account about who blocked
+it. Existing generic send refusal and sender ROOM_REMOVED remain authoritative. Missing
+events reconcile on reconnect. Refetch generations and logout cache reset must prevent
+old requests from repopulating private state in a subsequent session.
+
+
+## M1 inbound ordering (CM-105 / SPEC-011 / ADR-0008)
+
+For this candidate, the client inbound executor has one core/maximum worker and the
+existing FIFO capacity of 100. Handler work for a SUBSCRIBE precedes a following SEND.
+The original authentication/authorization ERROR and close handling remains in place.
+The historical receive-order deferral above is superseded for this small, single-process
+M1 audience. The native preserveReceiveOrder flag and adapter prototype are excluded.
+Slow controller/database work can block every inbound session; this is not a throughput
+or multi-instance guarantee. AuthChannelInterceptorTest.WireConnect's held-subscription
+test and the original multi-session STOMP/private-error/revocation ITs verify the choice.

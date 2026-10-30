@@ -15,3 +15,5 @@
 .env*
 !.env.example
 !.env.*.example
+
+/.local-preview/

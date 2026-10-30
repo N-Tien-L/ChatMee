@@ -37,13 +37,14 @@ export interface ReportTarget {
 interface ReportDialogProps {
   target: ReportTarget | null;
   onClose: () => void;
+  onRestoreFocus?: () => void;
 }
 
 /**
  * Report a user, message or room (SPEC-009 AC-009-20). The server answers 202 with nothing to show, so the only
  * result is a thank-you toast; nobody else sees a change.
  */
-export function ReportDialog({ target, onClose }: ReportDialogProps) {
+export function ReportDialog({ target, onClose, onRestoreFocus }: ReportDialogProps) {
   const [reason, setReason] = useState<ReportReason | null>(null);
   const [note, setNote] = useState("");
   const [submitting, setSubmitting] = useState(false);
@@ -82,7 +83,11 @@ export function ReportDialog({ target, onClose }: ReportDialogProps) {
 
   return (
     <Dialog open={target !== null} onOpenChange={(open) => !open && close()}>
-      <DialogContent className="max-w-md">
+      <DialogContent className="max-w-md" onCloseAutoFocus={(event) => {
+        if (!onRestoreFocus) return;
+        event.preventDefault();
+        onRestoreFocus();
+      }}>
         <form onSubmit={(event) => void submit(event)} className="space-y-4">
           <DialogHeader>
             <DialogTitle>

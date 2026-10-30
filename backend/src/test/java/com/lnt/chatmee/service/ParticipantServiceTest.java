@@ -57,6 +57,7 @@ class ParticipantServiceTest {
         when(participants.findByChatRoomId("room")).thenReturn(List.of(Participant.builder().userId("actor").build()));
         service.joinRoom("room", "actor");
         verify(userEvents).roomAdded(eq("actor"), argThat(r -> r.id().equals("room") && r.participants().equals(Set.of("actor"))));
+        verify(userEvents).presenceScopeChanged(Set.of("actor"));
         verifyNoMoreInteractions(userEvents);
         verify(messageService).postSystemMessage("room", "Deleted user joined");
         verify(participants).save(argThat(p -> p.getUserId().equals("actor") && p.getRole() == Role.MEMBER));
@@ -365,6 +366,14 @@ class ParticipantServiceTest {
         }
         verify(rooms, never()).updateActivity(any(), any(), any());
         verify(userEvents, never()).roomActivity(any(), anyString(), any());
+    }
+
+    @Test
+    void removeParticipant_success_invalidatesRemainingAndDepartingPresenceOnly() {
+        when(participants.deleteByChatRoomIdAndUserId("room", "departing")).thenReturn(1L);
+        when(participants.findByChatRoomId("room")).thenReturn(List.of(Participant.builder().userId("remaining").build()));
+        assertTrue(service.removeParticipant("room", "departing"));
+        verify(userEvents).presenceScopeChanged(Set.of("remaining", "departing"));
     }
 
 }

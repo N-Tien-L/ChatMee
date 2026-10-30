@@ -312,8 +312,68 @@ class StompMessagingIT {
         return user;
     }
 
+    @Test
+    void presence_sharedMembershipAndRemoval_filtersEachSubscribedRecipient() throws Exception {
+        User subject = seedUser(true), related = seedUser(true), stranger = seedUser(false);
+        StompSession subjectSession = connect(issueToken(subject), new ProtocolEvents());
+        StompSession relatedSession = connect(issueToken(related), new ProtocolEvents());
+        StompSession strangerSession = connect(issueToken(stranger), new ProtocolEvents());
+        BlockingQueue<String> own = subscribePresence(subjectSession, subject.getId());
+        BlockingQueue<String> allowed = subscribePresence(relatedSession, related.getId());
+        BlockingQueue<String> unrelated = subscribePresence(strangerSession, stranger.getId());
+        own.clear(); allowed.clear(); unrelated.clear();
+        String before = UUID.randomUUID().toString();
+        messaging.convertAndSend("/topic/presence", (Object) Map.of("userId", subject.getId(), "online", true, "marker", before));
+        takePresenceMarker(own, before);
+        takePresenceMarker(allowed, before);
+        assertNoPresenceMarker(unrelated, before);
+        mongo.remove(Query.query(Criteria.where("chatRoomId").is(roomId).and("userId").is(related.getId())), Participant.class);
+        String after = UUID.randomUUID().toString();
+        messaging.convertAndSend("/topic/presence", (Object) Map.of("userId", subject.getId(), "online", false, "marker", after));
+        takePresenceMarker(own, after);
+        assertNoPresenceMarker(allowed, after);
+        assertNoPresenceMarker(unrelated, after);
+        assertThat(relatedSession.isConnected()).isTrue();
+        assertThat(strangerSession.isConnected()).isTrue();
+    }
+
+    private BlockingQueue<String> subscribePresence(StompSession session, String self) throws Exception {
+        BlockingQueue<String> received = new LinkedBlockingQueue<>(), ready = new LinkedBlockingQueue<>();
+        String probe = "subscription-ready:" + UUID.randomUUID();
+        session.subscribe("/topic/presence", new StompSessionHandlerAdapter() {
+            @Override public Type getPayloadType(StompHeaders headers) { return JsonNode.class; }
+            @Override public void handleFrame(StompHeaders headers, Object payload) {
+                JsonNode node = (JsonNode) payload;
+                String value = node.path("subscriptionReady").asString();
+                if (value.startsWith("subscription-ready:")) { if (probe.equals(value)) ready.add(value); }
+                else received.add(node.toString());
+            }
+        });
+        long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(10);
+        while (System.nanoTime() < deadline) {
+            messaging.convertAndSend("/topic/presence", (Object) Map.of("userId", self, "online", true, "subscriptionReady", probe));
+            if (probe.equals(ready.poll(100, TimeUnit.MILLISECONDS))) return received;
+        }
+        throw new AssertionError("Presence subscription did not become ready");
+    }
+    private void takePresenceMarker(BlockingQueue<String> queue, String marker) throws Exception {
+        long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(10);
+        while (System.nanoTime() < deadline) {
+            String next = queue.poll(100, TimeUnit.MILLISECONDS);
+            if (next != null && marker.equals(mapper.readTree(next).path("marker").asString())) return;
+        }
+        throw new AssertionError("Expected authorized presence frame");
+    }
+    private void assertNoPresenceMarker(BlockingQueue<String> queue, String marker) throws Exception {
+        long deadline = System.nanoTime() + TimeUnit.MILLISECONDS.toNanos(500);
+        while (System.nanoTime() < deadline) {
+            String next = queue.poll(50, TimeUnit.MILLISECONDS);
+            if (next != null) assertThat(mapper.readTree(next).path("marker").asString()).isNotEqualTo(marker);
+        }
+    }
+
     private String issueToken(User user) {
-        String token = tokens.issueToken(user.getId());
+        String token = tokens.issueToken(user.getId(), new org.springframework.mock.web.MockHttpSession());
         issuedTokens.add(token);
         return token;
     }

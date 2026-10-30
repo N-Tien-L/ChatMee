@@ -31,9 +31,9 @@ public class AuthApiController {
 
     @Operation(summary = "Issue a single-use, 60-second token for the STOMP CONNECT header")
     @PostMapping("/ws-token")
-    public ResponseEntity<WsTokenResponse> getWsToken(@CurrentUser UserPrincipal user) {
+    public ResponseEntity<WsTokenResponse> getWsToken(@CurrentUser UserPrincipal user, jakarta.servlet.http.HttpSession session) {
         return ResponseEntity.ok().cacheControl(CacheControl.noStore())
-                .body(new WsTokenResponse(wsTokenService.issueToken(user.userId())));
+                .body(new WsTokenResponse(wsTokenService.issueToken(user.userId(), session)));
     }
 
     @Operation(summary = "Get the authenticated user and session status")

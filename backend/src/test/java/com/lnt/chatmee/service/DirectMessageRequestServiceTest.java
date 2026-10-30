@@ -1,5 +1,7 @@
 package com.lnt.chatmee.service;
 
+import static org.mockito.Mockito.verifyNoMoreInteractions;
+
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -264,6 +266,8 @@ class DirectMessageRequestServiceTest {
                 && Duration.between(Instant.now(), until).compareTo(Duration.ofDays(30)) <= 0));
         verify(participants).removeAllParticipants("dm");
         verify(userEvents).roomRemoved(Set.of("alice"), "dm", "DECLINED");
+        verify(userEvents).dmRequestsChanged("bob");
+        verifyNoMoreInteractions(userEvents);
     }
 
     @Test

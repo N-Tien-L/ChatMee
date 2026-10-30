@@ -103,3 +103,23 @@ describe('mergeResyncedMessages with lost confirmations', () => {
         expect(merged[1].status).toBe('sending');
     });
 });
+
+
+it('mergeResyncedMessages_tiedMixedIds_matchesExistingBsonOrder', () => {
+    const at = '2026-10-09T10:00:00Z';
+    const string = saved('legacy-z', 'one', at);
+    const object1 = saved('000000000000000000000001', 'two', at);
+    const object2 = saved('000000000000000000000002', 'three', at);
+    const live = { ...object2, isOwn: true, status: 'sent' as const };
+    const result = mergeResyncedMessages([live], [string, object1], 'me');
+    expect(result.map(m => m.id)).toEqual([string.id, object1.id, object2.id]);
+});
+
+it('mergeResyncedMessages_liveCopyAlreadyShown_confirmsMatchingClientIdOnce', () => {
+    const at = '2026-10-09T10:00:00Z';
+    const stored = { ...saved('server', 'hello', at), clientMessageId: 't1' };
+    const result = mergeResyncedMessages([
+        { ...stored, isOwn: true, status: 'sent' }, pending('t1', 'hello', at),
+    ], [stored], 'me');
+    expect(result.map(m => m.id)).toEqual(['server']);
+});

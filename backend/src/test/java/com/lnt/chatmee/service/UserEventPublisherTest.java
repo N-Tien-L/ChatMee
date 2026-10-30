@@ -138,4 +138,33 @@ class UserEventPublisherTest {
         }
     }
 
+    @Test
+    void presenceScopeChanged_affectedAccounts_receivesEmptyPrivateInvalidation() {
+        var publisher = new UserEventPublisher(messaging);
+        publisher.presenceScopeChanged(Set.of("remaining", "departing"));
+        var users = ArgumentCaptor.forClass(String.class);
+        var events = ArgumentCaptor.forClass(UserEvent.class);
+        verify(messaging, times(2)).convertAndSendToUser(users.capture(), eq("/queue/events"), events.capture());
+        assertThat(users.getAllValues()).containsExactlyInAnyOrder("remaining", "departing");
+        assertThat(events.getAllValues()).allSatisfy(event -> {
+            assertThat(event.type()).isEqualTo("PRESENCE_SCOPE_CHANGED");
+            assertThat(event.payload()).isEqualTo(Map.of());
+        });
+        verifyNoMoreInteractions(messaging);
+    }
+
+    @Test
+    void accountStateChanged_onlyActingAccount_receivesNonRevealingScope() {
+        var publisher = new UserEventPublisher(messaging);
+        publisher.blocksChanged("actor");
+        publisher.dmRequestsChanged("recipient");
+        var events = ArgumentCaptor.forClass(UserEvent.class);
+        verify(messaging).convertAndSendToUser(eq("actor"), eq("/queue/events"), events.capture());
+        verify(messaging).convertAndSendToUser(eq("recipient"), eq("/queue/events"), events.capture());
+        assertThat(events.getAllValues()).extracting(UserEvent::type).containsOnly("ACCOUNT_STATE_CHANGED");
+        assertThat(events.getAllValues().get(0).payload()).isEqualTo(Map.of("scope", "BLOCKS"));
+        assertThat(events.getAllValues().get(1).payload()).isEqualTo(Map.of("scope", "DM_REQUESTS"));
+        verifyNoMoreInteractions(messaging);
+    }
+
 }

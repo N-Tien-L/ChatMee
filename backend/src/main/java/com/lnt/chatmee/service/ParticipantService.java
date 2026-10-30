@@ -142,6 +142,7 @@ public class ParticipantService {
 
     public void announceJoin(String roomId, User member) {
         messages.getObject().postSystemMessage(roomId, DisplayNames.of(member) + " joined");
+        presenceMembershipChanged(roomId, member.getId());
     }
 
     /**
@@ -154,6 +155,7 @@ public class ParticipantService {
             return false;
         }
         chatRoomRepository.releaseSeat(roomId, LocalDateTime.now());
+        presenceMembershipChanged(roomId, userId);
         logger.info("Removed participant {} from room {}", userId, roomId);
         return true;
     }
@@ -161,6 +163,12 @@ public class ParticipantService {
     /** Deletes every membership of a room (used when the room is soft-deleted). */
     public long removeAllParticipants(String roomId) {
         return participantRepository.deleteByChatRoomId(roomId);
+    }
+
+    private void presenceMembershipChanged(String roomId, String changedUserId) {
+        Set<String> affected = new LinkedHashSet<>(getParticipantUserIds(roomId));
+        affected.add(changedUserId);
+        userEvents.presenceScopeChanged(affected);
     }
 
     public Set<String> getParticipantUserIds(String roomId) {
@@ -266,6 +274,7 @@ public class ParticipantService {
             return false;
         }
         chatRoomRepository.releaseSeat(roomId, LocalDateTime.now());
+        presenceMembershipChanged(roomId, userId);
         logger.info("Removed participant {} with role {} from room {}", userId, role, roomId);
         return true;
     }

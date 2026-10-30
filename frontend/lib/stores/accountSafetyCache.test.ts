@@ -1,0 +1,56 @@
+import { beforeEach, expect, it, vi } from 'vitest';
+import { useAuthStore } from './authStore';
+import { useUsersStore } from './usersStore';
+import { useInboxStore } from './inboxStore';
+import { authApi } from '../api/authApi';
+import { userApi } from '../api/userApi';
+import { dmRequestApi } from '../api/dmRequestApi';
+import { invitationApi } from '../api/invitationApi';
+import type { DmRequestResponse, UserResponse } from '@/lib/types';
+vi.mock('../api/authApi', () => ({ authApi: { logout: vi.fn(), redirectToLogin: vi.fn() } }));
+vi.mock('../api/userApi', () => ({ userApi: { listBlocks: vi.fn() } }));
+vi.mock('../api/dmRequestApi', () => ({ dmRequestApi: { listMine: vi.fn(), decline: vi.fn() } }));
+vi.mock('../api/invitationApi', () => ({ invitationApi: { listMine: vi.fn() } }));
+vi.mock('react-hot-toast', () => ({ default: { success: vi.fn(), error: vi.fn() } }));
+const user = { id: 'account-a', name: 'Synthetic account' } as UserResponse;
+const request = { roomId: 'old-request', sender: { id: 'sender', name: 'Sender' } } as DmRequestResponse;
+const block = { id: 'blocked', name: 'Blocked', blockedAt: '2026-10-01T00:00:00Z' };
+beforeEach(() => {
+    vi.clearAllMocks();
+    vi.mocked(authApi.logout).mockResolvedValue(undefined);
+    vi.mocked(invitationApi.listMine).mockResolvedValue({ success: true, data: [] } as never);
+    useAuthStore.setState({ user, isAuthenticated: true });
+    useUsersStore.setState({ blockedUsers: [block], blocksError: null });
+    useInboxStore.setState({ requests: [request], invitations: [], isOpen: true, pending: [], loading: false, error: null });
+});
+it('logout_confirmed_clearsPrivateBlockAndInboxCaches', async () => {
+    await useAuthStore.getState().logout();
+    expect(useUsersStore.getState().blockedUsers).toBeNull();
+    expect(useInboxStore.getState().requests).toEqual([]);
+    expect(useInboxStore.getState().isOpen).toBe(false);
+});
+it('logout_pendingSafetyFetches_cannotRestorePreviousSessionEvenAfterSameAccountLogin', async () => {
+    let blocks!: (value: Awaited<ReturnType<typeof userApi.listBlocks>>) => void;
+    let requests!: (value: Awaited<ReturnType<typeof dmRequestApi.listMine>>) => void;
+    vi.mocked(userApi.listBlocks).mockReturnValue(new Promise(resolve => { blocks = resolve; }));
+    vi.mocked(dmRequestApi.listMine).mockReturnValue(new Promise(resolve => { requests = resolve; }));
+    const pending = [useUsersStore.getState().fetchBlocks(), useInboxStore.getState().fetchInbox()];
+    await useAuthStore.getState().logout();
+    useAuthStore.setState({ user, isAuthenticated: true });
+    blocks({ success: true, data: [block] } as never);
+    requests({ success: true, data: [request] } as never);
+    await Promise.all(pending);
+    expect(useUsersStore.getState().blockedUsers).toBeNull();
+    expect(useInboxStore.getState().requests).toEqual([]);
+});
+it('declineRequest_olderInboxFetch_cannotResurrectDecidedRequest', async () => {
+    let resolve!: (value: Awaited<ReturnType<typeof dmRequestApi.listMine>>) => void;
+    vi.mocked(dmRequestApi.listMine).mockReturnValue(new Promise(done => { resolve = done; }));
+    vi.mocked(dmRequestApi.decline).mockResolvedValue(undefined);
+    const old = useInboxStore.getState().fetchInbox();
+    await useInboxStore.getState().declineRequest(request.roomId);
+    expect(useInboxStore.getState().requests).toEqual([]);
+    resolve({ success: true, data: [request] } as never);
+    await old;
+    expect(useInboxStore.getState().requests).toEqual([]);
+});

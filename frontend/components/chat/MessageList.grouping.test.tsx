@@ -69,8 +69,8 @@ describe('MessageList grouping and system rows', () => {
     it('render_ownMessagesWithEachStatus_showsLucideStatusIcons', () => {
         const messages = [
             text('o1', '2026-10-09T10:00:00Z', { isOwn: true, senderId: 'u1', senderName: 'Alice', status: 'sending', tempId: 't1' }),
-            text('o2', '2026-10-09T10:00:10Z', { isOwn: true, senderId: 'u1', senderName: 'Alice', status: 'sent' }),
-            text('o3', '2026-10-09T10:00:20Z', { isOwn: true, senderId: 'u1', senderName: 'Alice', status: 'failed', tempId: 't3' }),
+            text('o2', '2026-10-09T10:00:10Z', { isOwn: true, senderId: 'u1', senderName: 'Alice', status: 'failed', tempId: 't3' }),
+            text('o3', '2026-10-09T10:00:20Z', { isOwn: true, senderId: 'u1', senderName: 'Alice', status: 'sent' }),
         ];
         render(<MessageList {...props} messages={messages} />);
         expect(screen.getByRole('img', { name: 'Sending' })).toBeInTheDocument();

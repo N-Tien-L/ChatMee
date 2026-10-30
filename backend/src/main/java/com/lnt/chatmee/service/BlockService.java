@@ -40,6 +40,7 @@ public class BlockService {
 
     private final UserBlockRepository blocks;
     private final UserRepository userRepository;
+    private final UserEventPublisher userEvents;
 
     /** Idempotent: blocking twice keeps one row. */
     public void block(String blockerId, String blockedId) {
@@ -48,14 +49,17 @@ public class BlockService {
             throw new UserNotFoundException("User not found");
         }
         if (blocks.existsByBlockerIdAndBlockedId(blockerId, blockedId)) {
+            userEvents.blocksChanged(blockerId);
             return;
         }
         try {
             blocks.insert(UserBlock.builder().blockerId(blockerId).blockedId(blockedId).createdAt(Instant.now()).build());
         } catch (DuplicateKeyException ex) {
             // A concurrent request stored the same block first.
+            userEvents.blocksChanged(blockerId);
             return;
         }
+        userEvents.blocksChanged(blockerId);
         logger.info("User {} blocked user {}", blockerId, blockedId);
     }
 
@@ -63,12 +67,14 @@ public class BlockService {
     public void unblock(String blockerId, String blockedId) {
         requireOther(blockerId, blockedId);
         if (blocks.deleteByBlockerIdAndBlockedId(blockerId, blockedId) > 0) {
+            userEvents.blocksChanged(blockerId);
             logger.info("User {} unblocked user {}", blockerId, blockedId);
             return;
         }
         if (!userRepository.existsById(blockedId)) {
             throw new UserNotFoundException("User not found");
         }
+        userEvents.blocksChanged(blockerId);
     }
 
     /** The caller's own blocks, newest first, with one user query. */
