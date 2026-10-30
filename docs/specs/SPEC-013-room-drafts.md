@@ -41,6 +41,11 @@ or STOMP destination, and a new dependency.
 - AC-013-9: If `sessionStorage` is unavailable or throws (private mode, quota), the composer
   still works with an in-memory draft for the current page lifetime and shows no error.
   -> Test: `draft_storageUnavailable_fallsBackToMemory`
+- AC-013-11: The room row shows both hints; neither replaces the other. The unread badge is
+  unchanged. The preview line shows `Draft: <text>` (truncated, styled as a draft) in place of
+  the last-message preview while a non-empty draft exists, and returns to the last message when
+  the draft is cleared. A draft never marks a room read or unread.
+  -> Test: `roomsList_draftAndUnread_showsBadgeAndDraftPreview`
 - AC-013-10: Drafts are never sent without an explicit user send action.
   -> E2E: `drafts.spec.ts`
 
@@ -67,4 +72,4 @@ None. Implementation touches only `frontend/` (`lib/stores/draftStore.ts`, `Chat
 `MessageInput`, `authStore` clear hook, `chatRoomsStore` end-state hook).
 
 ## 9. Open questions
-- OQ-A: Show a "Draft" hint on the room row in `ChatRoomsList`? Proposed: yes, optional in CM-112.
+- Resolved (owner, 2026-10-31): show the Draft hint, together with the unread badge (AC-013-11). No open questions.
