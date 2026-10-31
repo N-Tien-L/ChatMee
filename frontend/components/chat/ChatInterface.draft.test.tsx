@@ -88,6 +88,7 @@ describe('ChatInterface drafts', () => {
         fireEvent.submit(field().closest('form') as HTMLFormElement);
         expect(sendMessage).toHaveBeenCalledWith('keep me');
         expect(field().value).toBe('');
+        vi.advanceTimersByTime(1000);
         expect(JSON.parse(sessionStorage.getItem(KEY('r1')) as string).text).toBe('keep me');
     });
 

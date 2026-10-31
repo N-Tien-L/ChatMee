@@ -245,9 +245,12 @@ const ChatRoomView: React.FC<{ roomId: string; onDeleted: () => void }> = ({
       if (currentUserId) useDraftStore.getState().save(currentUserId, roomId, draftTextRef.current);
     }
   }, [currentUserId, roomId]);
+  // The sent text stays stored until its echo arrives, so an empty composer after a send must not erase it.
+  const awaitingEchoRef = useRef<string | null>(null);
   useEffect(() => {
     draftTextRef.current = newMessage;
     if (!currentUserId) return;
+    if (!newMessage && awaitingEchoRef.current) return;
     if (draftWriteRef.current) clearTimeout(draftWriteRef.current);
     draftWriteRef.current = setTimeout(() => {
       draftWriteRef.current = null;
@@ -255,6 +258,11 @@ const ChatRoomView: React.FC<{ roomId: string; onDeleted: () => void }> = ({
     }, DRAFT_WRITE_DEBOUNCE_MS);
   }, [newMessage, currentUserId, roomId]);
   useEffect(() => flushDraft, [flushDraft]);
+  // A reload or tab close skips React cleanup, so flush the pending write when the page is hidden.
+  useEffect(() => {
+    window.addEventListener("pagehide", flushDraft);
+    return () => window.removeEventListener("pagehide", flushDraft);
+  }, [flushDraft]);
 
   // A blocked DM is read-only: drop its draft and any pending write (AC-013-8).
   useEffect(() => {
@@ -267,7 +275,6 @@ const ChatRoomView: React.FC<{ roomId: string; onDeleted: () => void }> = ({
   }, [blocked, currentUserId, roomId]);
 
   // The draft is cleared only once the server echo of the sent message arrives (AC-013-5).
-  const awaitingEchoRef = useRef<string | null>(null);
   useEffect(() => {
     const tempId = awaitingEchoRef.current;
     if (!tempId || !currentUserId) return;

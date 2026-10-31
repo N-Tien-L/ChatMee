@@ -35,6 +35,9 @@ test('drafts_sendConfirmed_clearsDraft', async ({ alice }) => {
   await composer(alice).fill('SPEC-013 sent text');
   await alice.getByRole('button', { name: 'Send message', exact: true }).click();
   await expect(alice.getByRole('log').getByText('SPEC-013 sent text', { exact: true })).toBeVisible();
+  // The optimistic bubble is instant; wait for the server echo to clear the stored draft before reloading.
+  await expect.poll(() => alice.evaluate(() =>
+    Object.keys(sessionStorage).filter(key => key.startsWith('chatmee:draft:v1:')).length)).toBe(0);
   await alice.reload();
   await expect(composer(alice)).toHaveValue('');
 });
