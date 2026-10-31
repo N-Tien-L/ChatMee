@@ -43,7 +43,7 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
         registry.setApplicationDestinationPrefixes("/app");
         registry.setUserDestinationPrefix("/user");
         registry.enableSimpleBroker("/topic", "/queue")
-                .setHeartbeatValue(new long[]{10000, 10000}) // 10s heartbeat
+                .setHeartbeatValue(new long[]{5000, 10000}) // check every 5 s: silence stays under the client's 20 s limit
                 .setTaskScheduler(heartbeatScheduler());
     }
 
