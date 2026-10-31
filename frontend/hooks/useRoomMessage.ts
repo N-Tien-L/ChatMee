@@ -431,12 +431,14 @@ export const useRoomMessages = (roomId: string, options: RoomMessagesOptions = {
     }, [roomId, sendWebSocketMessage, clearPendingTimer]);
 
     // Action for sending a message
-    const sendMessage = useCallback(async (content: string) => {
-        if (!connected || !content.trim()) return;
+    /** Returns the tempId of the optimistic message, so callers can follow its confirmation. */
+    const sendMessage = useCallback((content: string): string | undefined => {
+        if (!connected || !content.trim()) return undefined;
         const optimisticMessage = createOptimisticMessage(content.trim());
-        if (!optimisticMessage) return;
+        if (!optimisticMessage) return undefined;
         dispatch({ type: "ADD_OPTIMISTIC_MESSAGE", payload: optimisticMessage });
         deliver(optimisticMessage);
+        return optimisticMessage.tempId;
     }, [connected, createOptimisticMessage, deliver]);
 
     /** Sends a failed message again as a new attempt with the same client id, replacing the failed copy. */
