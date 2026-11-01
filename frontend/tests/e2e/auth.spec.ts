@@ -139,6 +139,8 @@ for (const fault of ['network', '503'] as const) {
 test('auth_logoutCurrentSession_closesSiblingTabAndPreservesIndependentLogin', async ({ alice, bob }) => {
   const identity = await me(alice.context());
   await signOut(bob);
+  // Wait for the logout to settle; navigating to /login mid-flight can abort it and leave the session alive.
+  await expect(bob.getByRole('button', { name: 'Continue with GitHub' })).toBeVisible();
   await login(bob, 'Alice');
   expect((await me(bob.context())).id === identity.id).toBe(true);
   const mirror = await alice.context().newPage();
