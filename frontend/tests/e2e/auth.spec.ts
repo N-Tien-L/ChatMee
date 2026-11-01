@@ -171,6 +171,8 @@ test('auth_logoutCurrentSession_revokesUnusedWsToken', async ({ alice, bob }) =>
     return (await response.json()).token as string;
   });
   await signOut(alice);
+  // Wait for the logout to complete so the grant is revoked before the CONNECT probe.
+  await expect(alice.getByRole('button', { name: 'Continue with GitHub' })).toBeVisible();
   // The other real session stays usable; only the old issuing session's grant is tested.
   await me(bob.context());
   const rejected = await bob.evaluate(value => new Promise<boolean>((resolve, reject) => {
