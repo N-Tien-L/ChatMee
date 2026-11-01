@@ -15,8 +15,11 @@ import ChatHeader from "./ChatHeader";
 import MessageList from "./MessageList";
 import TypingIndicator from "./TypingIndicator";
 import MessageInput from "./MessageInput";
+import { useDraftStore } from "@/lib/stores/draftStore";
 import { MessageType, RoomType } from "@/lib/types";
 
+/** Draft writes are coalesced for this long after the last keystroke (SPEC-013 AC-013-4). */
+const DRAFT_WRITE_DEBOUNCE_MS = 300;
 /** Typing indicator: how long a typing user is shown after the last event, in ms (SPEC-005 AC-005-5). */
 const SELF_TYPING_IDLE_MS = 2000;
 /** Minimum gap between "typing: true" frames. The server allows 10 typing frames per 5 s per user (CM-056). */
@@ -69,6 +72,11 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ roomId }) => {
 
   // Without any reason (e.g. a refetch dropped the room) the user is no longer a member.
   const endedReason = ended?.roomId === roomId ? ended.reason ?? eventReason ?? "REMOVED" : null;
+  const userId = useAuthStore((state) => state.user?.id);
+  // Losing access to the room drops its draft (SPEC-013 AC-013-8).
+  useEffect(() => {
+    if (endedReason && userId) useDraftStore.getState().clear(userId, roomId);
+  }, [endedReason, userId, roomId]);
   if (endedReason) return <RoomEndedView reason={endedReason} />;
 
   if (!roomExists)
@@ -133,7 +141,10 @@ const ChatRoomView: React.FC<{ roomId: string; onDeleted: () => void }> = ({
     recoveryError,
     continueRecovery,
   } = useRoomMessages(roomId, { onRoomDeleted: handleRoomDeleted });
-  const [newMessage, setNewMessage] = useState("");
+  const currentUserId = useAuthStore((state) => state.user?.id);
+  const [newMessage, setNewMessage] = useState(() =>
+    currentUserId ? useDraftStore.getState().load(currentUserId, roomId) : ""
+  );
   const [showInfo, setShowInfo] = useState(false);
   const [report, setReport] = useState<ReportTarget | null>(null);
   const reportTrigger = useRef<HTMLElement | null>(null);
@@ -153,7 +164,6 @@ const ChatRoomView: React.FC<{ roomId: string; onDeleted: () => void }> = ({
   const currentRoom = useChatRoomsStore((state) =>
     state.rooms.find((room) => room.id === roomId)
   );
-  const currentUserId = useAuthStore((state) => state.user?.id);
   const memberCount = currentRoom?.participants?.length ?? 0;
   // The blocker's DM is read-only while the block exists (SPEC-009 AC-009-19); the blocked user gets the generic send error.
   const blocked = currentRoom?.roomType === RoomType.DIRECT_MESSAGE && currentRoom.blocked === true;
@@ -225,6 +235,55 @@ const ChatRoomView: React.FC<{ roomId: string; onDeleted: () => void }> = ({
     } else handleTyping(false);
   };
 
+  // Debounced draft write; the pending write is flushed on room change and unmount (SPEC-013 AC-013-4).
+  const draftTextRef = useRef(newMessage);
+  const draftWriteRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const flushDraft = useCallback(() => {
+    if (draftWriteRef.current) {
+      clearTimeout(draftWriteRef.current);
+      draftWriteRef.current = null;
+      if (currentUserId) useDraftStore.getState().save(currentUserId, roomId, draftTextRef.current);
+    }
+  }, [currentUserId, roomId]);
+  // The sent text stays stored until its echo arrives, so an empty composer after a send must not erase it.
+  const awaitingEchoRef = useRef<string | null>(null);
+  useEffect(() => {
+    draftTextRef.current = newMessage;
+    if (!currentUserId) return;
+    if (!newMessage && awaitingEchoRef.current) return;
+    if (draftWriteRef.current) clearTimeout(draftWriteRef.current);
+    draftWriteRef.current = setTimeout(() => {
+      draftWriteRef.current = null;
+      useDraftStore.getState().save(currentUserId, roomId, newMessage);
+    }, DRAFT_WRITE_DEBOUNCE_MS);
+  }, [newMessage, currentUserId, roomId]);
+  useEffect(() => flushDraft, [flushDraft]);
+  // A reload or tab close skips React cleanup, so flush the pending write when the page is hidden.
+  useEffect(() => {
+    window.addEventListener("pagehide", flushDraft);
+    return () => window.removeEventListener("pagehide", flushDraft);
+  }, [flushDraft]);
+
+  // A blocked DM is read-only: drop its draft and any pending write (AC-013-8).
+  useEffect(() => {
+    if (!blocked || !currentUserId) return;
+    if (draftWriteRef.current) {
+      clearTimeout(draftWriteRef.current);
+      draftWriteRef.current = null;
+    }
+    useDraftStore.getState().clear(currentUserId, roomId);
+  }, [blocked, currentUserId, roomId]);
+
+  // The draft is cleared only once the server echo of the sent message arrives (AC-013-5).
+  useEffect(() => {
+    const tempId = awaitingEchoRef.current;
+    if (!tempId || !currentUserId) return;
+    if (messages.some((m) => m.tempId === tempId && !m.isOptimistic && m.status === "sent")) {
+      awaitingEchoRef.current = null;
+      useDraftStore.getState().clear(currentUserId, roomId);
+    }
+  }, [messages, currentUserId, roomId]);
+
   // Send message handler
   const handleSendMessage = (e: React.FormEvent) => {
     e.preventDefault();
@@ -237,7 +296,13 @@ const ChatRoomView: React.FC<{ roomId: string; onDeleted: () => void }> = ({
       clearTimeout(typingTimeoutRef.current);
     }
 
-    sendMessage(newMessage.trim());
+    // Persist what is being sent now: a failed send keeps it, the echo clears it.
+    if (draftWriteRef.current) {
+      clearTimeout(draftWriteRef.current);
+      draftWriteRef.current = null;
+    }
+    if (currentUserId) useDraftStore.getState().save(currentUserId, roomId, newMessage);
+    awaitingEchoRef.current = sendMessage(newMessage.trim()) ?? null;
     setNewMessage("");
   };
 

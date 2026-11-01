@@ -10,6 +10,7 @@ import { useChatStore } from './chatStore'
 import { useDiscoverRoomsStore } from './discoverRoomsStore'
 import { resetUserRequests } from './usersStore'
 import { resetInboxState } from './inboxStore'
+import { useDraftStore } from './draftStore'
 
 interface AuthState {
     user: UserResponse | null
@@ -43,6 +44,7 @@ function clearSessionCaches() {
     useChatStore.setState({ onlineUsers: new Set(), typingUsers: {}, presenceLoaded: false })
     resetUserRequests()
     resetInboxState()
+    useDraftStore.getState().clearAll()
     useDiscoverRoomsStore.setState({ isOpen: false, query: "", results: [], page: 0, hasMore: false, error: null, joinError: null })
 }
 
@@ -84,6 +86,8 @@ export const useAuthStore = create<AuthState>()(
                             isAuthenticated: true,
                             user: response.data.user || null
                         })
+                        // A different account must not see (or keep) another account's drafts (SPEC-013 AC-013-7).
+                        if (response.data.user) useDraftStore.getState().hydrate(response.data.user.id)
 
                         if (showToast && response.data.user) {
                             toast.success(`Welcome, ${response.data.user.name}!`, {
