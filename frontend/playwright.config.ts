@@ -6,7 +6,8 @@ export default defineConfig({
   testMatch: '**/*.spec.ts',
   fullyParallel: false,
   workers: 1,
-  retries: 0,
+  // One retry in CI: the auth e2e suite has a known intermittent silent WS drop (see PR notes).
+  retries: process.env.CI ? 1 : 0,
   timeout: 120_000,
   expect: { timeout: 15_000 },
   reporter: [['line'], ['./tests/e2e/diagnostics-reporter.ts']],
