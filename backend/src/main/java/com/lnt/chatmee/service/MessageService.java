@@ -58,6 +58,7 @@ public class MessageService {
     private final DirectMessageRequestService dmRequests;
     private final ParticipantRepository participantRepository;
     private final BlockService blockService;
+    private final ReactionService reactionService;
 
     public ChatMessageResponse sendMessage(ChatMessageRequest request, String userId) {
         User user = userRepository.findById(userId)
@@ -257,7 +258,7 @@ public class MessageService {
             List<Message> page = new ArrayList<>(rows.subList(0, Math.min(pageSize, rows.size())));
             Collections.reverse(page);
 
-            List<ChatMessageResponse> messages = toResponses(page);
+            List<ChatMessageResponse> messages = toResponses(page, userId);
             String nextCursor = hasMore
                     ? new MessageCursor(page.get(0).getCreatedAt(), page.get(0).getId()).encode() : null;
             return new MessagePageResponse(messages, nextCursor, hasMore);
@@ -292,7 +293,7 @@ public class MessageService {
             window.addAll(newer.subList(0, Math.min(side, newer.size())));
             Message first = window.get(0);
             Message last = window.get(window.size() - 1);
-            return new MessageContextResponse(toResponses(window), target.getId(), hasBefore, hasAfter,
+            return new MessageContextResponse(toResponses(window, userId), target.getId(), hasBefore, hasAfter,
                     hasBefore ? new MessageCursor(first.getCreatedAt(), first.getId()).encode() : null,
                     hasAfter ? new MessageCursor(last.getCreatedAt(), last.getId()).encode() : null);
         } catch (DataAccessException e) {
@@ -300,8 +301,11 @@ public class MessageService {
         }
     }
 
-    /** One user query for sender names and, only when the page has replies, one query for deleted targets. */
-    private List<ChatMessageResponse> toResponses(List<Message> page) {
+    /**
+     * One user query for sender names, one reaction aggregation for the page (SPEC-015 AC-015-5) and, only when
+     * the page has replies, one query for deleted targets.
+     */
+    private List<ChatMessageResponse> toResponses(List<Message> page, String userId) {
         Map<String, String> senderNames = new HashMap<>();
         if (!page.isEmpty()) {
             Set<String> senderIds = page.stream().map(Message::getSenderId).collect(Collectors.toSet());
@@ -312,10 +316,13 @@ public class MessageService {
         Set<String> deletedTargets = targetIds.isEmpty() ? Set.of()
                 : messageRepository.findByIdInAndIsDeletedTrue(targetIds).stream().map(Message::getId)
                         .collect(Collectors.toSet());
+        Map<String, List<com.lnt.chatmee.dto.response.ReactionSummaryResponse>> reactions = page.isEmpty() ? Map.of()
+                : reactionService.summaries(page.stream().map(Message::getId).toList(), userId);
         return page.stream()
                 .map(message -> ChatMessageResponse.from(message,
                         senderNames.getOrDefault(message.getSenderId(), DisplayNames.DELETED_USER), null,
-                        message.getReplyTo() != null && deletedTargets.contains(message.getReplyTo().messageId())))
+                        message.getReplyTo() != null && deletedTargets.contains(message.getReplyTo().messageId()))
+                        .withReactions(reactions.get(message.getId())))
                 .toList();
     }
 

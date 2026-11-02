@@ -81,6 +81,7 @@ public class ChatRoomService {
     private final RateLimitingService rateLimitingService;
     private final ParticipantRepository participantRepository;
     private final BlockService blockService;
+    private final ReactionService reactionService;
 
     public ChatRoomResponse createRoom(CreateChatRoomRequest request, String userId) {
 
@@ -255,6 +256,7 @@ public class ChatRoomService {
             throw new ChatRoomNotFoundException("Can't find chat room with id: " + roomId);
         }
         long removed = participantService.removeAllParticipants(roomId);
+        reactionService.deleteForRoom(roomId);
 
         userEvents.roomRemoved(deletedRecipients, roomId, "DELETED");
 

@@ -32,6 +32,8 @@ event and field.
   indicator or keycap component, from an explicit allow-list of ranges (JDK 17 has no
   `\p{IsEmoji}`). Anything else returns 400. The quick-bar default set is frontend-only.
   -> Test: `react_invalidEmoji_400`, `react_zwjSequence_accepted`, `react_multipleGraphemes_400`
+  (CM-117 evidence: `EmojiValidatorTest`. Implementation note: the production JDK 17 `BreakIterator` splits ZWJ
+  sequences, so "one cluster" is checked with an explicit emoji-sequence grammar over the same allow-list.)
 - AC-015-4: Only an active member of the room may react or read reactions; a non-member,
   unknown room or unknown message returns 404. Reacting in a DM blocked either way returns
   403 under the existing block rules. System and deleted messages return 400/404.
@@ -55,6 +57,8 @@ event and field.
   who-reacted sheet; layout works at 360 px. -> E2E `reactions.spec.ts`
 - AC-015-11: Deleting a message or room removes its reactions; a left or removed member's
   reactions stay until the message is deleted. -> Test: `deleteMessage_removesReactions`
+  (CM-117 evidence: room part `ReactionRepositoryIT#deleteRoom_removesReactions`, `ChatRoomServiceTest`;
+  no message deletion API exists yet, so the message part has no code path to test.)
 
 ## 5. Edge cases & Errors
 | Scenario | Expected behavior | HTTP / STOMP |

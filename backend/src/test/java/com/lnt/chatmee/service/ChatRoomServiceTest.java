@@ -72,6 +72,8 @@ class ChatRoomServiceTest {
     @Mock com.lnt.chatmee.repository.ParticipantRepository participantRepository;
     @Mock BlockService blocks;
 
+    @Mock ReactionService reactionService;
+
     @InjectMocks
     private ChatRoomService chatRoomService;
 
@@ -440,6 +442,8 @@ class ChatRoomServiceTest {
 
         verify(chatRoomRepository, never()).delete(any());
         verify(participantService).removeAllParticipants("room1");
+        // SPEC-015 AC-015-11: the room's reactions go with it.
+        verify(reactionService).deleteForRoom("room1");
         verify(userEvents).roomRemoved(Set.of("user1", "user2", "user3"), "room1", "DELETED");
         verifyNoMoreInteractions(userEvents);
         ArgumentCaptor<ChatMessageResponse> event = ArgumentCaptor.forClass(ChatMessageResponse.class);

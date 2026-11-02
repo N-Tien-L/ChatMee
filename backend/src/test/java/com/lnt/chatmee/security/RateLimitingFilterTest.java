@@ -59,6 +59,21 @@ class RateLimitingFilterTest {
     }
 
     @Test
+    void react_rateLimited_429() throws Exception {
+        // SPEC-015 AC-015-8: reaction writes share the existing per-user HTTP limit.
+        when(limit.check(anyString(), anyBoolean())).thenReturn(new RateLimitingService.Decision(false, 20, 0, 7));
+        var request = new MockHttpServletRequest("PUT", "/api/v1/rooms/r1/messages/m1/reaction");
+        var response = new MockHttpServletResponse();
+        var chain = mock(FilterChain.class);
+
+        filter.doFilter(request, response, chain);
+
+        assertThat(response.getStatus()).isEqualTo(429);
+        assertThat(response.getHeader("Retry-After")).isEqualTo("7");
+        verifyNoInteractions(chain);
+    }
+
+    @Test
     void filter_exceededLimit_returns429ProblemWithoutContinuing() throws Exception {
         when(limit.check(anyString(), anyBoolean())).thenReturn(new RateLimitingService.Decision(false, 20, 0, 42));
         var request = new MockHttpServletRequest("GET", "/api/v1/users");

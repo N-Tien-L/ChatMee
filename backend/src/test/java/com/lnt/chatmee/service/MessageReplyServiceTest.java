@@ -55,6 +55,8 @@ class MessageReplyServiceTest {
     @Mock ParticipantRepository participantRepository;
     @Mock BlockService blocks;
 
+    @Mock ReactionService reactionService;
+
     @InjectMocks MessageService messageService;
 
     @BeforeEach
@@ -208,6 +210,39 @@ class MessageReplyServiceTest {
         assertThat(messages.get(0).replyTo().preview()).isNull();
         assertThat(messages.get(0).replyTo().senderName()).isEqualTo("Bob");
         assertThat(messages.get(1).replyTo().preview()).isEqualTo("still here");
+    }
+
+    @Test
+    void history_includesReactionSummary() {
+        historyRoom();
+        when(messageRepository.findPage(eq("room1"), any(Pageable.class))).thenReturn(new ArrayList<>(List.of(
+                Message.builder().id("m2").chatRoomId("room1").senderId("user2").content("b")
+                        .type(Message.MessageType.TEXT).createdAt(T0.plusSeconds(1)).build(),
+                Message.builder().id("m1").chatRoomId("room1").senderId("user2").content("a")
+                        .type(Message.MessageType.TEXT).createdAt(T0).build())));
+        var summary = List.of(new com.lnt.chatmee.dto.response.ReactionSummaryResponse("x", 2, true));
+        when(reactionService.summaries(List.of("m1", "m2"), "user1")).thenReturn(java.util.Map.of("m1", summary));
+
+        var messages = messageService.getMessages("room1", "user1", null, 50).messages();
+
+        assertThat(messages.get(0).reactions()).isEqualTo(summary);
+        assertThat(messages.get(1).reactions()).isEmpty();
+    }
+
+    @Test
+    void history_reactionQuery_isBatched() {
+        historyRoom();
+        List<Message> rows = new ArrayList<>();
+        for (int i = 0; i < 30; i++) {
+            rows.add(Message.builder().id("m" + i).chatRoomId("room1").senderId("user2").content("c")
+                    .type(Message.MessageType.TEXT).createdAt(T0.minusSeconds(i)).build());
+        }
+        when(messageRepository.findPage(eq("room1"), any(Pageable.class))).thenReturn(rows);
+
+        messageService.getMessages("room1", "user1", null, 50);
+
+        // One aggregation for the whole page, never one per message.
+        verify(reactionService, org.mockito.Mockito.times(1)).summaries(any(), eq("user1"));
     }
 
     @Test

@@ -98,6 +98,15 @@ public class UserEventPublisher {
         }
     }
 
+    /** Reaction counts after a change, on the existing room topic (SPEC-015 AC-015-7). */
+    public void reactionUpdated(String roomId, com.lnt.chatmee.dto.event.ReactionUpdatedEvent event) {
+        try {
+            messagingTemplate.convertAndSend("/topic/rooms/" + roomId, event);
+        } catch (MessagingException ex) {
+            logger.warn("Failed to broadcast reaction update for message {} in room {}", event.messageId(), roomId);
+        }
+    }
+
     private void send(String userId, UserEvent<?> event) {
         try {
             messagingTemplate.convertAndSendToUser(userId, "/queue/events", event);
