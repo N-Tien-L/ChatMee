@@ -4,7 +4,7 @@ import { messageApi } from "@/lib/api/messageApi";
 import { chatRoomApi } from "@/lib/api/chatRoomApi";
 import { useAuthStore } from "@/lib/stores/authStore";
 import { useChatRoomsStore } from "@/lib/stores/chatRoomsStore";
-import { Message, MessageResponse, MessageType } from "@/lib/types";
+import { Message, MessageResponse, MessageType, ReplyTo } from "@/lib/types";
 import {
     deduplicateMessages,
     matchResyncedPending,
@@ -381,7 +381,9 @@ export const useRoomMessages = (roomId: string, options: RoomMessagesOptions = {
 
     // A new send gets a new client id; a Resend passes the failed message's id so the server can
     // recognise a retry of a send it already stored (SPEC-008 AC-008-13).
-    const createOptimisticMessage = useCallback((content: string, tempId = `temp-${Date.now()}-${Math.random()}`): Message | null => {
+    const createOptimisticMessage = useCallback((
+        content: string, tempId = `temp-${Date.now()}-${Math.random()}`, replyTo: ReplyTo | null = null,
+    ): Message | null => {
         if (!user) return null;
         const now = new Date().toISOString();
         return {
@@ -399,6 +401,8 @@ export const useRoomMessages = (roomId: string, options: RoomMessagesOptions = {
             isOptimistic: true,
             isDeleted: false,
             isUpdated: false,
+            // Display only until the echo: the server derives the stored quote itself (AC-014-3).
+            replyTo,
         };
     }, [roomId, user]);
 
@@ -417,7 +421,10 @@ export const useRoomMessages = (roomId: string, options: RoomMessagesOptions = {
 
         let published: boolean;
         try {
-            published = sendWebSocketMessage(roomId, message.content, tempId);
+            const replyId = message.replyTo?.messageId;
+            published = replyId
+                ? sendWebSocketMessage(roomId, message.content, tempId, replyId)
+                : sendWebSocketMessage(roomId, message.content, tempId);
         } catch {
             published = false;
         }
@@ -432,9 +439,9 @@ export const useRoomMessages = (roomId: string, options: RoomMessagesOptions = {
 
     // Action for sending a message
     /** Returns the tempId of the optimistic message, so callers can follow its confirmation. */
-    const sendMessage = useCallback((content: string): string | undefined => {
+    const sendMessage = useCallback((content: string, replyTo: ReplyTo | null = null): string | undefined => {
         if (!connected || !content.trim()) return undefined;
-        const optimisticMessage = createOptimisticMessage(content.trim());
+        const optimisticMessage = createOptimisticMessage(content.trim(), undefined, replyTo);
         if (!optimisticMessage) return undefined;
         dispatch({ type: "ADD_OPTIMISTIC_MESSAGE", payload: optimisticMessage });
         deliver(optimisticMessage);
@@ -448,7 +455,7 @@ export const useRoomMessages = (roomId: string, options: RoomMessagesOptions = {
             (m) => m.isOptimistic && m.tempId === tempId && m.status === "failed"
         );
         if (!failed) return;
-        const retry = createOptimisticMessage(failed.content, tempId);
+        const retry = createOptimisticMessage(failed.content, tempId, failed.replyTo ?? null);
         if (!retry) return;
         dispatch({ type: "RESEND_MESSAGE", payload: { tempId, message: retry } });
         deliver(retry);

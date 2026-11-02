@@ -63,8 +63,10 @@ export const useWebSocket = () => {
 
     // Clients send TEXT only; SYSTEM messages come from the server.
     const sendMessage = useCallback(
-        (roomId: string, content: string, tempId?: string) =>
-            session.publish("/app/chat.sendMessage", { roomId, content, messageType: "TEXT", tempId }),
+        (roomId: string, content: string, tempId?: string, replyToMessageId?: string) =>
+            session.publish("/app/chat.sendMessage", replyToMessageId
+                ? { roomId, content, messageType: "TEXT", tempId, replyToMessageId }
+                : { roomId, content, messageType: "TEXT", tempId }),
         [session]
     );
 

@@ -1,5 +1,5 @@
 import { ApiResponse } from "@/lib/types";
-import { MessagePageResponse } from "../types";
+import { MessageContextResponse, MessagePageResponse } from "../types";
 import { apiClient } from "./apiClient";
 
 export interface GetMessagesParams {
@@ -14,5 +14,14 @@ export const messageApi = {
             params: { before: params.before, limit: params.limit },
         });
         return response.data;
-    }
+    },
+
+    /** The target and up to `limit` messages on each side, for jumping to a reply's original (SPEC-014 AC-014-6). */
+    getContext: async (roomId: string, messageId: string, limit = 20): Promise<ApiResponse<MessageContextResponse>> => {
+        const response = await apiClient.get<ApiResponse<MessageContextResponse>>(
+            `/api/v1/rooms/${roomId}/messages/${encodeURIComponent(messageId)}/context`,
+            { params: { limit } },
+        );
+        return response.data;
+    },
 }

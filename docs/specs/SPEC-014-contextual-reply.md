@@ -51,6 +51,9 @@ changes. This spec amends SPEC-004 and SPEC-008 additively; their text stays as 
   with the same chip as the Reply action; it must not conflict with scrolling or the tap-to-open
   actions menu, and a Reply action stays available for non-touch and assistive use.
   -> Test: `reply_swipeRight_startsReply`, `reply_verticalScroll_doesNotTrigger`
+  (Frontend evidence, CM-115: `ChatInterface.reply.test.tsx`, `MessageList.reply.test.tsx`,
+  `MessageActions.swipe.test.tsx`, E2E `tests/e2e/reply.spec.ts`. On touch the bubble menu opens on release, so a
+  scroll or swipe never opens it.)
 - AC-014-9: Replying counts against the existing send rate limit; no new STOMP destination.
   -> Test: `sendMessage_replyRateLimited`
 

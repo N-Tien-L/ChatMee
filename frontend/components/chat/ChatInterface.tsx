@@ -1,9 +1,10 @@
 "use client";
 
-import React, { useState, useRef, useEffect, useCallback } from "react";
+import React, { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import { useShallow } from "zustand/react/shallow";
 import { useChatRoomsStore, RoomEndReason } from "@/lib/stores/chatRoomsStore";
 import { useRoomMessages, useRoomMemberNames } from "@/hooks/useRoomMessage";
+import { useMessageContext } from "@/hooks/useMessageContext";
 import { useChatStore } from "@/lib/stores/chatStore";
 import { useWebSocket } from "@/hooks/useWebSocket";
 import { useUsersStore } from "@/lib/stores/usersStore";
@@ -12,16 +13,30 @@ import { RoomPanel } from "@/components/room/RoomPanel";
 import { ReportDialog, ReportTarget } from "@/components/safety/ReportDialog";
 import { Button } from "@/components/ui/button";
 import ChatHeader from "./ChatHeader";
-import MessageList from "./MessageList";
+import MessageList, { FocusRequest } from "./MessageList";
+import { ArrowDown } from "lucide-react";
+import toast from "react-hot-toast";
 import TypingIndicator from "./TypingIndicator";
 import MessageInput from "./MessageInput";
 import { useDraftStore } from "@/lib/stores/draftStore";
-import { MessageType, RoomType } from "@/lib/types";
+import { Message, MessageType, ReplyTo, RoomType } from "@/lib/types";
 
 /** Draft writes are coalesced for this long after the last keystroke (SPEC-013 AC-013-4). */
 const DRAFT_WRITE_DEBOUNCE_MS = 300;
 /** Typing indicator: how long a typing user is shown after the last event, in ms (SPEC-005 AC-005-5). */
 const SELF_TYPING_IDLE_MS = 2000;
+/** Preview length of a reply chip or optimistic quote, matching the server snapshot (SPEC-014 AC-014-3). */
+const REPLY_PREVIEW_CODE_POINTS = 120;
+
+/** The quote shown while a reply is composed or sending; the server derives the stored one (AC-014-3). */
+const replySnapshot = (message: Message): ReplyTo => ({
+  messageId: message.id,
+  senderId: message.senderId,
+  senderName: message.senderName || "Member",
+  preview: message.type === MessageType.TEXT
+    ? Array.from(message.content ?? "").slice(0, REPLY_PREVIEW_CODE_POINTS).join("") : "",
+  type: message.type,
+});
 /** Minimum gap between "typing: true" frames. The server allows 10 typing frames per 5 s per user (CM-056). */
 const TYPING_SEND_INTERVAL_MS = 1000;
 
@@ -150,8 +165,14 @@ const ChatRoomView: React.FC<{ roomId: string; onDeleted: () => void }> = ({
   const reportTrigger = useRef<HTMLElement | null>(null);
   const unblockUser = useUsersStore((state) => state.unblockUser);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const segmentEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const [replyTarget, setReplyTarget] = useState<ReplyTo | null>(null);
+  // The reply that was just sent: if it fails, its chip comes back (AC-014-7).
+  const sentReplyRef = useRef<{ tempId: string; target: ReplyTo } | null>(null);
+  const [focusRequest, setFocusRequest] = useState<FocusRequest | null>(null);
+  const { segment, load: contextLoad, jumpTo: loadContext, close: closeSegment } = useMessageContext(roomId);
   const lastTypingSentRef = useRef(0);
   useEffect(
     () => () => {
@@ -284,6 +305,51 @@ const ChatRoomView: React.FC<{ roomId: string; onDeleted: () => void }> = ({
     }
   }, [messages, currentUserId, roomId]);
 
+  useEffect(() => {
+    const sent = sentReplyRef.current;
+    if (!sent) return;
+    const copy = messages.find((m) => m.tempId === sent.tempId);
+    if (copy?.status === "failed") {
+      sentReplyRef.current = null;
+      setReplyTarget((current) => current ?? sent.target);
+    } else if (copy && !copy.isOptimistic) sentReplyRef.current = null;
+  }, [messages]);
+
+  const startReply = useCallback((message: Message) => {
+    setReplyTarget(replySnapshot(message));
+    inputRef.current?.focus();
+  }, []);
+
+  // A loaded original is scrolled to; otherwise its context window opens as a detached segment (AC-014-8).
+  const jumpToOriginal = useCallback((messageId: string) => {
+    const shown = segment ? segment.messages : messages;
+    if (shown.some((m) => m.id === messageId)) {
+      setFocusRequest({ id: messageId, nonce: Date.now() });
+      return;
+    }
+    if (segment && messages.some((m) => m.id === messageId)) {
+      // The original is in the live list: leave the segment and scroll there.
+      closeSegment();
+      setFocusRequest({ id: messageId, nonce: Date.now() });
+      return;
+    }
+    void loadContext(messageId);
+  }, [segment, messages, loadContext, closeSegment]);
+
+  // A new segment opens on its target; a later jump inside it replaces that request.
+  const segmentOpening = useMemo<FocusRequest | null>(
+    () => (segment ? { id: segment.targetId, nonce: 0 } : null), [segment]);
+  const segmentFocus = segment && focusRequest && segment.messages.some((m) => m.id === focusRequest.id)
+    ? focusRequest : segmentOpening;
+  useEffect(() => {
+    if (contextLoad.state === "error") toast.error(contextLoad.message);
+  }, [contextLoad]);
+
+  const jumpToLatest = useCallback(() => {
+    closeSegment();
+    setFocusRequest(null);
+  }, [closeSegment]);
+
   // Send message handler
   const handleSendMessage = (e: React.FormEvent) => {
     e.preventDefault();
@@ -302,8 +368,13 @@ const ChatRoomView: React.FC<{ roomId: string; onDeleted: () => void }> = ({
       draftWriteRef.current = null;
     }
     if (currentUserId) useDraftStore.getState().save(currentUserId, roomId, newMessage);
-    awaitingEchoRef.current = sendMessage(newMessage.trim()) ?? null;
+    const tempId = (replyTarget ? sendMessage(newMessage.trim(), replyTarget) : sendMessage(newMessage.trim())) ?? null;
+    awaitingEchoRef.current = tempId;
+    if (replyTarget && tempId) sentReplyRef.current = { tempId, target: replyTarget };
+    setReplyTarget(null);
     setNewMessage("");
+    // A send from a detached segment lands at the live tail, so show it.
+    if (segment) jumpToLatest();
   };
 
   const formatTime = (date: Date) => {
@@ -364,9 +435,52 @@ const ChatRoomView: React.FC<{ roomId: string; onDeleted: () => void }> = ({
           )}
         </div>
       )}
+      {segment && (
+        <div role="status" className="mx-3 mb-2 flex flex-wrap items-center gap-2 rounded-md border px-3 py-2 text-sm sm:mx-7">
+          <span className="flex-1 text-muted-foreground">Viewing an earlier part of the conversation.</span>
+          <Button size="sm" variant="outline" onClick={jumpToLatest}>
+            <ArrowDown className="mr-1 h-4 w-4" aria-hidden="true" />
+            Jump to latest
+          </Button>
+        </div>
+      )}
+      {contextLoad.state === "loading" && (
+        <p role="status" aria-live="polite" className="mx-3 mb-2 text-xs text-muted-foreground sm:mx-7">
+          Loading the original message…
+        </p>
+      )}
       {/* MessageList owns the scroll container (load older on scroll to top, CM-044). */}
       <div className="flex-1 min-h-0">
+        {segment ? (
+          // A separate list: the segment never merges into, or scrolls as part of, the live conversation.
+          <MessageList
+            key={`segment-${segment.targetId}`}
+            messages={segment.messages}
+            onlineUsers={onlineUsers}
+            presenceKnown={presenceLoaded}
+            formatDate={formatDate}
+            formatTime={formatTime}
+            messagesEndRef={segmentEndRef}
+            canResend={false}
+            onReply={blocked || requestUsed ? undefined : startReply}
+            onJumpToOriginal={jumpToOriginal}
+            focusRequest={segmentFocus}
+            onReport={(message) => {
+              reportTrigger.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+              setReport({ type: "MESSAGE", id: message.id, label: `message from ${message.senderName || "this member"}` });
+            }}
+            directWith={
+              currentRoom.roomType === RoomType.DIRECT_MESSAGE && currentRoom.counterpart
+                ? { name: currentRoom.counterpart.name, avatarUrl: currentRoom.counterpart.avatarUrl }
+                : null
+            }
+          />
+        ) : (
         <MessageList
+          key="live"
+          onReply={blocked || requestUsed ? undefined : startReply}
+          onJumpToOriginal={jumpToOriginal}
+          focusRequest={focusRequest}
           messages={messages}
           recovering={!!recovery && recovery !== "idle"}
           onlineUsers={onlineUsers}
@@ -394,6 +508,7 @@ const ChatRoomView: React.FC<{ roomId: string; onDeleted: () => void }> = ({
               : null
           }
         />
+        )}
       </div>
 
       <TypingIndicator
@@ -416,6 +531,8 @@ const ChatRoomView: React.FC<{ roomId: string; onDeleted: () => void }> = ({
         disabled={!newMessage.trim() || !connected || requestUsed || blocked}
         inputDisabled={requestUsed || blocked}
         inputRef={inputRef}
+        replyTo={replyTarget}
+        onCancelReply={() => setReplyTarget(null)}
         // When blocked, the BlockedDmBanner above is the hint; the request hint would be misleading next to it.
         pausedHint={
           blocked
