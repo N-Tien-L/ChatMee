@@ -54,6 +54,23 @@ class WsRateLimitInterceptorTest {
     }
 
     @Test
+    void sendMessage_replyRateLimited() {
+        // SPEC-014 AC-014-9: a reply is an ordinary send on the same destination and shares its limit.
+        when(limits.check(anyString(), anyInt(), anyLong())).thenReturn(DENIED);
+        when(messagingProvider.getObject()).thenReturn(messaging);
+
+        Message<?> result = interceptor.preSend(frame(StompCommand.SEND, "/app/chat.sendMessage", "user-1",
+                "{\"roomId\":\"r\",\"tempId\":\"t-2\",\"replyToMessageId\":\"m-1\"}"), channel);
+
+        assertThat(result).isNull();
+        verify(limits).check("ws:user-1:/app/chat.sendMessage", 10, 5);
+        ArgumentCaptor<StompError> error = ArgumentCaptor.forClass(StompError.class);
+        verify(messaging).convertAndSendToUser(eq("user-1"), eq("/queue/errors"), error.capture(), privateTo("session-1"));
+        assertThat(error.getValue().getTempId()).isEqualTo("t-2");
+        assertThat(error.getValue().getCode()).isEqualTo("RATE_LIMITED");
+    }
+
+    @Test
     void preSend_chatOverLimit_dropsFrameAndSendsRateLimitedErrorWithTempId() {
         when(limits.check(anyString(), anyInt(), anyLong())).thenReturn(DENIED);
         when(messagingProvider.getObject()).thenReturn(messaging);

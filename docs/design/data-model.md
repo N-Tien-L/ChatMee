@@ -177,6 +177,17 @@ Status: Approved design, implemented by the tickets named below.
 - Unique partial index `messages_room_sender_client`: `{chatRoomId: 1, senderId: 1, clientMessageId: 1}` where `clientMessageId` exists.
   A `DuplicateKeyException` on insert loads and returns the stored message (no second row); history and broadcasts include `clientMessageId`.
 
+### messages: reply snapshot (SPEC-014, CM-114)
+- `replyTo` (subdocument, optional, new): `{messageId, senderId, senderName, preview, type}`, copied by the server
+  from the target when the reply is saved. `preview` is the target text truncated to 120 code points, empty for
+  non-text targets. Absent on legacy messages and non-replies; no migration and no new index.
+- A retried send with the same `tempId` returns the stored row, so it keeps the original snapshot.
+- Responses redact `preview` to `null` while the target is deleted. A history or context page that contains replies
+  runs one extra query, `findByIdInAndIsDeletedTrue(targetIds)`; pages without replies run none.
+- Context window (`GET .../messages/{messageId}/context`): the target plus up to `limit` (default 20, max 50) rows on
+  each side, using the history boundary before the target and the mirrored strict boundary
+  `createdAt > t OR (createdAt = t AND _id > id)` (ascending) after it. Both use `messages_room_created_id`.
+
 ## Consent, requests, blocks and reports (SPEC-009, v0 scope)
 Status: Approved (SPEC-009, ADR-0006). Join requests, `room_removals` and mute are v1 (D-02, D-03).
 

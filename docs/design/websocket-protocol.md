@@ -96,6 +96,15 @@ finds those strings, migrate them separately only after establishing the origina
 writer's timezone; do not guess UTC or apply a blanket seven-hour adjustment.
 BSON Date retains millisecond precision; JSON Instant can retain nanoseconds.
 
+### Reply payload (SPEC-014, CM-114)
+`ChatMessageRequest` accepts an optional `replyToMessageId` (max 64 chars) on `/app/chat.sendMessage`; there is no new
+destination and the send keeps its rate limit. After the membership checks the server reads the target; a missing,
+foreign-room or deleted target stores nothing and sends `{tempId, code: VALIDATION_FAILED,
+message: "Validation failed: replyToMessageId"}` to the sending session only. Any client-supplied `replyTo` is
+ignored. The room broadcast and history carry `replyTo: {messageId, senderId, senderName, preview, type} | null`;
+`preview` is `null` once the target is deleted (clients render "Original message unavailable"). Older clients ignore
+the field.
+
 ## Room deleted event (CM-028)
 
 Deleting a room is a soft delete (see `docs/design/data-model.md`). After the room
@@ -408,6 +417,7 @@ Full contracts are in the specs and in OpenAPI (`/v3/api-docs`, dev/local).
 | `POST /api/v1/reports` | AC-009-20 | CM-074 |
 | `POST /api/v1/rooms/{roomId}/hide` | AC-009-21: 204; DM members only; group rooms 400; non-member 404; per user | CM-075 implemented |
 | `PATCH /api/v1/rooms/{roomId}/members/{userId}/role` | AC-009-23 | CM-076 |
+| `GET /api/v1/rooms/{roomId}/messages/{messageId}/context?limit=n` | AC-014-6: target plus up to n (20, max 50) each side, oldest first; `targetId`, `hasBefore`, `hasAfter`, `beforeCursor` (a history `before` cursor), `afterCursor`; non-member, unknown room, unknown or deleted message 404 | CM-114 |
 
 ## Invitations (SPEC-009 AC-009-1..3, AC-009-5, CM-070 implemented)
 

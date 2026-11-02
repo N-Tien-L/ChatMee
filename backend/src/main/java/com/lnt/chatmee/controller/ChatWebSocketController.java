@@ -50,6 +50,10 @@ public class ChatWebSocketController {
         } catch (com.lnt.chatmee.exception.DmRequestPendingException e) {
             sendError(sessionId, request, principal, ErrorCode.DM_REQUEST_PENDING, e.getMessage());
             return;
+        } catch (com.lnt.chatmee.exception.InvalidRequestException e) {
+            // An unusable reply target: one generic text, never the target id or content (SPEC-014 section 5).
+            sendError(sessionId, request, principal, ErrorCode.VALIDATION_FAILED, "Validation failed: replyToMessageId");
+            return;
         } catch (com.lnt.chatmee.exception.ForbiddenActionException e) {
             // A block keeps its generic text (AC-009-18); every other refusal stays "Room membership required".
             String message = BlockService.CANNOT_MESSAGE.equals(e.getMessage()) ? e.getMessage() : "Room membership required";

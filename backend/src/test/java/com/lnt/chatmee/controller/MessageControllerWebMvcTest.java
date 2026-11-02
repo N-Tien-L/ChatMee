@@ -100,6 +100,40 @@ class MessageControllerWebMvcTest extends SecuredWebMvcTestSupport {
         expectProblem(mvc.perform(get(HISTORY).with(oauth2Login().oauth2User(com.lnt.chatmee.support.TestUsers.principal("u1")))), 404, "ROOM_NOT_FOUND");
     }
 
+    @Test
+    void getMessageContext_member_returnsWindowWithReplySnapshot() throws Exception {
+        when(messageService.getMessageContext("room-1", "m1", "u1", 20)).thenReturn(
+                new com.lnt.chatmee.dto.response.MessageContextResponse(List.of(ChatMessageResponse.builder()
+                        .id("m2").chatRoomId("room-1").senderId("u2").content("re").type(MessageType.TEXT)
+                        .createdAt(Instant.parse("2026-10-09T01:02:03Z"))
+                        .replyTo(new com.lnt.chatmee.dto.response.ReplyToResponse("m1", "u3", "Bob", null,
+                                MessageType.TEXT))
+                        .build()), "m1", true, false, "abc", null));
+
+        mvc.perform(get(HISTORY + "/m1/context").with(oauth2Login().oauth2User(com.lnt.chatmee.support.TestUsers.principal("u1"))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.targetId").value("m1"))
+                .andExpect(jsonPath("$.data.hasBefore").value(true))
+                .andExpect(jsonPath("$.data.hasAfter").value(false))
+                .andExpect(jsonPath("$.data.beforeCursor").value("abc"))
+                .andExpect(jsonPath("$.data.messages[0].replyTo.messageId").value("m1"))
+                .andExpect(jsonPath("$.data.messages[0].replyTo.preview").value(org.hamcrest.Matchers.nullValue()));
+    }
+
+    @Test
+    void getMessageContext_nonMember_returns404Problem() throws Exception {
+        when(messageService.getMessageContext("room-1", "m1", "u1", 20))
+                .thenThrow(new ChatRoomNotFoundException("Message not found"));
+
+        expectProblem(mvc.perform(get(HISTORY + "/m1/context").with(oauth2Login().oauth2User(com.lnt.chatmee.support.TestUsers.principal("u1")))), 404, "ROOM_NOT_FOUND");
+    }
+
+    @Test
+    void getMessageContext_anonymous_returns401() throws Exception {
+        mvc.perform(get(HISTORY + "/m1/context")).andExpect(status().isUnauthorized());
+        verifyNoInteractions(messageService);
+    }
+
     // SPEC-004 D-13: history of a soft-deleted room keeps answering 403 in v0.
     @Test
     void getRecentMessages_softDeletedRoom_returns403Problem() throws Exception {

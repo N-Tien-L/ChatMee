@@ -72,6 +72,53 @@ class MessageRepositoryIT {
     }
 
     @Test
+    void context_tiedTimestamps_ordersStably() {
+        // SPEC-014 AC-014-6: the window around a target that shares its timestamp has no gap or duplicate.
+        Instant time = Instant.parse("2026-11-01T01:02:03.123456789Z");
+        Message older = save("ctx-0", time.minusSeconds(1), false);
+        Message tieA = save("ctx-a", time, false);
+        Message target = save("ctx-b", time, false);
+        Message tieC = save("ctx-c", time, false);
+        save("ctx-c-deleted", time, true);
+        Message newer = save("ctx-z", time.plusSeconds(1), false);
+        Message stored = messages.findById(target.getId()).orElseThrow();
+
+        List<Message> before = messages.findPageBefore(roomId, stored.getCreatedAt(), stored.getId(),
+                PageRequest.of(0, 10));
+        List<Message> after = messages.findPageAfter(roomId, stored.getCreatedAt(), stored.getId(),
+                PageRequest.of(0, 10));
+
+        assertThat(before).extracting(Message::getId).containsExactly(tieA.getId(), older.getId());
+        assertThat(after).extracting(Message::getId).containsExactly(tieC.getId(), newer.getId());
+    }
+
+    @Test
+    void findByIdInAndIsDeletedTrue_returnsOnlyDeletedTargets() {
+        Instant time = Instant.parse("2026-11-01T01:02:03Z");
+        Message live = save("target-live", time, false);
+        Message deleted = save("target-deleted", time, true);
+
+        assertThat(messages.findByIdInAndIsDeletedTrue(List.of(live.getId(), deleted.getId(), "missing")))
+                .extracting(Message::getId).containsExactly(deleted.getId());
+    }
+
+    @Test
+    void replySnapshot_roundTrips_andLegacyRowsHaveNone() {
+        Instant time = Instant.parse("2026-11-01T01:02:03Z");
+        Message legacy = save("legacy", time, false);
+        Message reply = messages.save(Message.builder().id(roomId + ":reply").chatRoomId(roomId).senderId("sender")
+                .content("re").type(Message.MessageType.TEXT).createdAt(time).updatedAt(time)
+                .replyTo(new Message.ReplySnapshot(legacy.getId(), "sender", "Alice", "Repository history test",
+                        Message.MessageType.TEXT)).build());
+        insertedIds.add(reply.getId());
+
+        assertThat(messages.findById(legacy.getId()).orElseThrow().getReplyTo()).isNull();
+        assertThat(messages.findById(reply.getId()).orElseThrow().getReplyTo())
+                .isEqualTo(new Message.ReplySnapshot(legacy.getId(), "sender", "Alice", "Repository history test",
+                        Message.MessageType.TEXT));
+    }
+
+    @Test
     void findPage_softDeletedMessages_areExcluded() {
         Instant time = Instant.parse("2026-10-09T01:02:03Z");
         Message oldest = save("oldest", time.minusSeconds(1), false);
