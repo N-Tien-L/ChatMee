@@ -18,6 +18,9 @@ test('reply_toMessageMoreThan100Back_jumpsToDetachedSegmentAndBack', async ({ al
   const room = await createConversation(alice);
   await joinRoom(bob, room);
   await send(bob, 'CM-115 far original');
+  // Alice leaves the open room while Bob seeds history: a visible open room marks every incoming
+  // message read over HTTP, which with 105 sends exceeds the per-user 100 requests/minute limit.
+  await alice.goto('about:blank');
   for (let n = 0; n < 105; n++) {
     // Pace below the unchanged 10 sends / 5 seconds limit; this delay is not an assertion.
     await pace(550);
@@ -27,7 +30,7 @@ test('reply_toMessageMoreThan100Back_jumpsToDetachedSegmentAndBack', async ({ al
   }
 
   // Alice scrolls back through older pages until the original is loaded, then replies to it from its menu.
-  await alice.reload();
+  await alice.goto('/dashboard?roomId=' + room);
   await expect(alice.getByText('On air', { exact: true })).toBeVisible();
   const scroller = alice.getByTestId('message-scroll');
   await expect.poll(async () => {
