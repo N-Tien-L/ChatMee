@@ -23,7 +23,7 @@ export function ReactionSurface({ open, onOpenChange, title, description, childr
             <SheetTitle className="font-display text-lg font-semibold">{title}</SheetTitle>
             <SheetDescription className="sr-only">{description}</SheetDescription>
           </div>
-          <div className="min-h-0 flex-1 overflow-hidden px-3 pb-[max(1rem,env(safe-area-inset-bottom))]">{children}</div>
+          <div className="min-h-0 flex-1 overflow-hidden px-4 pb-[max(1rem,env(safe-area-inset-bottom))]">{children}</div>
         </SheetContent>
       </Sheet>
     );
@@ -35,7 +35,7 @@ export function ReactionSurface({ open, onOpenChange, title, description, childr
           <DialogTitle className="font-display text-lg font-semibold">{title}</DialogTitle>
           <DialogDescription className="sr-only">{description}</DialogDescription>
         </div>
-        <div className="px-3 pb-4">{children}</div>
+        <div className="px-4 pb-4">{children}</div>
       </DialogContent>
     </Dialog>
   );

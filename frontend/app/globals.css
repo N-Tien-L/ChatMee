@@ -396,3 +396,27 @@
 @media (prefers-reduced-motion: no-preference) {
   .typing-dot { animation: typing-wave 1.1s ease-in-out infinite; }
 }
+
+/* Emoji picker: thin grey thumb, no track, visible only while scrolling. */
+.emoji-scroll {
+  scrollbar-gutter: auto !important;
+  scrollbar-width: thin;
+  scrollbar-color: transparent transparent;
+}
+.emoji-scroll[data-scrolling] {
+  scrollbar-color: rgb(128 128 128 / 0.55) transparent;
+}
+.emoji-scroll::-webkit-scrollbar {
+  width: 4px;
+  background: transparent;
+}
+.emoji-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+.emoji-scroll::-webkit-scrollbar-thumb {
+  background: transparent;
+  border-radius: 9999px;
+}
+.emoji-scroll[data-scrolling]::-webkit-scrollbar-thumb {
+  background: rgb(128 128 128 / 0.55);
+}
