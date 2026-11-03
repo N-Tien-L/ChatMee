@@ -23,6 +23,7 @@ event and field.
   repeating the same PUT is idempotent. `DELETE .../reaction` removes it and is idempotent.
   In the UI, selecting the emoji the user already has undoes it (the client sends DELETE);
   selecting another emoji changes it (PUT). -> Test: `react_replaceExisting_keepsOne`, `react_sameEmoji_idempotent`, `react_delete_idempotent`; UI `reactions_reselectSame_removes`, `reactions_selectOther_changes`
+  (CM-118 evidence: `useRoomMessage.reactions.test.ts#reactions_reselectSame_removes`, `#reactions_selectOther_changes`; E2E `reactions.spec.ts`.)
 - AC-015-2: Storage is a `reactions` collection `{messageId, roomId, userId, emoji, createdAt}`
   with a unique index on `(messageId, userId)`. The index is declared on the entity; no
   destructive migration. (The plan's `(messageId, userId, emoji)` index is narrowed because
@@ -52,9 +53,15 @@ event and field.
 - AC-015-9: The client applies reactions optimistically, reconciles with the event, and after
   reconnect treats the history refetch as authoritative for loaded messages.
   -> Test: `reactions_optimisticRollbackOnError`, `reactions_reconnect_converges`; E2E `reactions.spec.ts`
+  (CM-118 evidence: `useRoomMessage.reactions.test.ts#reactions_optimisticRollbackOnError`, `#reactions_reconnect_converges`,
+  `#reactions_roomEvent_appliesCountsAndKeepsMine`, `#reactions_roomEventDuringOwnRequest_waitsForResponse`. Only the newest page is
+  refetched on reconnect, as for messages; older loaded pages keep their last known counts until the next event.)
 - AC-015-10: UI: quick bar of 👍 ❤️ 😂 😮 😢 😡 plus "+" opening a full picker (Dialog on
   desktop, Drawer on mobile), lazy-loaded; chips under the bubble; tapping a chip opens the
   who-reacted sheet; layout works at 360 px. -> E2E `reactions.spec.ts`
+  (CM-118 evidence: `reactions.spec.ts#reactions_quickBarPickerAndWhoReacted_updateLiveForBothMembers`,
+  `#reactions_mobile_chipsFitAndWhoReactedOpensAsDrawer`, `MessageList.reactions.test.tsx#*`. The mobile drawer is the existing
+  shadcn `Sheet` from the bottom; no drawer dependency was added.)
 - AC-015-11: Deleting a message or room removes its reactions; a left or removed member's
   reactions stay until the message is deleted. -> Test: `deleteMessage_removesReactions`
   (CM-117 evidence: room part `ReactionRepositoryIT#deleteRoom_removesReactions`, `ChatRoomServiceTest`;

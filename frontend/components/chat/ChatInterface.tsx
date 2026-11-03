@@ -5,6 +5,7 @@ import { useShallow } from "zustand/react/shallow";
 import { useChatRoomsStore, RoomEndReason } from "@/lib/stores/chatRoomsStore";
 import { useRoomMessages, useRoomMemberNames } from "@/hooks/useRoomMessage";
 import { useMessageContext } from "@/hooks/useMessageContext";
+import { useReactors } from "@/hooks/useReactors";
 import { useChatStore } from "@/lib/stores/chatStore";
 import { useWebSocket } from "@/hooks/useWebSocket";
 import { useUsersStore } from "@/lib/stores/usersStore";
@@ -18,6 +19,8 @@ import { ArrowDown } from "lucide-react";
 import toast from "react-hot-toast";
 import TypingIndicator from "./TypingIndicator";
 import MessageInput from "./MessageInput";
+import { ReactionPicker } from "./ReactionPicker";
+import { ReactorsSheet } from "./ReactorsSheet";
 import { useDraftStore } from "@/lib/stores/draftStore";
 import { Message, MessageType, ReplyTo, RoomType } from "@/lib/types";
 
@@ -145,6 +148,7 @@ const ChatRoomView: React.FC<{ roomId: string; onDeleted: () => void }> = ({
     sendMessage,
     resendMessage,
     discardMessage,
+    toggleReaction,
     reload,
     loadOlder,
     loading,
@@ -173,6 +177,16 @@ const ChatRoomView: React.FC<{ roomId: string; onDeleted: () => void }> = ({
   const sentReplyRef = useRef<{ tempId: string; target: ReplyTo } | null>(null);
   const [focusRequest, setFocusRequest] = useState<FocusRequest | null>(null);
   const { segment, load: contextLoad, jumpTo: loadContext, close: closeSegment } = useMessageContext(roomId);
+  // Reactions (SPEC-015): the message whose picker or who-reacted list is open.
+  const [pickerFor, setPickerFor] = useState<string | null>(null);
+  const [reactorsFor, setReactorsFor] = useState<{ message: Message; emoji: string | null } | null>(null);
+  const reactors = useReactors(roomId, reactorsFor?.message.id ?? null, reactorsFor?.emoji ?? null);
+  const react = useCallback((message: Message, emoji: string) => {
+    void toggleReaction(message.id, emoji).then((error) => {
+      if (error) toast.error(error);
+    });
+  }, [toggleReaction]);
+  const showReactors = useCallback((message: Message, emoji: string) => setReactorsFor({ message, emoji }), []);
   const lastTypingSentRef = useRef(0);
   useEffect(
     () => () => {
@@ -463,6 +477,7 @@ const ChatRoomView: React.FC<{ roomId: string; onDeleted: () => void }> = ({
             messagesEndRef={segmentEndRef}
             canResend={false}
             onReply={blocked || requestUsed ? undefined : startReply}
+            onShowReactors={showReactors}
             onJumpToOriginal={jumpToOriginal}
             focusRequest={segmentFocus}
             onReport={(message) => {
@@ -479,6 +494,9 @@ const ChatRoomView: React.FC<{ roomId: string; onDeleted: () => void }> = ({
         <MessageList
           key="live"
           onReply={blocked || requestUsed ? undefined : startReply}
+          onReact={blocked || requestUsed ? undefined : react}
+          onPickReaction={blocked || requestUsed ? undefined : (message) => setPickerFor(message.id)}
+          onShowReactors={showReactors}
           onJumpToOriginal={jumpToOriginal}
           focusRequest={focusRequest}
           messages={messages}
@@ -521,6 +539,37 @@ const ChatRoomView: React.FC<{ roomId: string; onDeleted: () => void }> = ({
           name={currentRoom.counterpart.name}
           onUnblock={() => currentRoom.counterpart && void unblockUser(currentRoom.counterpart)}
         />
+      )}
+      {/* Mounted only while open: a closed surface runs no viewport hooks. */}
+      {pickerFor !== null && (
+      <ReactionPicker
+        open
+        onOpenChange={(open) => { if (!open) setPickerFor(null); }}
+        onSelect={(emoji) => {
+          const message = messages.find((m) => m.id === pickerFor);
+          setPickerFor(null);
+          if (message) react(message, emoji);
+        }}
+      />
+      )}
+      {reactorsFor !== null && (
+      <ReactorsSheet
+        open
+        onOpenChange={(open) => { if (!open) setReactorsFor(null); }}
+        reactions={
+          (reactorsFor && messages.find((m) => m.id === reactorsFor.message.id)?.reactions)
+            ?? reactorsFor?.message.reactions ?? []
+        }
+        emoji={reactorsFor?.emoji ?? null}
+        onEmojiChange={(emoji) => setReactorsFor((current) => (current ? { ...current, emoji } : current))}
+        reactors={reactors.reactors}
+        loading={reactors.loading}
+        error={reactors.error}
+        hasMore={reactors.hasMore}
+        onLoadMore={reactors.loadMore}
+        onRetry={reactors.retry}
+        currentUserId={currentUserId}
+      />
       )}
       <ReportDialog target={report} onClose={() => setReport(null)} onRestoreFocus={() => reportTrigger.current?.focus()} />
 

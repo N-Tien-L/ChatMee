@@ -10,6 +10,7 @@ import { isDeletedUser } from "../common/deletedUser";
 import { DeliveryTab, useJustConfirmed } from "./DeliveryTab";
 import { MessageActions } from "./MessageActions";
 import { ReplyQuote } from "./ReplyQuote";
+import { ReactionChips } from "./ReactionChips";
 
 /** Distance from the top of the list at which the next older page is requested. */
 const LOAD_OLDER_THRESHOLD_PX = 48;
@@ -57,6 +58,12 @@ interface MessageListProps {
   onReply?: (message: Message) => void;
   /** A tap on a reply's quote (AC-014-8); the parent scrolls here or loads a detached segment. */
   onJumpToOriginal?: (messageId: string) => void;
+  /** Quick-bar reaction pick (SPEC-015 AC-015-1); absent hides the quick bar. */
+  onReact?: (message: Message, emoji: string) => void;
+  /** "+" on the quick bar: opens the full picker (AC-015-10). */
+  onPickReaction?: (message: Message) => void;
+  /** A tap on a reaction chip: opens who reacted, filtered to that emoji (AC-015-10). */
+  onShowReactors?: (message: Message, emoji: string) => void;
   focusRequest?: FocusRequest | null;
 }
 
@@ -251,6 +258,9 @@ const MessageListContent: React.FC<MessageListContentProps> = ({
   onReport,
   onReply,
   onJumpToOriginal,
+  onReact,
+  onPickReaction,
+  onShowReactors,
   showLoadOlder,
   highlightId,
 }) => {
@@ -442,6 +452,8 @@ const MessageListContent: React.FC<MessageListContentProps> = ({
                     message={message}
                     timeLabel={formatTime(messageDate)}
                     onReply={onReply}
+                    onReact={onReact}
+                    onPickReaction={onPickReaction}
                     className="max-w-[85%] sm:max-w-md lg:max-w-xl"
                   >
                   <OwnBubble
@@ -462,6 +474,11 @@ const MessageListContent: React.FC<MessageListContentProps> = ({
                   </OwnBubble>
                   </BubbleActions>
                   </div>
+                  <ReactionChips
+                    reactions={message.reactions}
+                    own
+                    onOpen={onShowReactors ? (emoji) => onShowReactors(message, emoji) : undefined}
+                  />
                   <div className="flex flex-wrap items-center justify-end gap-x-2 gap-y-1 text-xs">
                     {failed && message.tempId && (
                       <>
@@ -536,6 +553,8 @@ const MessageListContent: React.FC<MessageListContentProps> = ({
                         timeLabel={formatTime(messageDate)}
                         onReport={onReport}
                         onReply={onReply}
+                        onReact={onReact}
+                        onPickReaction={onPickReaction}
                         className="min-w-0"
                       >
                         <div className={`rounded-2xl bg-card px-3.5 py-2 break-words text-card-foreground shadow-[0_2px_10px_-6px_rgb(15_31_28/0.25)] ring-1 ring-border ${groupStart ? "rounded-tl-md" : ""}`}>
@@ -552,6 +571,10 @@ const MessageListContent: React.FC<MessageListContentProps> = ({
                         </time>
                       )}
                     </div>
+                    <ReactionChips
+                      reactions={message.reactions}
+                      onOpen={onShowReactors ? (emoji) => onShowReactors(message, emoji) : undefined}
+                    />
                   </div>
                 </div>
               )}

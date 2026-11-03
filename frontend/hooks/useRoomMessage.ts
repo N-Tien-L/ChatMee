@@ -4,7 +4,8 @@ import { messageApi } from "@/lib/api/messageApi";
 import { chatRoomApi } from "@/lib/api/chatRoomApi";
 import { useAuthStore } from "@/lib/stores/authStore";
 import { useChatRoomsStore } from "@/lib/stores/chatRoomsStore";
-import { Message, MessageResponse, MessageType, ReplyTo } from "@/lib/types";
+import { Message, MessageResponse, MessageType, ReactionSummary, ReactionUpdatedEvent, ReplyTo } from "@/lib/types";
+import { applyMyReaction, fromRoomEvent, myReaction } from "@/lib/utils/reactions";
 import {
     deduplicateMessages,
     matchResyncedPending,
@@ -27,6 +28,16 @@ export function resetRoomMessageCache(): void {
     cacheEpoch++;
     sessionCache.clear();
 }
+
+/** Keeps a cached copy's reactions in step, so reopening the room does not show older counts. */
+const patchCachedReactions = (key: string, messageId: string, reactions: ReactionSummary[]) => {
+    const cached = sessionCache.get(key);
+    if (!cached || !cached.messages.some((m) => m.id === messageId)) return;
+    sessionCache.set(key, {
+        ...cached,
+        messages: cached.messages.map((m) => (m.id === messageId ? { ...m, reactions } : m)),
+    });
+};
 
 /** Where loadOlder continues for the open room; replaced on every room change. */
 type Paging = { roomId: string; nextCursor: string | null; hasMore: boolean; inFlight: boolean };
@@ -89,6 +100,16 @@ export const useRoomMessages = (roomId: string, options: RoomMessagesOptions = {
         if (timer !== undefined) clearTimeout(timer);
         pendingTimers.current.delete(tempId);
     }, []);
+
+    // Reactions (SPEC-015): the latest request per message; older responses and events during a request are ignored.
+    const reactionSeq = useRef(0);
+    const reactionsInFlight = useRef(new Map<string, number>());
+    const setReactions = useCallback((messageId: string, reactions: ReactionSummary[]) => {
+        const action = { type: "SET_REACTIONS" as const, payload: { messageId, reactions } };
+        messagesRef.current = messageReducer({ ...initialState, messages: messagesRef.current }, action).messages;
+        dispatch(action);
+        patchCachedReactions(cacheKey, messageId, reactions);
+    }, [cacheKey]);
 
     // Kept outside the reducer so two scroll events before the next render cannot send the same
     // cursor twice, and so a page that arrives after a room switch is recognised and ignored.
@@ -370,14 +391,21 @@ export const useRoomMessages = (roomId: string, options: RoomMessagesOptions = {
                 });
             }
         };
+        // 3. Reaction counts from any member (AC-015-7); our own pending pick settles from its response instead.
+        const handleReaction = (event: ReactionUpdatedEvent) => {
+            if (!active || epoch !== cacheEpoch || reactionsInFlight.current.has(event.messageId)) return;
+            const target = messagesRef.current.find((m) => m.id === event.messageId);
+            if (!target) return;
+            setReactions(event.messageId, fromRoomEvent(target.reactions, event));
+        };
         const removeErrorHandler = subscribeErrors(handleError);
-        const unsubscribeRoom = subscribeRoom(roomId, handleNewMessage);
+        const unsubscribeRoom = subscribeRoom(roomId, handleNewMessage, handleReaction);
         return () => {
             active = false;
             unsubscribeRoom();
             removeErrorHandler();
         };
-    }, [roomId, cacheKey, subscribeRoom, userId, subscribeErrors, clearPendingTimer]);
+    }, [roomId, cacheKey, subscribeRoom, userId, subscribeErrors, clearPendingTimer, setReactions]);
 
     // A new send gets a new client id; a Resend passes the failed message's id so the server can
     // recognise a retry of a send it already stored (SPEC-008 AC-008-13).
@@ -466,6 +494,41 @@ export const useRoomMessages = (roomId: string, options: RoomMessagesOptions = {
         dispatch({ type: "DISCARD_MESSAGE", payload: { tempId } });
     }, []);
 
+    /**
+     * Picks `emoji` as the current user's reaction, or undoes it when it already is (SPEC-015 AC-015-1). Applied
+     * optimistically; the response replaces it and a failure rolls it back (AC-015-9). Resolves with an error text
+     * for the caller to show, or null.
+     */
+    const toggleReaction = useCallback(async (messageId: string, emoji: string): Promise<string | null> => {
+        const message = messagesRef.current.find((m) => m.id === messageId && !m.isOptimistic);
+        if (!message) return null;
+        const before = message.reactions ?? [];
+        const removing = myReaction(before) === emoji;
+        const seq = ++reactionSeq.current;
+        reactionsInFlight.current.set(messageId, seq);
+        setReactions(messageId, applyMyReaction(before, removing ? null : emoji));
+        const epoch = cacheEpoch;
+        const gen = generation.current;
+        // A newer pick on the same message, a room switch or a logout makes this response stale.
+        const stale = () => epoch !== cacheEpoch || gen !== generation.current
+            || reactionsInFlight.current.get(messageId) !== seq;
+        try {
+            const res = removing
+                ? await messageApi.unreact(roomId, messageId)
+                : await messageApi.react(roomId, messageId, emoji);
+            if (stale()) return null;
+            if (!res?.success) throw new Error(res?.message || "Could not update the reaction");
+            setReactions(messageId, res.data.reactions);
+            return null;
+        } catch (err) {
+            if (stale()) return null;
+            setReactions(messageId, before);
+            return errorText(err, "Could not update the reaction");
+        } finally {
+            if (reactionsInFlight.current.get(messageId) === seq) reactionsInFlight.current.delete(messageId);
+        }
+    }, [roomId, setReactions]);
+
     return {
         ...state,
         recovery,
@@ -476,6 +539,7 @@ export const useRoomMessages = (roomId: string, options: RoomMessagesOptions = {
         sendMessage,
         resendMessage,
         discardMessage,
+        toggleReaction,
         reload: recovery === "idle" ? reload : continueRecovery,
         loadOlder,
     };
