@@ -64,6 +64,7 @@ public final class LocalOAuthProvider implements AutoCloseable {
             String base = "/authorize?" + exchange.getRequestURI().getRawQuery().replace("&", "&amp;").replace("\"", "&quot;").replace("<", "&lt;");
             reply(exchange, 200, "text/html", "<h1>Local synthetic OAuth</h1><a href=\"" + base
                     + "&amp;account=alice\">Alice</a> <a href=\"" + base + "&amp;account=bob\">Bob</a>"
+                    + " <a href=\"" + base + "&amp;account=carol\">Carol</a>"
                     + " <a href=\"" + base + "&amp;account=deny\">Deny</a>");
             return;
         }
@@ -74,7 +75,7 @@ public final class LocalOAuthProvider implements AutoCloseable {
             exchange.close();
             return;
         }
-        if (!account.equals("alice") && !account.equals("bob")) {
+        if (!account.equals("alice") && !account.equals("bob") && !account.equals("carol")) {
             reply(exchange, 400, "text/plain", "Unknown synthetic account");
             return;
         }
