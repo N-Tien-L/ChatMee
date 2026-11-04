@@ -105,6 +105,14 @@ ignored. The room broadcast and history carry `replyTo: {messageId, senderId, se
 `preview` is `null` once the target is deleted (clients render "Original message unavailable"). Older clients ignore
 the field.
 
+### Reaction updated event (SPEC-015, CM-117)
+After a reaction is set, changed or removed, `/topic/rooms/{roomId}` carries
+`{event: "REACTION_UPDATED", messageId, summary: [{emoji, count}]}` (top 6, counts only; `reactedByMe` is computed
+per client from its own action and history). No new destination. Message frames have no `event` field, which is how
+clients tell the two apart. **Clients before CM-118 parse every room frame as a message**, so the backend with
+CM-117 must not be deployed ahead of the CM-118 frontend. A failed publish is logged with ids only; history reloads
+are authoritative.
+
 ## Room deleted event (CM-028)
 
 Deleting a room is a soft delete (see `docs/design/data-model.md`). After the room
@@ -417,6 +425,8 @@ Full contracts are in the specs and in OpenAPI (`/v3/api-docs`, dev/local).
 | `POST /api/v1/reports` | AC-009-20 | CM-074 |
 | `POST /api/v1/rooms/{roomId}/hide` | AC-009-21: 204; DM members only; group rooms 400; non-member 404; per user | CM-075 implemented |
 | `PATCH /api/v1/rooms/{roomId}/members/{userId}/role` | AC-009-23 | CM-076 |
+| `PUT /api/v1/rooms/{roomId}/messages/{messageId}/reaction` `{emoji}`, `DELETE .../reaction` | AC-015-1, -3, -4: 200 `{messageId, reactions: [{emoji, count, reactedByMe}]}`; idempotent; invalid emoji or SYSTEM message 400; non-member, unknown room or message 404; blocked DM 403; HTTP rate limit 429 | CM-117 |
+| `GET /api/v1/rooms/{roomId}/messages/{messageId}/reactions?emoji=&cursor=&limit=` | AC-015-6: `{reactions: [{userId, displayName, emoji, createdAt}], nextCursor, hasMore}`, newest first, limit 20 (max 50), member-only 404 | CM-117 |
 | `GET /api/v1/rooms/{roomId}/messages/{messageId}/context?limit=n` | AC-014-6: target plus up to n (20, max 50) each side, oldest first; `targetId`, `hasBefore`, `hasAfter`, `beforeCursor` (a history `before` cursor), `afterCursor`; non-member, unknown room, unknown or deleted message 404 | CM-114 |
 
 ## Invitations (SPEC-009 AC-009-1..3, AC-009-5, CM-070 implemented)

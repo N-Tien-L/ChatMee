@@ -61,6 +61,8 @@ class MessageServiceTest {
 
     @Mock BlockService blocks;
 
+    @Mock ReactionService reactionService;
+
     @InjectMocks
     private MessageService messageService;
 

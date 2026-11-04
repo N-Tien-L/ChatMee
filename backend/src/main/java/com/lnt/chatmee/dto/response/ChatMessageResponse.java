@@ -3,6 +3,7 @@ package com.lnt.chatmee.dto.response;
 import com.lnt.chatmee.model.Message.MessageType;
 
 import java.time.Instant;
+import java.util.List;
 
 import com.fasterxml.jackson.annotation.JsonFormat;
 import com.fasterxml.jackson.annotation.JsonProperty;
@@ -26,7 +27,9 @@ public record ChatMessageResponse(
     @JsonProperty("isUpdated") boolean isUpdated,
     @JsonProperty("isDeleted") boolean isDeleted,
     /** The quoted target (SPEC-014); null when this message is not a reply. */
-    ReplyToResponse replyTo
+    ReplyToResponse replyTo,
+    /** Top reactions with the caller's own choice marked (SPEC-015 AC-015-5); empty when there are none. */
+    List<ReactionSummaryResponse> reactions
 ) {
     public static ChatMessageResponse from(com.lnt.chatmee.model.Message message, String senderName, String tempId) {
         return from(message, senderName, tempId, false);
@@ -38,6 +41,12 @@ public record ChatMessageResponse(
         return new ChatMessageResponse(message.getId(), tempId, message.getClientMessageId(), message.getChatRoomId(),
                 message.getSenderId(), senderName, message.getContent(), message.getType(), message.getCreatedAt(),
                 message.getUpdatedAt(), message.isUpdated(), message.isDeleted(),
-                ReplyToResponse.from(message.getReplyTo(), replyTargetDeleted));
+                ReplyToResponse.from(message.getReplyTo(), replyTargetDeleted), List.of());
+    }
+
+    /** The same message with the caller's reaction summary. */
+    public ChatMessageResponse withReactions(List<ReactionSummaryResponse> summary) {
+        return new ChatMessageResponse(id, tempId, clientMessageId, chatRoomId, senderId, senderName, content, type,
+                createdAt, updatedAt, isUpdated, isDeleted, replyTo, summary == null ? List.of() : summary);
     }
 }

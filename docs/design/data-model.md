@@ -188,6 +188,22 @@ Status: Approved design, implemented by the tickets named below.
   each side, using the history boundary before the target and the mirrored strict boundary
   `createdAt > t OR (createdAt = t AND _id > id)` (ascending) after it. Both use `messages_room_created_id`.
 
+### reactions (SPEC-015, CM-117)
+| Collection | Entity | Fields | Indexes |
+|---|---|---|---|
+| `reactions` | `Reaction` | `_id` (UUID string), `messageId`, `roomId`, `userId`, `emoji`, `createdAt` | `reactions_message_user` unique `(messageId, userId)`; `reactions_message_created_id` `(messageId, createdAt DESC, _id DESC)`; `reactions_room` `(roomId)` |
+
+- One reaction per user per message. `setReaction` upserts only when the stored emoji differs, so repeating the same
+  emoji keeps its `createdAt`; a different emoji replaces it and sets `createdAt` again. Concurrent first reactions
+  rely on the unique index plus one retry as an update.
+- History and context pages run one aggregation (`$match messageId $in page`, `$group` by message and emoji with
+  count, first `createdAt` and whether the caller chose it). The service keeps the top 6 per message by count, then
+  earliest first reaction.
+- Who-reacted pages sort `createdAt DESC, _id DESC` and reuse the opaque `MessageCursor` encoding of
+  `(createdAt, id)`.
+- A soft-deleted room removes its reactions (`deleteByRoomId`). There is no message deletion API yet; messages with
+  `isDeleted` cannot be reacted to or listed.
+
 ## Consent, requests, blocks and reports (SPEC-009, v0 scope)
 Status: Approved (SPEC-009, ADR-0006). Join requests, `room_removals` and mute are v1 (D-02, D-03).
 
