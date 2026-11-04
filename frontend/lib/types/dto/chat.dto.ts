@@ -92,6 +92,31 @@ export interface MessageResponse {
     updatedAt: string;
     isUpdated: boolean;
     isDeleted: boolean;
+    /** Server-derived quote of the message this one replies to (SPEC-014); null or absent when it is not a reply. */
+    replyTo?: ReplyTo | null;
+}
+
+/**
+ * The quote above a reply (SPEC-014 AC-014-3). `preview` is "" for non-text targets (show `type`) and null once the
+ * original is deleted (show "Original message unavailable", AC-014-5).
+ */
+export interface ReplyTo {
+    messageId: string;
+    senderId: string;
+    senderName: string;
+    preview: string | null;
+    type: MessageType;
+}
+
+/** GET /api/v1/rooms/{roomId}/messages/{messageId}/context (SPEC-014 AC-014-6), oldest first. */
+export interface MessageContextResponse {
+    messages: MessageResponse[];
+    targetId: string;
+    hasBefore: boolean;
+    hasAfter: boolean;
+    /** A history `before` cursor for messages older than this window. */
+    beforeCursor: string | null;
+    afterCursor: string | null;
 }
 
 /** One page of GET /api/v1/rooms/{roomId}/messages (CM-044), oldest message first. */

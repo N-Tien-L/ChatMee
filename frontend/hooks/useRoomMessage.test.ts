@@ -10,7 +10,7 @@ import { ChatRoom } from '@/lib/types';
 
 const transport = vi.hoisted(() => ({
     connected: true, connecting: false,
-    sendMessage: vi.fn<(roomId: string, content: string, tempId?: string) => boolean>(() => true),
+    sendMessage: vi.fn<(roomId: string, content: string, tempId?: string, replyToMessageId?: string) => boolean>(() => true),
     subscribeRoom: vi.fn<(roomId: string, onMessage: (message: Message) => void) => () => void>(() => () => {}),
     subscribeErrors: vi.fn<(handler: (error: { tempId?: string; code?: string; message: string }) => void) => () => void>(() => () => {}),
     onReconnect: vi.fn<(listener: () => void) => () => void>(() => () => {}),
@@ -79,6 +79,20 @@ describe('useRoomMessages client ids (SPEC-008 AC-008-13)', () => {
         act(() => { onMessage(echo); });
         expect(result.current.messages).toHaveLength(1);
         expect(result.current.messages[0]).toMatchObject({ id: 's1', status: 'sent' });
+    });
+
+    it('sendMessage_reply_publishesTargetIdAndResendKeepsQuote', async () => {
+        const { result } = await mountRoom();
+        const quote = { messageId: 'm-1', senderId: 'u-2', senderName: 'Bob', preview: 'hi', type: MessageType.TEXT };
+        act(() => { void result.current.sendMessage('re', quote); });
+        const sent = result.current.messages[0];
+        expect(sent.replyTo).toEqual(quote);
+        expect(transport.sendMessage).toHaveBeenLastCalledWith(expect.any(String), 're', sent.tempId, 'm-1');
+
+        act(() => { vi.advanceTimersByTime(10_000); });
+        act(() => { result.current.resendMessage(sent.tempId as string); });
+        expect(transport.sendMessage).toHaveBeenLastCalledWith(expect.any(String), 're', sent.tempId, 'm-1');
+        expect(result.current.messages[0].replyTo).toEqual(quote);
     });
 
     it('sendMessage_twoNewSends_getDistinctClientIds', async () => {

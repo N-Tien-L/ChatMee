@@ -1,7 +1,7 @@
 "use client";
 
 import { Message, MessageType } from "@/lib/types";
-import React, { useCallback, useLayoutEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { AlertCircle, ArrowDown, MessageSquare, RotateCw } from "lucide-react";
 import { Skeleton } from "../ui/skeleton";
 import { Button } from "../ui/button";
@@ -9,6 +9,7 @@ import { UserAvatar } from "../common/UserAvatar";
 import { isDeletedUser } from "../common/deletedUser";
 import { DeliveryTab, useJustConfirmed } from "./DeliveryTab";
 import { MessageActions } from "./MessageActions";
+import { ReplyQuote } from "./ReplyQuote";
 
 /** Distance from the top of the list at which the next older page is requested. */
 const LOAD_OLDER_THRESHOLD_PX = 48;
@@ -18,6 +19,14 @@ const NEAR_BOTTOM_PX = 80;
 const GROUP_WINDOW_MS = 5 * 60 * 1000;
 /** A pause this long inside one day gets its own time marker, as in Messenger. */
 const TIME_BREAK_MS = 60 * 60 * 1000;
+/** How long a jumped-to original stays highlighted. */
+const HIGHLIGHT_MS = 2000;
+
+/** Scroll to and highlight one loaded message; a new nonce repeats the jump to the same message. */
+export interface FocusRequest {
+  id: string;
+  nonce: number;
+}
 
 interface MessageListProps {
   recovering?: boolean;
@@ -44,6 +53,11 @@ interface MessageListProps {
   directWith?: { name: string; avatarUrl?: string | null } | null;
   /** Report another member's message (SPEC-009 AC-009-20); offered in the message actions menu. */
   onReport?: (message: Message) => void;
+  /** Starts a reply to a message (SPEC-014 AC-014-7). */
+  onReply?: (message: Message) => void;
+  /** A tap on a reply's quote (AC-014-8); the parent scrolls here or loads a detached segment. */
+  onJumpToOriginal?: (messageId: string) => void;
+  focusRequest?: FocusRequest | null;
 }
 
 const isNearBottom = (el: HTMLElement) =>
@@ -98,6 +112,8 @@ const MessageList: React.FC<MessageListProps> = (props) => {
   const atBottomRef = useRef(true);
   const [unseenCount, setUnseenCount] = useState(0);
   const [needsLoadOlder, setNeedsLoadOlder] = useState(false);
+  const [highlightId, setHighlightId] = useState<string | null>(null);
+  const { focusRequest = null } = props;
 
   const scrollToBottom = useCallback(
     (behavior: ScrollBehavior) => {
@@ -139,6 +155,24 @@ const MessageList: React.FC<MessageListProps> = (props) => {
     rememberAnchor();
   }, [messages, scrollToBottom, rememberAnchor, props.recovering]);
 
+  // Runs after the edge effect above, so a first load's jump to the bottom never overrides the jump to the original.
+  useLayoutEffect(() => {
+    const el = scrollRef.current;
+    if (!el || !focusRequest) return;
+    const row = Array.from(el.querySelectorAll<HTMLElement>("[data-message-id]"))
+      .find(node => node.dataset.messageId === focusRequest.id);
+    if (!row) return;
+    row.scrollIntoView?.({ block: "center" });
+    atBottomRef.current = isNearBottom(el);
+    rememberAnchor();
+    setHighlightId(focusRequest.id);
+  }, [focusRequest, rememberAnchor]);
+  useEffect(() => {
+    if (!highlightId) return;
+    const timer = setTimeout(() => setHighlightId(null), HIGHLIGHT_MS);
+    return () => clearTimeout(timer);
+  }, [highlightId, focusRequest]);
+
   // When the loaded page does not fill the viewport there is nothing to scroll, so offer the button.
   useLayoutEffect(() => {
     const el = scrollRef.current;
@@ -171,6 +205,7 @@ const MessageList: React.FC<MessageListProps> = (props) => {
       >
         <MessageListContent
           {...props}
+          highlightId={highlightId}
           showLoadOlder={needsLoadOlder && !loadingOlder && !olderError && !loading && !error}
         />
       </div>
@@ -192,6 +227,7 @@ const MessageList: React.FC<MessageListProps> = (props) => {
 
 interface MessageListContentProps extends MessageListProps {
   showLoadOlder: boolean;
+  highlightId: string | null;
 }
 
 const MessageListContent: React.FC<MessageListContentProps> = ({
@@ -213,7 +249,10 @@ const MessageListContent: React.FC<MessageListContentProps> = ({
   onLoadOlder,
   directWith = null,
   onReport,
+  onReply,
+  onJumpToOriginal,
   showLoadOlder,
+  highlightId,
 }) => {
   if (loading && messages.length === 0) {
     return (
@@ -356,7 +395,12 @@ const MessageListContent: React.FC<MessageListContentProps> = ({
           const pending = message.isOwn && message.status === "sending";
 
           return (
-            <div key={message.id} data-message-id={message.id}>
+            <div
+              key={message.id}
+              data-message-id={message.id}
+              data-highlighted={highlightId === message.id ? "true" : undefined}
+              className="rounded-xl transition-colors duration-500 motion-reduce:transition-none data-[highlighted=true]:bg-primary/10"
+            >
               {showDate && (
                 <div className="flex justify-center my-4">
                   <span className="rounded-full bg-card px-3 py-1 font-mono text-[11px] uppercase tracking-[0.12em] text-muted-foreground shadow-sm ring-1 ring-border">
@@ -397,6 +441,7 @@ const MessageListContent: React.FC<MessageListContentProps> = ({
                     enabled={!failed && !pending}
                     message={message}
                     timeLabel={formatTime(messageDate)}
+                    onReply={onReply}
                     className="max-w-[85%] sm:max-w-md lg:max-w-xl"
                   >
                   <OwnBubble
@@ -409,6 +454,10 @@ const MessageListContent: React.FC<MessageListContentProps> = ({
                           : "bg-gradient-to-br from-bubble-own-from to-bubble-own-to text-primary-foreground shadow-[0_6px_18px_-10px_rgb(11_107_93/0.8)]"
                     }`}
                   >
+                    {message.replyTo && (
+                      <ReplyQuote replyTo={message.replyTo} own={!failed && !pending}
+                        onJump={failed || pending ? undefined : onJumpToOriginal} />
+                    )}
                     <p className="text-sm whitespace-pre-wrap break-words">{message.content}</p>
                   </OwnBubble>
                   </BubbleActions>
@@ -486,9 +535,11 @@ const MessageListContent: React.FC<MessageListContentProps> = ({
                         message={message}
                         timeLabel={formatTime(messageDate)}
                         onReport={onReport}
+                        onReply={onReply}
                         className="min-w-0"
                       >
                         <div className={`rounded-2xl bg-card px-3.5 py-2 break-words text-card-foreground shadow-[0_2px_10px_-6px_rgb(15_31_28/0.25)] ring-1 ring-border ${groupStart ? "rounded-tl-md" : ""}`}>
+                          {message.replyTo && <ReplyQuote replyTo={message.replyTo} onJump={onJumpToOriginal} />}
                           <p className="text-sm whitespace-pre-wrap break-words">{message.content}</p>
                         </div>
                       </BubbleActions>
