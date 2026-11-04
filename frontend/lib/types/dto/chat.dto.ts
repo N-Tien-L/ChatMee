@@ -92,6 +92,68 @@ export interface MessageResponse {
     updatedAt: string;
     isUpdated: boolean;
     isDeleted: boolean;
+    /** Server-derived quote of the message this one replies to (SPEC-014); null or absent when it is not a reply. */
+    replyTo?: ReplyTo | null;
+    /** Top reactions with the caller's own choice marked (SPEC-015 AC-015-5); absent or empty when there are none. */
+    reactions?: ReactionSummary[];
+}
+
+/** One emoji on a message: how many chose it and whether the current user did (SPEC-015 AC-015-5). */
+export interface ReactionSummary {
+    emoji: string;
+    count: number;
+    reactedByMe: boolean;
+}
+
+/** PUT/DELETE .../reaction response: the caller's view of the message's reactions after the change. */
+export interface MessageReactionsResponse {
+    messageId: string;
+    reactions: ReactionSummary[];
+}
+
+/** `REACTION_UPDATED` frame on `/topic/rooms/{roomId}` (AC-015-7): counts only, `reactedByMe` is per client. */
+export interface ReactionUpdatedEvent {
+    event: "REACTION_UPDATED";
+    messageId: string;
+    summary: { emoji: string; count: number }[];
+}
+
+/** One entry of GET .../reactions (AC-015-6). */
+export interface Reactor {
+    userId: string;
+    displayName: string;
+    emoji: string;
+    createdAt: string;
+}
+
+/** Who reacted, newest first; `nextCursor` requests strictly older entries. */
+export interface ReactorPageResponse {
+    reactions: Reactor[];
+    nextCursor: string | null;
+    hasMore: boolean;
+}
+
+/**
+ * The quote above a reply (SPEC-014 AC-014-3). `preview` is "" for non-text targets (show `type`) and null once the
+ * original is deleted (show "Original message unavailable", AC-014-5).
+ */
+export interface ReplyTo {
+    messageId: string;
+    senderId: string;
+    senderName: string;
+    preview: string | null;
+    type: MessageType;
+}
+
+/** GET /api/v1/rooms/{roomId}/messages/{messageId}/context (SPEC-014 AC-014-6), oldest first. */
+export interface MessageContextResponse {
+    messages: MessageResponse[];
+    targetId: string;
+    hasBefore: boolean;
+    hasAfter: boolean;
+    /** A history `before` cursor for messages older than this window. */
+    beforeCursor: string | null;
+    afterCursor: string | null;
 }
 
 /** One page of GET /api/v1/rooms/{roomId}/messages (CM-044), oldest message first. */

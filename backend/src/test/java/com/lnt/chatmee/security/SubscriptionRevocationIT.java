@@ -148,7 +148,7 @@ class SubscriptionRevocationIT {
         mvc.perform(delete("/api/v1/rooms/" + roomId).with(oauth2Login().oauth2User(principal(owner)))
                 .with(csrf().asHeader())).andExpect(status().isOk());
         publishRoomAndTyping("after-delete");
-        messaging.convertAndSend("/topic/presence", (Object) Map.of("marker", "connection-alive"));
+        messaging.convertAndSend("/topic/presence", (Object) Map.of("marker", "connection-alive", "userId", member.getId(), "online", true));
 
         for (BlockingQueue<JsonNode> queue : rooms) {
             JsonNode deleted = take(queue);
@@ -178,7 +178,7 @@ class SubscriptionRevocationIT {
         publishRoomAndTyping("revoked");
         messaging.convertAndSend(topic(otherRoom), (Object) Map.of("marker", "other-room"));
         messaging.convertAndSend(topic(otherRoom) + "/typing", (Object) Map.of("marker", "other-typing"));
-        messaging.convertAndSend("/topic/presence", (Object) Map.of("marker", "presence"));
+        messaging.convertAndSend("/topic/presence", (Object) Map.of("marker", "presence", "userId", member.getId(), "online", true));
         messaging.convertAndSendToUser(member.getId(), "/queue/errors", Map.of("marker", "private-error"));
 
         assertThat(take(other).path("marker").asString()).isEqualTo("other-room");
@@ -244,7 +244,7 @@ class SubscriptionRevocationIT {
     }
 
     private StompSession connect(User user) throws Exception {
-        String token = tokens.issueToken(user.getId());
+        String token = tokens.issueToken(user.getId(), new org.springframework.mock.web.MockHttpSession());
         issuedTokens.add(token);
         StompHeaders headers = new StompHeaders();
         headers.set("X-WS-Token", token);
@@ -281,7 +281,9 @@ class SubscriptionRevocationIT {
         // Simple broker receipts are unsupported; an exact probe proves subscription readiness.
         long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(10);
         while (System.nanoTime() < deadline) {
-            if (userId == null) messaging.convertAndSend(destination, (Object) Map.of("subscriptionReady", probe));
+            if ("/topic/presence".equals(destination)) messaging.convertAndSend(destination,
+                    (Object) Map.of("subscriptionReady", probe, "userId", member.getId(), "online", true));
+            else if (userId == null) messaging.convertAndSend(destination, (Object) Map.of("subscriptionReady", probe));
             else messaging.convertAndSendToUser(userId, destination.substring("/user".length()), Map.of("subscriptionReady", probe));
             if (probe.equals(readiness.poll(100, TimeUnit.MILLISECONDS))) return received;
         }
@@ -328,8 +330,12 @@ class SubscriptionRevocationIT {
             .with(oauth2Login().oauth2User(principal(owner))).with(csrf().asHeader()))
             .andExpect(status().isNoContent());
         for (var queue : events) {
-            var event = take(queue);
-            assertThat(event.path("type").asString()).isEqualTo("ROOM_REMOVED");
+            var delivered = List.of(take(queue), take(queue));
+            assertThat(delivered.stream().map(value -> value.path("type").asString()).toList())
+                .containsExactlyInAnyOrder("PRESENCE_SCOPE_CHANGED", "ROOM_REMOVED");
+            var scope = delivered.stream().filter(value -> "PRESENCE_SCOPE_CHANGED".equals(value.path("type").asString())).findFirst().orElseThrow();
+            assertThat(scope.path("payload").isEmpty()).isTrue();
+            var event = delivered.stream().filter(value -> "ROOM_REMOVED".equals(value.path("type").asString())).findFirst().orElseThrow();
             assertThat(event.path("payload").path("reason").asString()).isEqualTo("REMOVED");
             assertThat(event.path("payload").path("roomId").asString()).isEqualTo(roomId);
         }
@@ -340,6 +346,9 @@ class SubscriptionRevocationIT {
         publishRoomAndTyping("after-removal");
         assertThat(take(room).path("marker").asString()).isEqualTo("after-removal");
         for (var queue : revoked) assertSilent(queue);
+        var scopeChanged = take(ownerEvents);
+        assertThat(scopeChanged.path("type").asString()).isEqualTo("PRESENCE_SCOPE_CHANGED");
+        assertThat(scopeChanged.path("payload").isEmpty()).isTrue();
         assertSilent(ownerEvents);
         assertThat(participants.isUserParticipant(roomId, member.getId())).isFalse();
         for (var session : sessions) assertThat(session.isConnected()).isTrue();

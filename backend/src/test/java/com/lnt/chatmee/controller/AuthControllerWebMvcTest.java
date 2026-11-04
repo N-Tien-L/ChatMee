@@ -73,7 +73,7 @@ class AuthControllerWebMvcTest extends SecuredWebMvcTestSupport {
 
     @Test
     void getWsToken_authenticatedWithCsrf_returnsUncachedToken() throws Exception {
-        when(wsTokenService.issueToken(any())).thenReturn("token-123");
+        when(wsTokenService.issueToken(any(), any())).thenReturn("token-123");
 
         mvc.perform(post("/api/v1/auth/ws-token").with(oauth2Login().oauth2User(com.lnt.chatmee.support.TestUsers.principal("u1"))).with(csrf().asHeader()))
                 .andExpect(status().isOk())

@@ -1,6 +1,8 @@
 import React from "react";
 import { Button } from "../ui/button";
 import { Send } from "lucide-react";
+import type { ReplyTo } from "@/lib/types";
+import { ReplyChip } from "./ReplyQuote";
 
 /** Server limit after trim (AC-004-3): 1-5000 characters. */
 export const MESSAGE_MAX_LENGTH = 5000;
@@ -17,6 +19,9 @@ interface MessageInputProps {
   pausedHint?: string | null;
   /** Locks the text field itself, for example after the one message of a pending DM request (SPEC-009 AC-009-10). */
   inputDisabled?: boolean;
+  /** The message being replied to; shows the chip above the field (SPEC-014 AC-014-7). */
+  replyTo?: Pick<ReplyTo, "senderName" | "preview" | "type"> | null;
+  onCancelReply?: () => void;
 }
 
 const MESSAGE_INPUT_ID = "chat-message-input";
@@ -29,9 +34,16 @@ const MessageInput: React.FC<MessageInputProps> = ({
   inputRef,
   pausedHint = null,
   inputDisabled = false,
+  replyTo = null,
+  onCancelReply,
 }) => {
   // Enter sends, Shift+Enter inserts a newline; Enter while an IME is composing is left alone.
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (e.key === "Escape" && replyTo && onCancelReply) {
+      e.preventDefault();
+      onCancelReply();
+      return;
+    }
     if (e.key !== "Enter" || e.shiftKey || e.nativeEvent.isComposing) return;
     e.preventDefault();
     if (!disabled) e.currentTarget.form?.requestSubmit();
@@ -42,6 +54,7 @@ const MessageInput: React.FC<MessageInputProps> = ({
       <p role="status" aria-live="polite" className="empty:hidden mb-1.5 text-xs text-warning">
         {pausedHint}
       </p>
+      {replyTo && onCancelReply && !inputDisabled && <ReplyChip replyTo={replyTo} onCancel={onCancelReply} />}
       <form
         onSubmit={onSubmit}
         className="flex items-end gap-2 rounded-2xl border border-border bg-card p-2 pl-4 shadow-[0_8px_30px_-12px_rgb(15_31_28/0.18)] transition-shadow focus-within:border-ring focus-within:shadow-[0_8px_40px_-10px_rgb(18_160_138/0.35)] focus-within:ring-[3px] focus-within:ring-ring/20"

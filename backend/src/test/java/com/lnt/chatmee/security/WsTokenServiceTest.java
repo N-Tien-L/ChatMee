@@ -48,7 +48,7 @@ class WsTokenServiceTest {
     private final ValueOperations<String, String> values = mock(ValueOperations.class);
     private final UserRepository users = mock(UserRepository.class);
     private final String principal = "internal-user";
-    private final WsTokenService tokens = new WsTokenService(redis, users);
+    private final WsTokenService tokens = new WsTokenService(redis, users, new WsSessionRegistry(redis));
 
     @BeforeEach
     void setUp() {
@@ -59,11 +59,11 @@ class WsTokenServiceTest {
     void issueToken_authenticatedUser_storesInternalIdWithSixtySecondTtl() {
         when(users.findById(principal))
                 .thenReturn(Optional.of(User.builder().id("internal-user").build()));
-        String token = tokens.issueToken(principal);
+        String token = tokens.issueToken(principal, new org.springframework.mock.web.MockHttpSession());
         assertTrue(Base64.getUrlDecoder().decode(token).length >= 16);
         assertTrue(token.matches("[A-Za-z0-9_-]+"));
         verify(values).set("ws-token:" + token, "internal-user", Duration.ofSeconds(60));
-        String secondToken = tokens.issueToken(principal);
+        String secondToken = tokens.issueToken(principal, new org.springframework.mock.web.MockHttpSession());
         assertNotEquals(token, secondToken);
     }
 
@@ -78,14 +78,14 @@ class WsTokenServiceTest {
 
     @Test
     void issueToken_missingPrincipal_rejectsWithoutWritingToken() {
-        assertThrows(BadCredentialsException.class, () -> tokens.issueToken(null));
+        assertThrows(BadCredentialsException.class, () -> tokens.issueToken(null, new org.springframework.mock.web.MockHttpSession()));
         verifyNoInteractions(values, users);
     }
 
     @Test
     void issueToken_unknownUser_rejectsWithoutWritingToken() {
         when(users.findById(principal)).thenReturn(Optional.empty());
-        assertThrows(BadCredentialsException.class, () -> tokens.issueToken(principal));
+        assertThrows(BadCredentialsException.class, () -> tokens.issueToken(principal, new org.springframework.mock.web.MockHttpSession()));
         verifyNoInteractions(values);
     }
 
@@ -134,12 +134,12 @@ class WsTokenServiceTest {
 
         @Test
         void getWsToken_authenticatedSession_returnsUncachedToken() throws Exception {
-            when(endpointTokens.issueToken(anyString())).thenReturn("issued-token");
+            when(endpointTokens.issueToken(anyString(), any())).thenReturn("issued-token");
             mvc.perform(post("/api/v1/auth/ws-token").with(oauth2Login().oauth2User(com.lnt.chatmee.support.TestUsers.principal("u1"))).with(csrf().asHeader()))
                     .andExpect(status().isOk())
                     .andExpect(header().string("Cache-Control", "no-store"))
                     .andExpect(jsonPath("$.token").value("issued-token"));
-            verify(endpointTokens).issueToken(anyString());
+            verify(endpointTokens).issueToken(anyString(), any());
             verifyNoInteractions(endpointUsers, endpointProfiles);
         }
     }

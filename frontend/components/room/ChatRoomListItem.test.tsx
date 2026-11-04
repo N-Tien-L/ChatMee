@@ -3,6 +3,7 @@ import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/re
 import { useChatRoomsStore } from '@/lib/stores/chatRoomsStore';
 import ChatRoomListItem from './ChatRoomListItem';
 import { useAuthStore } from '@/lib/stores/authStore';
+import { useDraftStore } from '@/lib/stores/draftStore';
 import { ChatRoom, ParticipantRole, RoomSettings, RoomType } from '@/lib/types';
 
 vi.mock('./RoomPanel', () => ({ RoomPanel: () => null }));
@@ -37,6 +38,16 @@ describe('ChatRoomListItem', () => {
     it('render_otherUsersLastMessage_showsSenderNamePrefixedPreview', () => {
         renderRow({ lastMessage: { id: 'm', senderId: 'u1', senderName: 'Alice', preview: 'hello', createdAt: '2026-02-01T00:00:00Z' } });
         expect(screen.getByText('Alice: hello')).toBeTruthy();
+    });
+
+    it('roomsList_draftAndUnread_showsBadgeAndDraftPreview', () => {
+        useDraftStore.setState({ texts: { r1: 'half typed' } });
+        renderRow({ unreadCount: 2, lastMessage: { id: 'm', senderId: 'u1', senderName: 'Alice', preview: 'hello', createdAt: '2026-02-01T00:00:00Z' } });
+        expect(screen.getByText('2')).toBeTruthy();
+        expect(screen.getByText(/Draft:/)).toBeTruthy();
+        expect(screen.getByText(/half typed/)).toBeTruthy();
+        expect(screen.queryByText('Alice: hello')).toBeNull();
+        useDraftStore.setState({ texts: {} });
     });
 
     it('render_unreadMessages_showsBadgeAndBoldName', () => {

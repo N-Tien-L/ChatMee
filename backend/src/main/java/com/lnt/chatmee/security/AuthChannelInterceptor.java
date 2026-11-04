@@ -48,6 +48,7 @@ public class AuthChannelInterceptor implements ChannelInterceptor {
             if (userId == null || userId.isBlank()) {
                 throw new BadCredentialsException("Invalid or expired WebSocket token");
             }
+            wsTokenService.bindSocket(token, userId, accessor.getSessionId());
             Principal principal = () -> userId;
             accessor.setUser(principal);
         }
@@ -57,6 +58,7 @@ public class AuthChannelInterceptor implements ChannelInterceptor {
             if (principal == null || principal.getName() == null || principal.getName().isBlank()) {
                 throw new BadCredentialsException("WebSocket authentication required");
             }
+            wsTokenService.requireSocket(accessor.getSessionId());
             if (StompCommand.SUBSCRIBE.equals(accessor.getCommand())) {
                 authorizeSubscription(accessor.getDestination(), principal.getName());
             } else if (!isSendAllowed(accessor.getDestination())) {

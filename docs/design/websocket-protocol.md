@@ -96,6 +96,23 @@ finds those strings, migrate them separately only after establishing the origina
 writer's timezone; do not guess UTC or apply a blanket seven-hour adjustment.
 BSON Date retains millisecond precision; JSON Instant can retain nanoseconds.
 
+### Reply payload (SPEC-014, CM-114)
+`ChatMessageRequest` accepts an optional `replyToMessageId` (max 64 chars) on `/app/chat.sendMessage`; there is no new
+destination and the send keeps its rate limit. After the membership checks the server reads the target; a missing,
+foreign-room or deleted target stores nothing and sends `{tempId, code: VALIDATION_FAILED,
+message: "Validation failed: replyToMessageId"}` to the sending session only. Any client-supplied `replyTo` is
+ignored. The room broadcast and history carry `replyTo: {messageId, senderId, senderName, preview, type} | null`;
+`preview` is `null` once the target is deleted (clients render "Original message unavailable"). Older clients ignore
+the field.
+
+### Reaction updated event (SPEC-015, CM-117)
+After a reaction is set, changed or removed, `/topic/rooms/{roomId}` carries
+`{event: "REACTION_UPDATED", messageId, summary: [{emoji, count}]}` (top 6, counts only; `reactedByMe` is computed
+per client from its own action and history). No new destination. Message frames have no `event` field, which is how
+clients tell the two apart. **Clients before CM-118 parse every room frame as a message**, so the backend with
+CM-117 must not be deployed ahead of the CM-118 frontend. A failed publish is logged with ids only; history reloads
+are authoritative.
+
 ## Room deleted event (CM-028)
 
 Deleting a room is a soft delete (see `docs/design/data-model.md`). After the room
@@ -408,6 +425,9 @@ Full contracts are in the specs and in OpenAPI (`/v3/api-docs`, dev/local).
 | `POST /api/v1/reports` | AC-009-20 | CM-074 |
 | `POST /api/v1/rooms/{roomId}/hide` | AC-009-21: 204; DM members only; group rooms 400; non-member 404; per user | CM-075 implemented |
 | `PATCH /api/v1/rooms/{roomId}/members/{userId}/role` | AC-009-23 | CM-076 |
+| `PUT /api/v1/rooms/{roomId}/messages/{messageId}/reaction` `{emoji}`, `DELETE .../reaction` | AC-015-1, -3, -4: 200 `{messageId, reactions: [{emoji, count, reactedByMe}]}`; idempotent; invalid emoji or SYSTEM message 400; non-member, unknown room or message 404; blocked DM 403; HTTP rate limit 429 | CM-117 |
+| `GET /api/v1/rooms/{roomId}/messages/{messageId}/reactions?emoji=&cursor=&limit=` | AC-015-6: `{reactions: [{userId, displayName, emoji, createdAt}], nextCursor, hasMore}`, newest first, limit 20 (max 50), member-only 404 | CM-117 |
+| `GET /api/v1/rooms/{roomId}/messages/{messageId}/context?limit=n` | AC-014-6: target plus up to n (20, max 50) each side, oldest first; `targetId`, `hasBefore`, `hasAfter`, `beforeCursor` (a history `before` cursor), `afterCursor`; non-member, unknown room, unknown or deleted message 404 | CM-114 |
 
 ## Invitations (SPEC-009 AC-009-1..3, AC-009-5, CM-070 implemented)
 
@@ -494,3 +514,58 @@ Removal checks participant roles rather than createdBy, deletes the membership a
 then sends ROOM_REMOVED with reason REMOVED to all sessions of the removed user. CM-058's existing
 live outbound guard blocks subsequent room and typing frames, including the removal announcement,
 for that user; their connection and other subscriptions remain usable.
+
+## M1 current-session revocation (CM-102 / SPEC-011, candidate implementation)
+
+The v0 deferral above is historical. For this owner-authorized M1 candidate, each issued
+ws-token is privately bound to the current server HTTP session and each authenticated
+transport inherits that binding. The public token response and Redis user-ID value,
+single-use getAndDelete and 60-second TTL are unchanged. Unknown local bindings reject
+CONNECT, including after restart; restart still requires relogin.
+
+POST /logout invalidates only the current HTTP session. Its servlet destruction callback
+revokes pending tokens and closes all of its transports; independent sessions of the same
+account are unaffected. Session-ID rotation also ends old bindings. Inbound SEND/SUBSCRIBE
+and queued outbound MESSAGE delivery require a still-valid bound session. A one-second
+local sweep closes sockets at the HTTP idle deadline without refreshing HTTP activity.
+Rejected CSRF logout does not trigger invalidation. No session/token IDs enter frames/logs.
+
+Verification: WsSessionRegistryTest; existing token/interceptor/CSRF tests; all 13 auth
+E2Es, including actual idle expiry and two raw transports that never run client logout.
+This is candidate-local evidence, not a deployed-state or real-provider smoke claim.
+
+## M1 presence visibility (CM-103 / SPEC-011, implementation scope)
+
+GET /api/v1/online-users and every /topic/presence delivery are restricted to self or
+users sharing a currently active room. Requested-only DMs are not shared membership;
+hiding an active DM does not revoke membership. Authorization is rechecked after outbound
+queuing and fails closed on malformed payload/database failure. Redis registry state is
+internal; its global data is not the subscriber audience.
+
+PRESENCE_SCOPE_CHANGED `{type, payload:{}, occurredAt}` uses existing /user/queue/events.
+Only accounts affected by join/leave/removal receive it (current members plus
+the departing member). Existing ROOM_REMOVED already invalidates the captured deletion audience. It contains no other account's
+presence/room details and asks the client to replace its authorized snapshot. Reconnect
+and room lifecycle refetch remain recovery paths; there is no new destination or polling.
+
+## M1 same-account safety invalidation (CM-104 / SPEC-011)
+
+ACCOUNT_STATE_CHANGED `{type, payload:{scope:"BLOCKS"|"DM_REQUESTS"}, occurredAt}` uses
+existing /user/queue/events and is delivered only to the account making the decision.
+BLOCKS refreshes that account's rooms, Inbox, blocks and current user-search results;
+DM_REQUESTS refreshes its Inbox/rooms. Never notify the blocked account about who blocked
+it. Existing generic send refusal and sender ROOM_REMOVED remain authoritative. Missing
+events reconcile on reconnect. Refetch generations and logout cache reset must prevent
+old requests from repopulating private state in a subsequent session.
+
+
+## M1 inbound ordering (CM-105 / SPEC-011 / ADR-0008)
+
+For this candidate, the client inbound executor has one core/maximum worker and the
+existing FIFO capacity of 100. Handler work for a SUBSCRIBE precedes a following SEND.
+The original authentication/authorization ERROR and close handling remains in place.
+The historical receive-order deferral above is superseded for this small, single-process
+M1 audience. The native preserveReceiveOrder flag and adapter prototype are excluded.
+Slow controller/database work can block every inbound session; this is not a throughput
+or multi-instance guarantee. AuthChannelInterceptorTest.WireConnect's held-subscription
+test and the original multi-session STOMP/private-error/revocation ITs verify the choice.

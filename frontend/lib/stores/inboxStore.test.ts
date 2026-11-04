@@ -123,3 +123,104 @@ describe('inboxStore', () => {
         expect(useChatRoomsStore.getState().fetchRooms).toHaveBeenCalledTimes(1);
     });
 });
+
+it('fetchInbox_unrelatedRoomEventDuringColdLoad_preservesPendingLists', async () => {
+    let resolve!: (value: Awaited<ReturnType<typeof dmRequestApi.listMine>>) => void;
+    vi.mocked(invitationApi.listMine).mockResolvedValue({ success: true, data: [invitation] } as never);
+    vi.mocked(dmRequestApi.listMine).mockReturnValueOnce(new Promise(done => { resolve = done; }));
+    const pending = useInboxStore.getState().fetchInbox();
+    useInboxStore.getState().handleUserEvent({ type: 'ROOM_ADDED', payload: { room: { id: 'unrelated-group' } } });
+    resolve({ success: true, data: [request] } as never);
+    await pending;
+    expect(useInboxStore.getState().invitations).toEqual([invitation]);
+    expect(useInboxStore.getState().requests).toEqual([request]);
+    expect(useInboxStore.getState().loading).toBe(false);
+});
+
+it('fetchInbox_newRequestDuringColdLoad_preservesOtherRowsAndLatestPreview', async () => {
+    let resolve!: (value: Awaited<ReturnType<typeof dmRequestApi.listMine>>) => void;
+    vi.mocked(invitationApi.listMine).mockResolvedValue({ success: true, data: [invitation] } as never);
+    vi.mocked(dmRequestApi.listMine).mockReturnValueOnce(new Promise(done => { resolve = done; }));
+    const pending = useInboxStore.getState().fetchInbox();
+    const latest = { ...request, preview: 'Live preview' };
+    const other = { ...request, roomId: 'dm-other' };
+    useInboxStore.getState().handleUserEvent({ type: 'DM_REQUEST_RECEIVED', payload: { request: latest } });
+    resolve({ success: true, data: [request, other] } as never);
+    await pending;
+    expect(useInboxStore.getState().invitations).toEqual([invitation]);
+    expect(useInboxStore.getState().requests).toEqual([latest, other]);
+});
+
+it('fetchInbox_decisionDuringSnapshot_removesOnlyDecidedRequest', async () => {
+    let resolve!: (value: Awaited<ReturnType<typeof dmRequestApi.listMine>>) => void;
+    vi.mocked(invitationApi.listMine).mockResolvedValue({ success: true, data: [invitation] } as never);
+    vi.mocked(dmRequestApi.listMine).mockReturnValueOnce(new Promise(done => { resolve = done; }));
+    vi.mocked(dmRequestApi.decline).mockResolvedValue(undefined);
+    useInboxStore.setState({ requests: [request] });
+    const pending = useInboxStore.getState().fetchInbox();
+    await useInboxStore.getState().declineRequest(request.roomId);
+    const other = { ...request, roomId: 'dm-other' };
+    resolve({ success: true, data: [request, other] } as never);
+    await pending;
+    expect(useInboxStore.getState().invitations).toEqual([invitation]);
+    expect(useInboxStore.getState().requests).toEqual([other]);
+});
+
+it('fetchInbox_invitationChangedDuringSnapshot_preservesOtherInvitationsAndRequests', async () => {
+    let resolve!: (value: Awaited<ReturnType<typeof invitationApi.listMine>>) => void;
+    vi.mocked(invitationApi.listMine).mockReturnValueOnce(new Promise(done => { resolve = done; }));
+    vi.mocked(dmRequestApi.listMine).mockResolvedValue({ success: true, data: [request] } as never);
+    const pending = useInboxStore.getState().fetchInbox();
+    useInboxStore.getState().handleUserEvent({ type: 'INVITATION_CHANGED', payload: { invitationId: invitation.id } });
+    const other = { ...invitation, id: 'other-invitation' };
+    resolve({ success: true, data: [invitation, other] } as never);
+    await pending;
+    expect(useInboxStore.getState().invitations).toEqual([other]);
+    expect(useInboxStore.getState().requests).toEqual([request]);
+});
+
+it('fetchInbox_invitationReceivedDuringSnapshot_preservesExistingRows', async () => {
+    let resolve!: (value: Awaited<ReturnType<typeof invitationApi.listMine>>) => void;
+    vi.mocked(invitationApi.listMine).mockReturnValueOnce(new Promise(done => { resolve = done; }));
+    vi.mocked(dmRequestApi.listMine).mockResolvedValue({ success: true, data: [request] } as never);
+    const pending = useInboxStore.getState().fetchInbox();
+    const added = { ...invitation, id: 'new-invitation' };
+    useInboxStore.getState().handleUserEvent({ type: 'INVITATION_RECEIVED', payload: { invitation: added } });
+    resolve({ success: true, data: [invitation] } as never);
+    await pending;
+    expect(useInboxStore.getState().invitations).toEqual([added, invitation]);
+    expect(useInboxStore.getState().requests).toEqual([request]);
+});
+
+it('fetchInbox_newerSnapshot_keepsOverlayAfterOlderResponseCompletes', async () => {
+    let old!: (value: Awaited<ReturnType<typeof dmRequestApi.listMine>>) => void;
+    let latest!: (value: Awaited<ReturnType<typeof dmRequestApi.listMine>>) => void;
+    vi.mocked(invitationApi.listMine).mockResolvedValue({ success: true, data: [] } as never);
+    vi.mocked(dmRequestApi.listMine).mockReturnValueOnce(new Promise(done => { old = done; }))
+        .mockReturnValueOnce(new Promise(done => { latest = done; }));
+    const first = useInboxStore.getState().fetchInbox();
+    const second = useInboxStore.getState().fetchInbox();
+    const updated = { ...request, preview: 'Latest event' };
+    useInboxStore.getState().handleUserEvent({ type: 'DM_REQUEST_RECEIVED', payload: { request: updated } });
+    old({ success: true, data: [] } as never);
+    await first;
+    expect(useInboxStore.getState().loading).toBe(true);
+    latest({ success: true, data: [request] } as never);
+    await second;
+    expect(useInboxStore.getState().requests).toEqual([updated]);
+    expect(useInboxStore.getState().loading).toBe(false);
+});
+
+it('fetchInbox_multipleLiveRows_keepsNewestCreatedFirst', async () => {
+    let resolve!: (value: Awaited<ReturnType<typeof dmRequestApi.listMine>>) => void;
+    vi.mocked(invitationApi.listMine).mockResolvedValue({ success: true, data: [] } as never);
+    vi.mocked(dmRequestApi.listMine).mockReturnValueOnce(new Promise(done => { resolve = done; }));
+    const pending = useInboxStore.getState().fetchInbox();
+    const newer = { ...request, roomId: 'dm-newer', createdAt: '2026-10-16T00:00:00Z' };
+    const newest = { ...request, roomId: 'dm-newest', createdAt: '2026-10-17T00:00:00Z' };
+    for (const value of [newer, newest])
+        useInboxStore.getState().handleUserEvent({ type: 'DM_REQUEST_RECEIVED', payload: { request: value } });
+    resolve({ success: true, data: [request] } as never);
+    await pending;
+    expect(useInboxStore.getState().requests).toEqual([newest, newer, request]);
+});

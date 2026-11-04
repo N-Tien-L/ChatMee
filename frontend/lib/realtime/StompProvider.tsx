@@ -1,11 +1,12 @@
 "use client";
 
-import { createContext, useContext, useEffect, useState, useSyncExternalStore } from "react";
+import { createContext, useContext, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import type { ReactNode } from "react";
 import axios from "axios";
 import { authApi } from "@/lib/api/authApi";
 import { chatRoomApi } from "@/lib/api/chatRoomApi";
 import { useAuthStore } from "@/lib/stores/authStore";
+import { useUsersStore } from "@/lib/stores/usersStore";
 import { useInboxStore } from "@/lib/stores/inboxStore";
 import { useChatRoomsStore } from "@/lib/stores/chatRoomsStore";
 import { PresenceMessage, useChatStore } from "@/lib/stores/chatStore";
@@ -38,6 +39,7 @@ async function fetchWsToken(): Promise<string> {
 export function StompProvider({ children }: { children: ReactNode }) {
     const isAuthenticated = useAuthStore(state => state.isAuthenticated);
     const userId = useAuthStore(state => state.user?.id);
+    const refreshPresence = useRef<(() => void) | null>(null);
     const [session] = useState(() => createStompSession({
         clientFactory: createStompClientFactory(process.env.NEXT_PUBLIC_WS_URL || "http://localhost:8080/ws"),
         getToken: fetchWsToken,
@@ -85,7 +87,33 @@ export function StompProvider({ children }: { children: ReactNode }) {
         }
         void useChatRoomsStore.getState().handleUserEvent(event);
         useInboxStore.getState().handleUserEvent(event);
+        if (typeof event === "object" && event !== null && "type" in event && event.type === "ACCOUNT_STATE_CHANGED" &&
+            "payload" in event && typeof event.payload === "object" && event.payload !== null && "scope" in event.payload &&
+            ["BLOCKS", "DM_REQUESTS"].includes(String(event.payload.scope))) {
+            void useChatRoomsStore.getState().fetchRooms();
+            void useInboxStore.getState().fetchInbox();
+            if (event.payload.scope === "BLOCKS") {
+                const users = useUsersStore.getState();
+                void users.fetchBlocks();
+                void users.fetchUsers(users.searchQuery);
+            }
+        }
+        if (typeof event === "object" && event !== null && "type" in event &&
+            ["ROOM_ADDED", "ROOM_REMOVED", "ROOM_UPDATED", "PRESENCE_SCOPE_CHANGED"].includes(String(event.type))) refreshPresence.current?.();
     }), [session]);
+
+    useEffect(() => {
+        if (!userId) return;
+        let active = true;
+        let request = 0;
+        refreshPresence.current = () => {
+            const current = ++request;
+            void chatRoomApi.getOnlineUsers().then(users => {
+                if (active && current === request) useChatStore.getState().setOnlineUsers(users);
+            }).catch(() => { /* The next membership change or connect retries. */ });
+        };
+        return () => { active = false; refreshPresence.current = null; };
+    }, [userId]);
 
     // Events are not replayed, so every connect (first and reconnect) refetches the room list and
     // the presence snapshot.
@@ -94,11 +122,7 @@ export function StompProvider({ children }: { children: ReactNode }) {
         const refetch = () => {
             void useChatRoomsStore.getState().fetchRooms();
             void useInboxStore.getState().fetchInbox();
-            chatRoomApi.getOnlineUsers()
-                .then(users => useChatStore.getState().setOnlineUsers(users))
-                .catch(() => {
-                    // Presence dots stay as they were; the next connect retries.
-                });
+            refreshPresence.current?.();
         };
         return session.onConnected(refetch);
     }, [session, userId]);

@@ -62,7 +62,7 @@ class CsrfSecurityTest {
             return null;
         }).when(rateLimitingFilter).doFilterInternal(any(HttpServletRequest.class), any(HttpServletResponse.class), any(FilterChain.class));
         
-        when(wsTokenService.issueToken(any())).thenReturn("mock-token");
+        when(wsTokenService.issueToken(any(), any())).thenReturn("mock-token");
 
         OAuth2User principal = com.lnt.chatmee.support.TestUsers.principal("u1");
         authToken = new OAuth2AuthenticationToken(principal, principal.getAuthorities(), "github");

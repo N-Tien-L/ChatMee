@@ -1,5 +1,7 @@
 package com.lnt.chatmee.service;
 
+import static org.mockito.Mockito.verifyNoMoreInteractions;
+
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -35,6 +37,7 @@ import com.lnt.chatmee.repository.UserRepository;
 class BlockServiceTest {
     @Mock UserBlockRepository blocks;
     @Mock UserRepository users;
+    @Mock UserEventPublisher userEvents;
 
     @InjectMocks BlockService service;
 
@@ -46,6 +49,8 @@ class BlockServiceTest {
 
         service.block("alice", "bob");
 
+        verify(userEvents).blocksChanged("alice");
+        verifyNoMoreInteractions(userEvents);
         verify(blocks).insert(argThat((UserBlock row) -> row.getBlockerId().equals("alice")
             && row.getBlockedId().equals("bob") && row.getCreatedAt() != null));
     }
@@ -92,6 +97,8 @@ class BlockServiceTest {
         service.unblock("alice", "bob");
 
         verify(blocks).deleteByBlockerIdAndBlockedId("alice", "bob");
+        verify(userEvents).blocksChanged("alice");
+        verifyNoMoreInteractions(userEvents);
     }
 
     @Test

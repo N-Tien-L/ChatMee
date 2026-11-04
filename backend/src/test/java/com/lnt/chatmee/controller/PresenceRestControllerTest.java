@@ -21,6 +21,6 @@ class PresenceRestControllerTest {
         }
         assertArrayEquals(new String[]{"/api/v1"}, PresenceRestController.class.getAnnotation(RequestMapping.class).value());
         assertArrayEquals(new String[]{"/online-users"}, PresenceRestController.class
-                .getDeclaredMethod("getOnlineUsers").getAnnotation(GetMapping.class).value());
+                .getDeclaredMethod("getOnlineUsers", com.lnt.chatmee.security.UserPrincipal.class).getAnnotation(GetMapping.class).value());
     }
 }

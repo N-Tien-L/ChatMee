@@ -1,4 +1,4 @@
-import { Message, MessageResponse } from "@/lib/types"
+import { Message, MessageResponse, ReactionSummary } from "@/lib/types"
 import { mergeResyncedMessages } from "@/lib/utils/messageUtils";
 
 export type MessageState = {
@@ -26,7 +26,9 @@ export type MessageAction =
     | { type: "RESEND_MESSAGE"; payload: { tempId: string; message: Message } }
     | { type: "DISCARD_MESSAGE"; payload: { tempId: string } }
     | { type: "RECEIVE_WEBSOCKET_MESSAGE"; payload: { message: Message; userId?: string } }
-    | { type: "RESYNC"; payload: { messages: MessageResponse[]; userId?: string } };
+    | { type: "RESYNC"; payload: { messages: MessageResponse[]; userId?: string } }
+    /** Replaces one loaded message's reactions (optimistic change, server response or room event; SPEC-015). */
+    | { type: "SET_REACTIONS"; payload: { messageId: string; reactions: ReactionSummary[] } };
 
 export const initialState: MessageState = {
     messages: [],
@@ -52,6 +54,7 @@ export function messageReducer(state: MessageState, action: MessageAction): Mess
             return {
                 ...state,
                 loading: false,
+                loadingOlder: false,
                 error: null,
                 messages: mergeResyncedMessages(state.messages, action.payload.messages, action.payload.userId),
                 hasMoreMessages: action.payload.hasMore,
@@ -147,9 +150,19 @@ export function messageReducer(state: MessageState, action: MessageAction): Mess
             return {
                 ...state,
                 loading: false,
+                loadingOlder: false,
                 error: null,
                 messages: mergeResyncedMessages(state.messages, action.payload.messages, action.payload.userId),
             };
+
+        case "SET_REACTIONS": {
+            const { messageId, reactions } = action.payload;
+            if (!state.messages.some((m) => m.id === messageId)) return state;
+            return {
+                ...state,
+                messages: state.messages.map((m) => (m.id === messageId ? { ...m, reactions } : m)),
+            };
+        }
 
         default:
             return state;

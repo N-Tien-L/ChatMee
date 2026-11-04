@@ -159,6 +159,7 @@ public class DirectMessageRequestService {
         }
         closeRoom(request.getRoomId());
         userEvents.roomRemoved(Set.of(request.getInviterId()), roomId, "DECLINED");
+        userEvents.dmRequestsChanged(callerId);
         logger.info("DM request {} declined by {} for room {}", request.getId(), callerId, roomId);
     }
 

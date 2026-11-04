@@ -20,8 +20,9 @@ public class WsTokenService {
     private final SecureRandom random = new SecureRandom();
     private final StringRedisTemplate redisTemplate;
     private final UserRepository userRepository;
+    private final WsSessionRegistry sessionRegistry;
 
-    public String issueToken(String userId) {
+    public String issueToken(String userId, jakarta.servlet.http.HttpSession session) {
         if (userId == null || userRepository.findById(userId).isEmpty()) {
             throw new BadCredentialsException("Authenticated user not found");
         }
@@ -29,8 +30,22 @@ public class WsTokenService {
         random.nextBytes(bytes);
         String token = Base64.getUrlEncoder().withoutPadding().encodeToString(bytes);
         redisTemplate.opsForValue().set(KEY_PREFIX + token, userId, TOKEN_TTL);
+        try { sessionRegistry.registerToken(token, userId, session); }
+        catch (BadCredentialsException invalid) {
+            try { redisTemplate.delete(KEY_PREFIX + token); }
+            catch (org.springframework.dao.DataAccessException unavailable) {
+                // The local binding was rejected; the Redis key expires within the original TTL.
+            }
+            throw invalid;
+        }
         return token;
     }
+
+    public void bindSocket(String token, String userId, String socketId) {
+        sessionRegistry.bindToken(token, userId, socketId);
+    }
+
+    public void requireSocket(String socketId) { sessionRegistry.requireSocket(socketId); }
 
     public String consumeToken(String token) {
         return redisTemplate.opsForValue().getAndDelete(KEY_PREFIX + token);

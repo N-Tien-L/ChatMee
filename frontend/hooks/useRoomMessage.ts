@@ -4,7 +4,8 @@ import { messageApi } from "@/lib/api/messageApi";
 import { chatRoomApi } from "@/lib/api/chatRoomApi";
 import { useAuthStore } from "@/lib/stores/authStore";
 import { useChatRoomsStore } from "@/lib/stores/chatRoomsStore";
-import { Message, MessageResponse, MessageType } from "@/lib/types";
+import { Message, MessageResponse, MessageType, ReactionSummary, ReactionUpdatedEvent, ReplyTo } from "@/lib/types";
+import { applyMyReaction, fromRoomEvent, myReaction } from "@/lib/utils/reactions";
 import {
     deduplicateMessages,
     matchResyncedPending,
@@ -16,6 +17,7 @@ import {
 import { initialState, messageReducer } from "./reducers/messageReducer";
 
 // Cache messages per room for current session
+let cacheEpoch = 0;
 const sessionCache = new Map<
     string,
     { messages: MessageResponse[]; hasMoreMessages: boolean; nextCursor: string | null; lastLoaded: number }
@@ -23,8 +25,19 @@ const sessionCache = new Map<
 
 /** Drops every cached room page; called on logout so the next account never sees them. */
 export function resetRoomMessageCache(): void {
+    cacheEpoch++;
     sessionCache.clear();
 }
+
+/** Keeps a cached copy's reactions in step, so reopening the room does not show older counts. */
+const patchCachedReactions = (key: string, messageId: string, reactions: ReactionSummary[]) => {
+    const cached = sessionCache.get(key);
+    if (!cached || !cached.messages.some((m) => m.id === messageId)) return;
+    sessionCache.set(key, {
+        ...cached,
+        messages: cached.messages.map((m) => (m.id === messageId ? { ...m, reactions } : m)),
+    });
+};
 
 /** Where loadOlder continues for the open room; replaced on every room change. */
 type Paging = { roomId: string; nextCursor: string | null; hasMore: boolean; inFlight: boolean };
@@ -60,6 +73,17 @@ interface RoomMessagesOptions {
 export const useRoomMessages = (roomId: string, options: RoomMessagesOptions = {}) => {
     const [state, dispatch] = useReducer(messageReducer, initialState)
     const { user } = useAuthStore();
+    const userId = user?.id;
+    const cacheKey = `${userId ?? "guest"}:${roomId}`;
+    const generation = useRef(0);
+    const initialLoaded = useRef(false);
+    const confirmedHead = useRef<string | undefined>(undefined);
+    const recoveryRef = useRef<{
+        anchor: string | undefined; before?: string; pages: MessageResponse[];
+        seen: Set<string>; busy: boolean; retryAt: number; stopped: boolean;
+    } | null>(null);
+    const [recovery, setRecovery] = useState<"idle" | "loading" | "incomplete" | "error" | "stopped">("idle");
+    const [recoveryError, setRecoveryError] = useState<string | null>(null);
     const pendingTimers = useRef(new Map<string, ReturnType<typeof setTimeout>>());
     // Latest messages for callbacks (resend, resync) without re-creating them on every message.
     const messagesRef = useRef(state.messages);
@@ -77,6 +101,16 @@ export const useRoomMessages = (roomId: string, options: RoomMessagesOptions = {
         pendingTimers.current.delete(tempId);
     }, []);
 
+    // Reactions (SPEC-015): the latest request per message; older responses and events during a request are ignored.
+    const reactionSeq = useRef(0);
+    const reactionsInFlight = useRef(new Map<string, number>());
+    const setReactions = useCallback((messageId: string, reactions: ReactionSummary[]) => {
+        const action = { type: "SET_REACTIONS" as const, payload: { messageId, reactions } };
+        messagesRef.current = messageReducer({ ...initialState, messages: messagesRef.current }, action).messages;
+        dispatch(action);
+        patchCachedReactions(cacheKey, messageId, reactions);
+    }, [cacheKey]);
+
     // Kept outside the reducer so two scroll events before the next render cannot send the same
     // cursor twice, and so a page that arrives after a room switch is recognised and ignored.
     const pagingRef = useRef<Paging>({ roomId, nextCursor: null, hasMore: false, inFlight: false });
@@ -88,14 +122,22 @@ export const useRoomMessages = (roomId: string, options: RoomMessagesOptions = {
 
     useEffect(() => {
         // History loads merge into what is on screen, so a new room must start empty.
+        generation.current++;
+        initialLoaded.current = false;
+        confirmedHead.current = undefined;
+        recoveryRef.current = null;
+        setRecovery("idle");
+        setRecoveryError(null);
+        messagesRef.current = [];
         dispatch({ type: "RESET" });
         pagingRef.current = { roomId, nextCursor: null, hasMore: false, inFlight: false };
         const timers = pendingTimers.current;
         return () => {
+            generation.current++;
             timers.forEach(clearTimeout);
             timers.clear();
         };
-    }, [roomId]);
+    }, [roomId, userId]);
     const {
         connected,
         connecting,
@@ -106,16 +148,27 @@ export const useRoomMessages = (roomId: string, options: RoomMessagesOptions = {
         getLastReconnectAt,
     } = useWebSocket();
 
+    // Freeze the head while disconnected or recovering: a live frame from the new
+    // connection must not become the overlap anchor ahead of an unresolved gap.
+    useEffect(() => {
+        if (connected && recovery === "idle" && initialLoaded.current) {
+            confirmedHead.current = mergeResyncedMessages(state.messages, [], userId).filter(m => !m.isOptimistic && m.id).at(-1)?.id;
+        }
+    }, [connected, recovery, state.messages, userId]);
+
     // Effect for loading the newest page (from cache or API)
     useEffect(() => {
         let active = true;
+        const requestGeneration = generation.current;
+        const epoch = cacheEpoch;
         const loadMessages = async () => {
-            if (!roomId) return;
+            if (!roomId || !userId) return;
             const paging = pagingRef.current;
 
             // A cache filled before the last reconnect may miss messages sent while disconnected.
-            const cached = sessionCache.get(roomId);
+            const cached = sessionCache.get(cacheKey);
             if (cached && cached.lastLoaded >= getLastReconnectAt()) {
+                initialLoaded.current = true;
                 paging.nextCursor = cached.nextCursor;
                 paging.hasMore = cached.hasMoreMessages;
                 dispatch({
@@ -124,7 +177,7 @@ export const useRoomMessages = (roomId: string, options: RoomMessagesOptions = {
                         messages: cached.messages,
                         hasMore: cached.hasMoreMessages,
                         nextCursor: cached.nextCursor,
-                        userId: user?.id,
+                        userId,
                     }
                 })
                 return;
@@ -133,20 +186,21 @@ export const useRoomMessages = (roomId: string, options: RoomMessagesOptions = {
             dispatch({ type: "FETCH_START" });
             try {
                 const res = await messageApi.getMessages(roomId);
-                if (!active) return;
+                if (!active || requestGeneration !== generation.current || epoch !== cacheEpoch) return;
                 if (!res.success) throw new Error(res.message || "Failed to load messages");
 
+                initialLoaded.current = true;
                 const unique = deduplicateMessages(res.data?.messages ?? []);
                 const nextCursor = res.data?.nextCursor ?? null;
                 const hasMore = !!res.data?.hasMore && nextCursor !== null;
                 paging.nextCursor = nextCursor;
                 paging.hasMore = hasMore;
-                dispatch({ type: "FETCH_SUCCESS", payload: { messages: unique, hasMore, nextCursor, userId: user?.id } });
-                sessionCache.set(roomId, {
+                dispatch({ type: "FETCH_SUCCESS", payload: { messages: unique, hasMore, nextCursor, userId } });
+                sessionCache.set(cacheKey, {
                     messages: unique, hasMoreMessages: hasMore, nextCursor, lastLoaded: Date.now(),
                 });
             } catch (err: unknown) {
-                if (!active) return;
+                if (!active || requestGeneration !== generation.current || epoch !== cacheEpoch) return;
                 paging.nextCursor = null;
                 paging.hasMore = false;
                 dispatch({ type: "FETCH_ERROR", payload: errorText(err, "Failed to load messages") });
@@ -157,7 +211,7 @@ export const useRoomMessages = (roomId: string, options: RoomMessagesOptions = {
         return () => {
             active = false;
         };
-    }, [roomId, user?.id, getLastReconnectAt, reloadCount]);
+    }, [roomId, userId, cacheKey, getLastReconnectAt, reloadCount]);
 
     /** Retries the initial history load after a failure. */
     const reload = useCallback(() => setReloadCount((count) => count + 1), []);
@@ -168,12 +222,14 @@ export const useRoomMessages = (roomId: string, options: RoomMessagesOptions = {
      */
     const loadOlder = useCallback(async () => {
         const paging = pagingRef.current;
-        if (paging.roomId !== roomId || paging.inFlight || !paging.hasMore || !paging.nextCursor) return;
+        const epoch = cacheEpoch;
+        const requestGeneration = generation.current;
+        if (recoveryRef.current || paging.roomId !== roomId || paging.inFlight || !paging.hasMore || !paging.nextCursor) return;
         paging.inFlight = true;
         dispatch({ type: "LOAD_OLDER_START" });
         try {
             const res = await messageApi.getMessages(roomId, { before: paging.nextCursor });
-            if (pagingRef.current !== paging) return;
+            if (pagingRef.current !== paging || epoch !== cacheEpoch || requestGeneration !== generation.current) return;
             if (!res.success || !res.data) throw new Error(res.message || "Failed to load older messages");
 
             const older = deduplicateMessages(res.data.messages ?? []);
@@ -181,10 +237,10 @@ export const useRoomMessages = (roomId: string, options: RoomMessagesOptions = {
             const hasMore = res.data.hasMore && nextCursor !== null;
             paging.nextCursor = nextCursor;
             paging.hasMore = hasMore;
-            dispatch({ type: "LOAD_OLDER_SUCCESS", payload: { messages: older, hasMore, nextCursor, userId: user?.id } });
-            const cached = sessionCache.get(roomId);
+            dispatch({ type: "LOAD_OLDER_SUCCESS", payload: { messages: older, hasMore, nextCursor, userId } });
+            const cached = sessionCache.get(cacheKey);
             if (cached) {
-                sessionCache.set(roomId, {
+                sessionCache.set(cacheKey, {
                     ...cached,
                     messages: mergeResyncedMessages(cached.messages, older),
                     hasMoreMessages: hasMore,
@@ -192,52 +248,119 @@ export const useRoomMessages = (roomId: string, options: RoomMessagesOptions = {
                 });
             }
         } catch (err: unknown) {
-            if (pagingRef.current !== paging) return;
+            if (pagingRef.current !== paging || epoch !== cacheEpoch || requestGeneration !== generation.current) return;
             dispatch({ type: "LOAD_OLDER_ERROR", payload: errorText(err, "Failed to load older messages") });
         } finally {
             paging.inFlight = false;
         }
-    }, [roomId, user?.id]);
+    }, [roomId, userId, cacheKey]);
 
-    // Resync after a reconnect: refetch the newest page and merge it by message id. Older pages
-    // already on screen are kept, and so is the cursor to page further back.
-    useEffect(() => {
-        if (!roomId) return;
-        let active = true;
-        const removeListener = onReconnect(() => {
-            void (async () => {
-                try {
-                    const res = await messageApi.getMessages(roomId);
-                    if (!active || !res.success || !Array.isArray(res.data?.messages)) return;
-                    const latest = deduplicateMessages(res.data.messages);
-                    // Pending messages saved while the confirmation was lost are confirmed, not failed.
-                    matchResyncedPending(messagesRef.current, latest, user?.id)
-                        .forEach((_, tempId) => clearPendingTimer(tempId));
-                    dispatch({ type: "RESYNC", payload: { messages: latest, userId: user?.id } });
-                    const cached = sessionCache.get(roomId);
-                    sessionCache.set(roomId, {
-                        messages: mergeResyncedMessages(cached?.messages ?? [], latest),
-                        hasMoreMessages: cached ? cached.hasMoreMessages : res.data.hasMore && res.data.nextCursor !== null,
-                        nextCursor: cached ? cached.nextCursor : res.data.nextCursor ?? null,
-                        lastLoaded: Date.now(),
-                    });
-                } catch {
-                    // Keep the current messages; the next reconnect or room open retries.
+    // Buffered history is published only when it reaches the saved contiguous segment.
+    // Live frames remain visible and the banner marks the conversation incomplete meanwhile.
+    const recover = useCallback(async (restart = false) => {
+        if (!roomId || !userId) return;
+        const previous = recoveryRef.current;
+        if (previous?.stopped) return;
+        if (!restart && previous?.busy) return;
+        const token = restart ? ++generation.current : generation.current;
+        const epoch = cacheEpoch;
+        const run = restart || !previous ? {
+            anchor: previous ? previous.anchor : initialLoaded.current
+                ? confirmedHead.current : undefined,
+            before: undefined as string | undefined, pages: [] as MessageResponse[],
+            seen: new Set<string>(), busy: false, retryAt: previous?.retryAt ?? 0, stopped: false,
+        } : previous;
+        recoveryRef.current = run;
+        if (restart) {
+            // An older request can remain unresolved after a new connection succeeds.
+            pagingRef.current = { ...pagingRef.current, inFlight: false };
+        }
+        if (Date.now() < run.retryAt) return;
+        // Incomplete pages must never become a reusable contiguous cache.
+        sessionCache.delete(cacheKey);
+        const valid = () => recoveryRef.current === run && token === generation.current && epoch === cacheEpoch;
+        run.busy = true;
+        setRecovery("loading");
+        setRecoveryError(null);
+        try {
+            for (let count = 0; count < 10; count++) {
+                const res = run.before
+                    ? await messageApi.getMessages(roomId, { before: run.before })
+                    : await messageApi.getMessages(roomId);
+                if (!valid()) return;
+                if (!res.success || !Array.isArray(res.data?.messages)) throw new Error("Could not recover messages");
+                const page = res.data;
+                const complete = !run.anchor || page.messages.some(m => m.id === run.anchor) || !page.hasMore;
+                if (!complete && (!page.nextCursor || run.seen.has(page.nextCursor))) {
+                    throw new Error("History cursor did not advance. Retry recovery.");
                 }
-            })();
-        });
-        return () => {
-            active = false;
-            removeListener();
-        };
-    }, [roomId, user?.id, onReconnect, clearPendingTimer]);
+                run.pages = deduplicateMessages([...page.messages, ...run.pages]);
+                if (complete) {
+                    matchResyncedPending(messagesRef.current, run.pages, userId)
+                        .forEach((_, tempId) => clearPendingTimer(tempId));
+                    const paging = pagingRef.current;
+                    // With no initial segment, the successful page establishes normal older navigation.
+                    if (!run.anchor) {
+                        paging.nextCursor = page.nextCursor;
+                        paging.hasMore = page.hasMore && !!page.nextCursor;
+                    }
+                    const merged = mergeResyncedMessages(messagesRef.current, run.pages, userId);
+                    dispatch({ type: "FETCH_SUCCESS", payload: {
+                        messages: run.pages, userId,
+                        nextCursor: paging.nextCursor, hasMore: paging.hasMore,
+                    } });
+                    messagesRef.current = merged;
+                    initialLoaded.current = true;
+                    sessionCache.set(cacheKey, {
+                        messages: merged.filter(m => !m.isOptimistic), hasMoreMessages: paging.hasMore,
+                        nextCursor: paging.nextCursor, lastLoaded: Date.now(),
+                    });
+                    recoveryRef.current = null;
+                    setRecovery("idle");
+                    return;
+                }
+                run.before = page.nextCursor!;
+                run.seen.add(run.before);
+            }
+            setRecovery("incomplete");
+        } catch (err: unknown) {
+            if (!valid()) return;
+            // apiClient preserves the Axios response as Error.cause.
+            const cause = err instanceof Error && err.cause ? err.cause : err;
+            const response = (cause as { response?: { status?: number; headers?: Record<string, unknown> } })?.response;
+            const status = response?.status;
+            if (status === 401 || status === 403 || status === 404) {
+                run.stopped = true;
+                setRecovery("stopped");
+                setRecoveryError(status === 401 ? "Your session ended. Sign in again." : "You are no longer a member");
+                if (status !== 401) useChatRoomsStore.getState().deleteRoom(roomId);
+                return;
+            }
+            if (status === 429) {
+                const header = String(response?.headers?.["retry-after"] ?? "1");
+                const seconds = Number(header);
+                run.retryAt = Number.isFinite(seconds) ? Date.now() + Math.max(0, seconds) * 1000
+                    : Math.max(Date.now(), Date.parse(header) || Date.now() + 1000);
+                setRecoveryError("Too many requests. Retry after " + new Date(run.retryAt).toLocaleTimeString() + ".");
+            } else setRecoveryError(errorText(err, "Could not recover messages"));
+            setRecovery("error");
+        } finally {
+            run.busy = false;
+        }
+    }, [roomId, userId, cacheKey, clearPendingTimer]);
+
+    useEffect(() => onReconnect(() => { void recover(true); }), [onReconnect, recover]);
+    const continueRecovery = useCallback(() => { void recover(); }, [recover]);
 
     // Effect for room and error subscriptions; the session keeps them across reconnects.
     useEffect(() => {
-        if (!roomId) return;
+        if (!roomId || !userId) return;
+        let active = true;
+        const epoch = cacheEpoch;
 
         // 1. Subscribe to new messages
         const handleNewMessage = (message: Message) => {
+            if (!active || epoch !== cacheEpoch) return;
             if (isRoomDeletedEvent(message)) {
                 onRoomDeletedRef.current?.();
                 return;
@@ -246,18 +369,20 @@ export const useRoomMessages = (roomId: string, options: RoomMessagesOptions = {
             if (message.type === MessageType.SYSTEM) {
                 refreshRoom(roomId);
             }
-            // Check if this message confirms one we sent optimistically
-            if (message.tempId && message.senderId === user?.id) {
-                clearPendingTimer(message.tempId);
-                dispatch({ type: "CONFIRM_SENT_MESSAGE", payload: message });
-            } else {
-                dispatch({ type: "RECEIVE_WEBSOCKET_MESSAGE", payload: { message, userId: user?.id } });
-            }
-            updateSessionCache(sessionCache, roomId, [message]);
+            // Update the callback snapshot before React commits: REST may settle in this
+            // same turn and must include this live frame in the recovered cache.
+            if (message.tempId && message.senderId === userId) clearPendingTimer(message.tempId);
+            const action = message.tempId && message.senderId === userId
+                ? { type: "CONFIRM_SENT_MESSAGE" as const, payload: message }
+                : { type: "RECEIVE_WEBSOCKET_MESSAGE" as const, payload: { message, userId } };
+            messagesRef.current = messageReducer({ ...initialState, messages: messagesRef.current }, action).messages;
+            dispatch(action);
+            updateSessionCache(sessionCache, cacheKey, [message]);
         };
 
         // 2. Subscribe to delivery errors
         const handleError = (error: StompError) => {
+            if (!active || epoch !== cacheEpoch) return;
             if (error.tempId) {
                 clearPendingTimer(error.tempId);
                 dispatch({
@@ -266,17 +391,27 @@ export const useRoomMessages = (roomId: string, options: RoomMessagesOptions = {
                 });
             }
         };
+        // 3. Reaction counts from any member (AC-015-7); our own pending pick settles from its response instead.
+        const handleReaction = (event: ReactionUpdatedEvent) => {
+            if (!active || epoch !== cacheEpoch || reactionsInFlight.current.has(event.messageId)) return;
+            const target = messagesRef.current.find((m) => m.id === event.messageId);
+            if (!target) return;
+            setReactions(event.messageId, fromRoomEvent(target.reactions, event));
+        };
         const removeErrorHandler = subscribeErrors(handleError);
-        const unsubscribeRoom = subscribeRoom(roomId, handleNewMessage);
+        const unsubscribeRoom = subscribeRoom(roomId, handleNewMessage, handleReaction);
         return () => {
+            active = false;
             unsubscribeRoom();
             removeErrorHandler();
         };
-    }, [roomId, subscribeRoom, user?.id, subscribeErrors, clearPendingTimer]);
+    }, [roomId, cacheKey, subscribeRoom, userId, subscribeErrors, clearPendingTimer, setReactions]);
 
     // A new send gets a new client id; a Resend passes the failed message's id so the server can
     // recognise a retry of a send it already stored (SPEC-008 AC-008-13).
-    const createOptimisticMessage = useCallback((content: string, tempId = `temp-${Date.now()}-${Math.random()}`): Message | null => {
+    const createOptimisticMessage = useCallback((
+        content: string, tempId = `temp-${Date.now()}-${Math.random()}`, replyTo: ReplyTo | null = null,
+    ): Message | null => {
         if (!user) return null;
         const now = new Date().toISOString();
         return {
@@ -294,13 +429,17 @@ export const useRoomMessages = (roomId: string, options: RoomMessagesOptions = {
             isOptimistic: true,
             isDeleted: false,
             isUpdated: false,
+            // Display only until the echo: the server derives the stored quote itself (AC-014-3).
+            replyTo,
         };
     }, [roomId, user]);
 
     // Publishes an optimistic message that is already in state and arms its confirmation timeout.
     const deliver = useCallback((message: Message) => {
         const tempId = message.tempId as string;
+        const epoch = cacheEpoch;
         pendingTimers.current.set(tempId, setTimeout(() => {
+            if (epoch !== cacheEpoch) return;
             pendingTimers.current.delete(tempId);
             dispatch({
                 type: "FAIL_SENT_MESSAGE",
@@ -310,7 +449,10 @@ export const useRoomMessages = (roomId: string, options: RoomMessagesOptions = {
 
         let published: boolean;
         try {
-            published = sendWebSocketMessage(roomId, message.content, tempId);
+            const replyId = message.replyTo?.messageId;
+            published = replyId
+                ? sendWebSocketMessage(roomId, message.content, tempId, replyId)
+                : sendWebSocketMessage(roomId, message.content, tempId);
         } catch {
             published = false;
         }
@@ -324,12 +466,14 @@ export const useRoomMessages = (roomId: string, options: RoomMessagesOptions = {
     }, [roomId, sendWebSocketMessage, clearPendingTimer]);
 
     // Action for sending a message
-    const sendMessage = useCallback(async (content: string) => {
-        if (!connected || !content.trim()) return;
-        const optimisticMessage = createOptimisticMessage(content.trim());
-        if (!optimisticMessage) return;
+    /** Returns the tempId of the optimistic message, so callers can follow its confirmation. */
+    const sendMessage = useCallback((content: string, replyTo: ReplyTo | null = null): string | undefined => {
+        if (!connected || !content.trim()) return undefined;
+        const optimisticMessage = createOptimisticMessage(content.trim(), undefined, replyTo);
+        if (!optimisticMessage) return undefined;
         dispatch({ type: "ADD_OPTIMISTIC_MESSAGE", payload: optimisticMessage });
         deliver(optimisticMessage);
+        return optimisticMessage.tempId;
     }, [connected, createOptimisticMessage, deliver]);
 
     /** Sends a failed message again as a new attempt with the same client id, replacing the failed copy. */
@@ -339,7 +483,7 @@ export const useRoomMessages = (roomId: string, options: RoomMessagesOptions = {
             (m) => m.isOptimistic && m.tempId === tempId && m.status === "failed"
         );
         if (!failed) return;
-        const retry = createOptimisticMessage(failed.content, tempId);
+        const retry = createOptimisticMessage(failed.content, tempId, failed.replyTo ?? null);
         if (!retry) return;
         dispatch({ type: "RESEND_MESSAGE", payload: { tempId, message: retry } });
         deliver(retry);
@@ -350,14 +494,53 @@ export const useRoomMessages = (roomId: string, options: RoomMessagesOptions = {
         dispatch({ type: "DISCARD_MESSAGE", payload: { tempId } });
     }, []);
 
+    /**
+     * Picks `emoji` as the current user's reaction, or undoes it when it already is (SPEC-015 AC-015-1). Applied
+     * optimistically; the response replaces it and a failure rolls it back (AC-015-9). Resolves with an error text
+     * for the caller to show, or null.
+     */
+    const toggleReaction = useCallback(async (messageId: string, emoji: string): Promise<string | null> => {
+        const message = messagesRef.current.find((m) => m.id === messageId && !m.isOptimistic);
+        if (!message) return null;
+        const before = message.reactions ?? [];
+        const removing = myReaction(before) === emoji;
+        const seq = ++reactionSeq.current;
+        reactionsInFlight.current.set(messageId, seq);
+        setReactions(messageId, applyMyReaction(before, removing ? null : emoji));
+        const epoch = cacheEpoch;
+        const gen = generation.current;
+        // A newer pick on the same message, a room switch or a logout makes this response stale.
+        const stale = () => epoch !== cacheEpoch || gen !== generation.current
+            || reactionsInFlight.current.get(messageId) !== seq;
+        try {
+            const res = removing
+                ? await messageApi.unreact(roomId, messageId)
+                : await messageApi.react(roomId, messageId, emoji);
+            if (stale()) return null;
+            if (!res?.success) throw new Error(res?.message || "Could not update the reaction");
+            setReactions(messageId, res.data.reactions);
+            return null;
+        } catch (err) {
+            if (stale()) return null;
+            setReactions(messageId, before);
+            return errorText(err, "Could not update the reaction");
+        } finally {
+            if (reactionsInFlight.current.get(messageId) === seq) reactionsInFlight.current.delete(messageId);
+        }
+    }, [roomId, setReactions]);
+
     return {
         ...state,
+        recovery,
+        recoveryError,
+        continueRecovery,
         connected,
         connecting,
         sendMessage,
         resendMessage,
         discardMessage,
-        reload,
+        toggleReaction,
+        reload: recovery === "idle" ? reload : continueRecovery,
         loadOlder,
     };
 };

@@ -33,6 +33,17 @@ export const updateSessionCache = (
     sessionCache.set(roomId, { ...cached, messages: unique });
 };
 
+// Match the existing Mongo history tie-break (String @Id maps 24-hex to ObjectId).
+// Cursors remain opaque; this only orders confirmed live rows alongside REST pages.
+const compareIds = (a: string, b: string) => {
+    const objectA = /^[0-9a-f]{24}$/i.test(a);
+    const objectB = /^[0-9a-f]{24}$/i.test(b);
+    if (objectA !== objectB) return objectA ? 1 : -1;
+    const left = objectA ? a.toLowerCase() : a;
+    const right = objectB ? b.toLowerCase() : b;
+    return left < right ? -1 : left > right ? 1 : 0;
+};
+
 const timeOf = (createdAt: string) => {
     const time = Date.parse(createdAt);
     return Number.isNaN(time) ? 0 : time;
@@ -74,7 +85,7 @@ export const matchResyncedPending = (
     const matches = new Map<string, MessageResponse>();
     if (!userId) return matches;
     const onScreen = new Set(current.filter((m) => !m.isOptimistic).map((m) => m.id));
-    const candidates = latest.filter((m) => m.senderId === userId && !onScreen.has(m.id));
+    const candidates = latest.filter((m) => m.senderId === userId && (!!(m.clientMessageId ?? m.tempId) || !onScreen.has(m.id)));
     const claimed = new Set<string>();
     const pending = current
         .filter(mayHaveBeenSaved)
@@ -126,6 +137,6 @@ export const mergeResyncedMessages = (
         (m) => !!m.isOptimistic && !(m.tempId && confirmedTempIds.has(m.tempId))
     );
     const kept = current.filter((m) => !m.isOptimistic && !fetchedIds.has(m.id));
-    const confirmed = [...kept, ...fetched].sort((a, b) => timeOf(a.createdAt) - timeOf(b.createdAt));
+    const confirmed = [...kept, ...fetched].sort((a, b) => timeOf(a.createdAt) - timeOf(b.createdAt) || compareIds(a.id, b.id));
     return [...confirmed, ...optimistic];
 };

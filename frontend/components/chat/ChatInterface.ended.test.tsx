@@ -1,10 +1,11 @@
 import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest';
-import { act, cleanup, render, screen } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
 import ChatInterface from './ChatInterface';
 import { useChatRoomsStore } from '@/lib/stores/chatRoomsStore';
 import { useAuthStore } from '@/lib/stores/authStore';
 import { ChatRoom, RoomSettings, RoomType } from '@/lib/types';
 
+const recoveryState = vi.hoisted(() => ({ recovery: "idle", recoveryError: null as string | null, continueRecovery: vi.fn() }));
 let onRoomDeleted: (() => void) | undefined;
 
 vi.mock('react-hot-toast', () => ({ default: Object.assign(vi.fn(), { success: vi.fn(), error: vi.fn() }) }));
@@ -14,7 +15,7 @@ vi.mock('@/hooks/useRoomMessage', () => ({
         return {
             messages: [], connected: true, sendMessage: vi.fn(), resendMessage: vi.fn(), discardMessage: vi.fn(),
             reload: vi.fn(), loadOlder: vi.fn(), loading: false, error: null, hasMoreMessages: false,
-            loadingOlder: false, olderError: null,
+            loadingOlder: false, olderError: null, ...recoveryState,
         };
     },
     useRoomMemberNames: () => ({}),
@@ -49,6 +50,9 @@ const removed = (reason: string) =>
 
 beforeEach(() => {
     onRoomDeleted = undefined;
+    recoveryState.recovery = "idle";
+    recoveryState.recoveryError = null;
+    recoveryState.continueRecovery.mockClear();
     useAuthStore.setState({ user: { id: 'me', name: 'Me', avatarUrl: '' } } as never);
     useChatRoomsStore.setState({ rooms: [room('r1')], filteredRooms: [], endedRooms: {}, activeRoomId: 'r1' });
 });
@@ -116,4 +120,16 @@ describe('ChatInterface ended state', () => {
         expect(screen.queryByRole('status')).toBeNull();
         expect(screen.getByText('conversation header')).toBeInTheDocument();
     });
+});
+
+
+it.each(['loading', 'incomplete', 'error'])('recovery_%s_showsIncompleteStatusAndAction', state => {
+    recoveryState.recovery = state;
+    if (state === 'error') recoveryState.recoveryError = 'Temporarily unavailable';
+    render(<ChatInterface roomId="r1" />);
+    expect(screen.getByRole('status')).toHaveTextContent(/incomplete/i);
+    if (state !== 'loading') {
+        fireEvent.click(screen.getByRole('button', { name: state === 'error' ? 'Retry recovery' : 'Continue recovery' }));
+        expect(recoveryState.continueRecovery).toHaveBeenCalledOnce();
+    } else expect(screen.queryByRole('button', { name: /recovery/i })).toBeNull();
 });

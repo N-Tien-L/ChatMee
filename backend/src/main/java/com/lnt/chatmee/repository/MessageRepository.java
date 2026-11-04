@@ -32,6 +32,21 @@ public interface MessageRepository extends MongoRepository<Message, String> {
             sort = "{ 'createdAt': -1, '_id': -1 }")
     List<Message> findPageBeforeKey(String roomId, Instant beforeCreatedAt, Object beforeId, Pageable pageable);
     
+    /** Messages strictly newer than the boundary, oldest first (SPEC-014 context window). */
+    default List<Message> findPageAfter(String roomId, Instant afterCreatedAt, String afterId, Pageable pageable) {
+        Object storedId = ObjectId.isValid(afterId) ? new ObjectId(afterId) : afterId;
+        return findPageAfterKey(roomId, afterCreatedAt, storedId, pageable);
+    }
+
+    @Query(value = "{ 'chatRoomId': ?0, 'isDeleted': false, '$or': ["
+            + "{ 'createdAt': { '$gt': ?1 } },"
+            + "{ 'createdAt': ?1, '$expr': { '$gt': ['$_id', { '$literal': ?2 }] } }] }",
+            sort = "{ 'createdAt': 1, '_id': 1 }")
+    List<Message> findPageAfterKey(String roomId, Instant afterCreatedAt, Object afterId, Pageable pageable);
+
+    /** Ids among {@code ids} whose message is deleted; used to redact reply quotes (SPEC-014 AC-014-5). */
+    List<Message> findByIdInAndIsDeletedTrue(java.util.Collection<String> ids);
+
     /** Idempotency lookup for a send retried with the same client id (SPEC-008 AC-008-13). */
     Optional<Message> findFirstByChatRoomIdAndSenderIdAndClientMessageId(String chatRoomId, String senderId,
             String clientMessageId);

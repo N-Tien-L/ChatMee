@@ -61,6 +61,8 @@ class MessageServiceTest {
 
     @Mock BlockService blocks;
 
+    @Mock ReactionService reactionService;
+
     @InjectMocks
     private MessageService messageService;
 
@@ -76,6 +78,20 @@ class MessageServiceTest {
         assertThat(second.id()).isEqualTo(first.id());
         assertThat(second.tempId()).isEqualTo("client-1");
         assertThat(second.clientMessageId()).isEqualTo("client-1");
+    }
+
+    @Test
+    void sendMessage_duplicateClientId_mayRepeatActivityWithoutSecondRow() {
+        List<Message> rows = simulateUniqueClientIdIndex();
+        when(participantService.isUserParticipant("room1", "user1")).thenReturn(true);
+        when(participantService.getParticipantUserIds("room1")).thenReturn(Set.of("user1", "user2"));
+        var first = messageService.sendMessage(textRequest("client-retry"), "user1");
+        var retry = messageService.sendMessage(textRequest("client-retry"), "user1");
+        assertThat(rows).hasSize(1);
+        assertThat(retry.id()).isEqualTo(first.id());
+        var summaries = ArgumentCaptor.forClass(com.lnt.chatmee.dto.event.LastMessageSummary.class);
+        verify(userEvents, times(2)).roomActivity(eq(Set.of("user1", "user2")), eq("room1"), summaries.capture());
+        assertThat(summaries.getAllValues().get(1)).isEqualTo(summaries.getAllValues().get(0));
     }
 
     @Test

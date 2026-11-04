@@ -1,13 +1,16 @@
 "use client";
 
 import { Message, MessageType } from "@/lib/types";
-import React, { useCallback, useLayoutEffect, useRef, useState } from "react";
-import { AlertCircle, ArrowDown, Flag, MessageSquare, RotateCw } from "lucide-react";
+import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { AlertCircle, ArrowDown, MessageSquare, RotateCw } from "lucide-react";
 import { Skeleton } from "../ui/skeleton";
 import { Button } from "../ui/button";
 import { UserAvatar } from "../common/UserAvatar";
 import { isDeletedUser } from "../common/deletedUser";
 import { DeliveryTab, useJustConfirmed } from "./DeliveryTab";
+import { MessageActions } from "./MessageActions";
+import { ReplyQuote } from "./ReplyQuote";
+import { ReactionChips } from "./ReactionChips";
 
 /** Distance from the top of the list at which the next older page is requested. */
 const LOAD_OLDER_THRESHOLD_PX = 48;
@@ -15,8 +18,19 @@ const LOAD_OLDER_THRESHOLD_PX = 48;
 const NEAR_BOTTOM_PX = 80;
 /** Consecutive messages from one sender inside this window share one avatar and name. */
 const GROUP_WINDOW_MS = 5 * 60 * 1000;
+/** A pause this long inside one day gets its own time marker, as in Messenger. */
+const TIME_BREAK_MS = 60 * 60 * 1000;
+/** How long a jumped-to original stays highlighted. */
+const HIGHLIGHT_MS = 2000;
+
+/** Scroll to and highlight one loaded message; a new nonce repeats the jump to the same message. */
+export interface FocusRequest {
+  id: string;
+  nonce: number;
+}
 
 interface MessageListProps {
+  recovering?: boolean;
   messages: Message[];
   onlineUsers: Set<string>;
   /** False until the first presence snapshot: the dots stay neutral instead of "offline" (SPEC-005 AC-005-6). */
@@ -38,8 +52,19 @@ interface MessageListProps {
   onLoadOlder?: () => void;
   /** Direct message with this person: no sender names or avatars on their messages, and a person intro on top. */
   directWith?: { name: string; avatarUrl?: string | null } | null;
-  /** Report another member's message (SPEC-009 AC-009-20); shown on hover or keyboard focus. */
+  /** Report another member's message (SPEC-009 AC-009-20); offered in the message actions menu. */
   onReport?: (message: Message) => void;
+  /** Starts a reply to a message (SPEC-014 AC-014-7). */
+  onReply?: (message: Message) => void;
+  /** A tap on a reply's quote (AC-014-8); the parent scrolls here or loads a detached segment. */
+  onJumpToOriginal?: (messageId: string) => void;
+  /** Quick-bar reaction pick (SPEC-015 AC-015-1); absent hides the quick bar. */
+  onReact?: (message: Message, emoji: string) => void;
+  /** "+" on the quick bar: opens the full picker (AC-015-10). */
+  onPickReaction?: (message: Message) => void;
+  /** A tap on a reaction chip: opens who reacted, filtered to that emoji (AC-015-10). */
+  onShowReactors?: (message: Message, emoji: string) => void;
+  focusRequest?: FocusRequest | null;
 }
 
 const isNearBottom = (el: HTMLElement) =>
@@ -55,6 +80,21 @@ const startsGroup = (messages: Message[], index: number, showDate: boolean) => {
   return Date.parse(current.createdAt) - Date.parse(previous.createdAt) > GROUP_WINDOW_MS;
 };
 
+const findLastOwnIndex = (messages: Message[]) => {
+  for (let i = messages.length - 1; i >= 0; i--) if (messages[i].isOwn) return i;
+  return -1;
+};
+
+/** Wraps a bubble in its actions menu; pending and failed messages have nothing to act on yet. */
+function BubbleActions({
+  enabled,
+  children,
+  ...rest
+}: { enabled: boolean } & React.ComponentProps<typeof MessageActions>) {
+  if (!enabled) return <div className={rest.className}>{children}</div>;
+  return <MessageActions {...rest}>{children}</MessageActions>;
+}
+
 /** Your own bubble: floats a little while sending, then settles with one ember ring when the server confirms. */
 function OwnBubble({ status, className, children }: { status: Message["status"]; className: string; children: React.ReactNode }) {
   const confirmed = useJustConfirmed(status);
@@ -64,12 +104,23 @@ function OwnBubble({ status, className, children }: { status: Message["status"];
 
 const MessageList: React.FC<MessageListProps> = (props) => {
   const { messages, messagesEndRef, hasMore = false, loadingOlder = false, olderError = null, onLoadOlder, loading = false, error = null } = props;
+  const visibleAnchor = useRef<{ id: string; offset: number } | null>(null);
+  const rememberAnchor = useCallback(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    const top = el.getBoundingClientRect().top;
+    const row = Array.from(el.querySelectorAll<HTMLElement>("[data-message-id]"))
+      .find(node => node.getBoundingClientRect().bottom > top);
+    visibleAnchor.current = row ? { id: row.dataset.messageId!, offset: row.getBoundingClientRect().top - top } : null;
+  }, []);
   const scrollRef = useRef<HTMLDivElement>(null);
   const edgesRef = useRef<{ first?: string; last?: string; scrollHeight: number }>({ scrollHeight: 0 });
   // Read at the moment a message arrives, before the list grows, so content growth alone never counts as scrolling away.
   const atBottomRef = useRef(true);
   const [unseenCount, setUnseenCount] = useState(0);
   const [needsLoadOlder, setNeedsLoadOlder] = useState(false);
+  const [highlightId, setHighlightId] = useState<string | null>(null);
+  const { focusRequest = null } = props;
 
   const scrollToBottom = useCallback(
     (behavior: ScrollBehavior) => {
@@ -85,14 +136,21 @@ const MessageList: React.FC<MessageListProps> = (props) => {
     const previous = edgesRef.current;
     const first = messages[0]?.id;
     const last = messages[messages.length - 1]?.id;
-    if (el && previous.last !== undefined && last === previous.last && first !== previous.first) {
+    const anchor = visibleAnchor.current;
+    const row = el && anchor && Array.from(el.querySelectorAll<HTMLElement>("[data-message-id]"))
+      .find(node => node.dataset.messageId === anchor.id);
+    if (el && row && anchor && !atBottomRef.current &&
+        !(messages[messages.length - 1]?.isOptimistic && messages[messages.length - 1]?.isOwn)) {
+      el.scrollTop += row.getBoundingClientRect().top - el.getBoundingClientRect().top - anchor.offset;
+      if (last !== previous.last) setUnseenCount(count => count + 1);
+    } else if (el && previous.last !== undefined && last === previous.last && first !== previous.first) {
       // An older page was prepended: keep the message the user was reading where it was.
       el.scrollTop += el.scrollHeight - previous.scrollHeight;
     } else if (last !== previous.last) {
       if (previous.last === undefined) {
         // A first load jumps straight to the bottom, so its scroll never passes the load-older threshold.
         scrollToBottom("auto");
-      } else if (messages[messages.length - 1]?.isOwn || atBottomRef.current) {
+      } else if ((messages[messages.length - 1]?.isOwn && !props.recovering) || atBottomRef.current) {
         scrollToBottom("smooth");
       } else {
         const index = messages.findIndex((m) => m.id === previous.last);
@@ -101,7 +159,26 @@ const MessageList: React.FC<MessageListProps> = (props) => {
       }
     }
     edgesRef.current = { first, last, scrollHeight: el?.scrollHeight ?? 0 };
-  }, [messages, scrollToBottom]);
+    rememberAnchor();
+  }, [messages, scrollToBottom, rememberAnchor, props.recovering]);
+
+  // Runs after the edge effect above, so a first load's jump to the bottom never overrides the jump to the original.
+  useLayoutEffect(() => {
+    const el = scrollRef.current;
+    if (!el || !focusRequest) return;
+    const row = Array.from(el.querySelectorAll<HTMLElement>("[data-message-id]"))
+      .find(node => node.dataset.messageId === focusRequest.id);
+    if (!row) return;
+    row.scrollIntoView?.({ block: "center" });
+    atBottomRef.current = isNearBottom(el);
+    rememberAnchor();
+    setHighlightId(focusRequest.id);
+  }, [focusRequest, rememberAnchor]);
+  useEffect(() => {
+    if (!highlightId) return;
+    const timer = setTimeout(() => setHighlightId(null), HIGHLIGHT_MS);
+    return () => clearTimeout(timer);
+  }, [highlightId, focusRequest]);
 
   // When the loaded page does not fill the viewport there is nothing to scroll, so offer the button.
   useLayoutEffect(() => {
@@ -113,6 +190,7 @@ const MessageList: React.FC<MessageListProps> = (props) => {
     const el = scrollRef.current;
     if (!el) return;
     atBottomRef.current = isNearBottom(el);
+    rememberAnchor();
     if (atBottomRef.current) setUnseenCount(0);
     if (!onLoadOlder || !hasMore || loadingOlder || olderError) return;
     if (el.scrollTop <= LOAD_OLDER_THRESHOLD_PX) onLoadOlder();
@@ -134,6 +212,7 @@ const MessageList: React.FC<MessageListProps> = (props) => {
       >
         <MessageListContent
           {...props}
+          highlightId={highlightId}
           showLoadOlder={needsLoadOlder && !loadingOlder && !olderError && !loading && !error}
         />
       </div>
@@ -155,6 +234,7 @@ const MessageList: React.FC<MessageListProps> = (props) => {
 
 interface MessageListContentProps extends MessageListProps {
   showLoadOlder: boolean;
+  highlightId: string | null;
 }
 
 const MessageListContent: React.FC<MessageListContentProps> = ({
@@ -176,7 +256,13 @@ const MessageListContent: React.FC<MessageListContentProps> = ({
   onLoadOlder,
   directWith = null,
   onReport,
+  onReply,
+  onJumpToOriginal,
+  onReact,
+  onPickReaction,
+  onShowReactors,
   showLoadOlder,
+  highlightId,
 }) => {
   if (loading && messages.length === 0) {
     return (
@@ -218,6 +304,8 @@ const MessageListContent: React.FC<MessageListContentProps> = ({
       </div>
     );
   }
+
+  const lastOwnIndex = findLastOwnIndex(messages);
 
   return (
     <>
@@ -308,16 +396,33 @@ const MessageListContent: React.FC<MessageListContentProps> = ({
             formatDate(messageDate) !==
               formatDate(new Date(messages[index - 1].createdAt));
           const groupStart = startsGroup(messages, index, showDate);
+          const showTimeBreak =
+            !showDate &&
+            Date.parse(message.createdAt) - Date.parse(messages[index - 1].createdAt) >= TIME_BREAK_MS;
+          const showSentMark = message.status !== "sent" || index === lastOwnIndex;
           const online = onlineUsers.has(message.senderId);
           const failed = message.isOwn && message.status === "failed";
           const pending = message.isOwn && message.status === "sending";
 
           return (
-            <div key={message.id}>
+            <div
+              key={message.id}
+              data-message-id={message.id}
+              data-highlighted={highlightId === message.id ? "true" : undefined}
+              className="rounded-xl transition-colors duration-500 motion-reduce:transition-none data-[highlighted=true]:bg-primary/10"
+            >
               {showDate && (
                 <div className="flex justify-center my-4">
                   <span className="rounded-full bg-card px-3 py-1 font-mono text-[11px] uppercase tracking-[0.12em] text-muted-foreground shadow-sm ring-1 ring-border">
                     {formatDate(messageDate)}
+                  </span>
+                </div>
+              )}
+
+              {showTimeBreak && (
+                <div className="flex justify-center my-4">
+                  <span className="rounded-full bg-card px-3 py-1 font-mono text-[11px] uppercase tracking-[0.12em] text-muted-foreground shadow-sm ring-1 ring-border">
+                    {formatTime(messageDate)}
                   </span>
                 </div>
               )}
@@ -331,11 +436,29 @@ const MessageListContent: React.FC<MessageListContentProps> = ({
               ) : message.isOwn ? (
                 <div
                   data-message-type={message.type}
-                  className={`animate-message-in flex flex-col items-end gap-1 ${groupStart ? "mt-4" : "mt-1"}`}
+                  className={`animate-message-in group flex flex-col items-end gap-1 ${groupStart ? "mt-4" : "mt-1"}`}
                 >
+                  <div className="flex max-w-full items-end justify-end gap-2">
+                  {!showSentMark && (
+                    <time
+                      dateTime={message.createdAt}
+                      className="pb-1 font-mono text-[11px] tabular text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100"
+                    >
+                      {formatTime(messageDate)}
+                    </time>
+                  )}
+                  <BubbleActions
+                    enabled={!failed && !pending}
+                    message={message}
+                    timeLabel={formatTime(messageDate)}
+                    onReply={onReply}
+                    onReact={onReact}
+                    onPickReaction={onPickReaction}
+                    className="max-w-[85%] sm:max-w-md lg:max-w-xl"
+                  >
                   <OwnBubble
                     status={message.status}
-                    className={`max-w-[85%] sm:max-w-md lg:max-w-xl rounded-2xl rounded-br-md px-3.5 py-2 break-words transition-[colors,transform,box-shadow] duration-300 ${
+                    className={`rounded-2xl rounded-br-md px-3.5 py-2 break-words transition-[colors,transform,box-shadow] duration-300 ${
                       failed
                         ? "border-[1.5px] border-destructive bg-card text-foreground"
                         : pending
@@ -343,8 +466,19 @@ const MessageListContent: React.FC<MessageListContentProps> = ({
                           : "bg-gradient-to-br from-bubble-own-from to-bubble-own-to text-primary-foreground shadow-[0_6px_18px_-10px_rgb(11_107_93/0.8)]"
                     }`}
                   >
+                    {message.replyTo && (
+                      <ReplyQuote replyTo={message.replyTo} own={!failed && !pending}
+                        onJump={failed || pending ? undefined : onJumpToOriginal} />
+                    )}
                     <p className="text-sm whitespace-pre-wrap break-words">{message.content}</p>
                   </OwnBubble>
+                  </BubbleActions>
+                  </div>
+                  <ReactionChips
+                    reactions={message.reactions}
+                    own
+                    onOpen={onShowReactors ? (emoji) => onShowReactors(message, emoji) : undefined}
+                  />
                   <div className="flex flex-wrap items-center justify-end gap-x-2 gap-y-1 text-xs">
                     {failed && message.tempId && (
                       <>
@@ -372,7 +506,8 @@ const MessageListContent: React.FC<MessageListContentProps> = ({
                         )}
                       </>
                     )}
-                    <DeliveryTab message={message} formatTime={formatTime} />
+                    {/* Like Messenger: only the latest sent message keeps its mark; older ones show a plain time on hover. */}
+                    {showSentMark && <DeliveryTab message={message} formatTime={formatTime} />}
                   </div>
                 </div>
               ) : (
@@ -412,9 +547,21 @@ const MessageListContent: React.FC<MessageListContentProps> = ({
                       </div>
                     )}
                     <div className="flex items-end gap-2">
-                      <div className={`rounded-2xl bg-card px-3.5 py-2 break-words text-card-foreground shadow-[0_2px_10px_-6px_rgb(15_31_28/0.25)] ring-1 ring-border ${groupStart ? "rounded-tl-md" : ""}`}>
-                        <p className="text-sm whitespace-pre-wrap break-words">{message.content}</p>
-                      </div>
+                      <BubbleActions
+                        enabled
+                        message={message}
+                        timeLabel={formatTime(messageDate)}
+                        onReport={onReport}
+                        onReply={onReply}
+                        onReact={onReact}
+                        onPickReaction={onPickReaction}
+                        className="min-w-0"
+                      >
+                        <div className={`rounded-2xl bg-card px-3.5 py-2 break-words text-card-foreground shadow-[0_2px_10px_-6px_rgb(15_31_28/0.25)] ring-1 ring-border ${groupStart ? "rounded-tl-md" : ""}`}>
+                          {message.replyTo && <ReplyQuote replyTo={message.replyTo} onJump={onJumpToOriginal} />}
+                          <p className="text-sm whitespace-pre-wrap break-words">{message.content}</p>
+                        </div>
+                      </BubbleActions>
                       {(!groupStart || directWith) && (
                         <time
                           dateTime={message.createdAt}
@@ -423,18 +570,11 @@ const MessageListContent: React.FC<MessageListContentProps> = ({
                           {formatTime(messageDate)}
                         </time>
                       )}
-                      {onReport && message.id && (
-                        <button
-                          type="button"
-                          onClick={() => onReport(message)}
-                          aria-label={`Report message from ${message.senderName || "this member"}`}
-                          title="Report message"
-                          className="mb-0.5 rounded-md p-1 text-muted-foreground opacity-0 transition-opacity hover:bg-accent hover:text-destructive focus-visible:opacity-100 group-hover:opacity-100 group-focus-within:opacity-100 pointer-coarse:opacity-100"
-                        >
-                          <Flag className="h-3.5 w-3.5" aria-hidden="true" />
-                        </button>
-                      )}
                     </div>
+                    <ReactionChips
+                      reactions={message.reactions}
+                      onOpen={onShowReactors ? (emoji) => onShowReactors(message, emoji) : undefined}
+                    />
                   </div>
                 </div>
               )}

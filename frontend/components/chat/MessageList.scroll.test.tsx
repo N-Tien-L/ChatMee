@@ -89,3 +89,21 @@ describe('MessageList smart auto-scroll', () => {
         expect(scrollIntoView).toHaveBeenCalledTimes(1);
     });
 });
+
+
+it('reconnect_liveMessageDuringPaging_preservesScrollAnchor', () => {
+    const { rerender } = render(<MessageList {...props} messages={baseMessages} recovering />);
+    const el = scrollContainerAt(200);
+    const row = el.querySelector<HTMLElement>('[data-message-id="m2"]')!;
+    let rowTop = 40;
+    vi.spyOn(row, 'getBoundingClientRect').mockImplementation(() => ({ top: rowTop, bottom: rowTop + 50 } as DOMRect));
+    fireEvent.scroll(el);
+    scrollIntoView.mockClear();
+    rowTop = 140;
+    rerender(<MessageList {...props} messages={[text('older'), ...baseMessages, text('live')]} recovering />);
+    expect(el.scrollTop).toBe(300);
+    expect(scrollIntoView).not.toHaveBeenCalled();
+    // Completing recovery with an own persisted message must not steal the reader's position.
+    rerender(<MessageList {...props} messages={[text('older'), ...baseMessages, text('live'), text('own', { isOwn: true })]} />);
+    expect(scrollIntoView).not.toHaveBeenCalled();
+});

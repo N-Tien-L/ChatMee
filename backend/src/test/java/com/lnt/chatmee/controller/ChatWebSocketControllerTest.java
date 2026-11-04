@@ -58,6 +58,27 @@ class ChatWebSocketControllerTest {
     }
 
     @Test
+    void sendMessage_unusableReplyTarget_sendsPrivateValidationErrorWithoutBroadcast() {
+        // SPEC-014 section 5: missing, foreign or deleted target -> private VALIDATION_FAILED for the tempId.
+        ChatMessageRequest request = new ChatMessageRequest();
+        request.setRoomId("room1");
+        request.setContent("hello");
+        request.setTempId("client-1");
+        request.setReplyToMessageId("target-1");
+        when(messageService.sendMessage(request, "user1"))
+                .thenThrow(new com.lnt.chatmee.exception.InvalidRequestException("Reply target unavailable"));
+
+        controller.sendMessage(request, () -> "user1", "session-1");
+
+        var error = org.mockito.ArgumentCaptor.forClass(com.lnt.chatmee.dto.StompError.class);
+        verify(messagingTemplate).convertAndSendToUser(eq("user1"), eq("/queue/errors"), error.capture(), anyMap());
+        assertThat(error.getValue().getCode()).isEqualTo("VALIDATION_FAILED");
+        assertThat(error.getValue().getTempId()).isEqualTo("client-1");
+        assertThat(error.getValue().getMessage()).doesNotContain("target-1");
+        verify(messagingTemplate, never()).convertAndSend(anyString(), any(Object.class));
+    }
+
+    @Test
     void sendMessage_broadcastThrowsAfterSave_logsWarningWithIdsOnly() {
         ListAppender<ILoggingEvent> logs = new ListAppender<>();
         Logger controllerLogger = (Logger) LoggerFactory.getLogger(ChatWebSocketController.class);

@@ -143,7 +143,7 @@ class UserEventsIT {
     }
 
     private StompSession connect(User user) throws Exception {
-        String token = tokens.issueToken(user.getId());
+        String token = tokens.issueToken(user.getId(), new org.springframework.mock.web.MockHttpSession());
         issuedTokens.add(token);
         StompHeaders headers = new StompHeaders();
         headers.set("X-WS-Token", token);

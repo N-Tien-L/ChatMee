@@ -57,6 +57,7 @@ class ParticipantServiceTest {
         when(participants.findByChatRoomId("room")).thenReturn(List.of(Participant.builder().userId("actor").build()));
         service.joinRoom("room", "actor");
         verify(userEvents).roomAdded(eq("actor"), argThat(r -> r.id().equals("room") && r.participants().equals(Set.of("actor"))));
+        verify(userEvents).presenceScopeChanged(Set.of("actor"));
         verifyNoMoreInteractions(userEvents);
         verify(messageService).postSystemMessage("room", "Deleted user joined");
         verify(participants).save(argThat(p -> p.getUserId().equals("actor") && p.getRole() == Role.MEMBER));
@@ -311,7 +312,7 @@ class ParticipantServiceTest {
     void postSystemMessage_membershipText_persistsBeforeBroadcastWithoutActivity() {
         var messages = mock(com.lnt.chatmee.repository.MessageRepository.class);
         var messageService = new MessageService(rooms, service, messages, users, userEvents,
-            mock(DirectMessageRequestService.class), participants, mock(BlockService.class));
+            mock(DirectMessageRequestService.class), participants, mock(BlockService.class), mock(ReactionService.class));
         when(messages.save(any())).thenAnswer(call -> call.getArgument(0));
         for (String text : List.of("Alice joined", "Alice left", "Bob removed Alice")) {
             var result = messageService.postSystemMessage("room", text);
@@ -332,7 +333,7 @@ class ParticipantServiceTest {
         var repository = mock(com.lnt.chatmee.repository.MessageRepository.class);
         when(repository.save(any())).thenAnswer(call -> call.getArgument(0));
         when(messages.getObject()).thenReturn(new MessageService(rooms, service, repository, users, userEvents,
-            mock(DirectMessageRequestService.class), participants, mock(BlockService.class)));
+            mock(DirectMessageRequestService.class), participants, mock(BlockService.class), mock(ReactionService.class)));
         room.setCreatedBy("former-owner");
         when(rooms.findByIdAndIsActiveTrue("room")).thenReturn(Optional.of(room));
         when(users.findById("alice")).thenReturn(Optional.of(User.builder().id("alice").name("Alice").build()));
@@ -343,7 +344,7 @@ class ParticipantServiceTest {
         var chatRooms = new ChatRoomService(rooms, users, repository, userEvents, service,
             mock(org.springframework.messaging.simp.SimpMessagingTemplate.class), policies,
             mock(DirectMessageRequestService.class), mock(RateLimitingService.class), participants,
-            mock(BlockService.class));
+            mock(BlockService.class), mock(ReactionService.class));
         when(participants.findByChatRoomIdAndUserId("room", "alice"))
             .thenReturn(Optional.of(Participant.builder().role(Role.MEMBER).build()));
         when(participants.deleteByChatRoomIdAndUserIdAndRole("room", "alice", Role.MEMBER)).thenReturn(1L);
@@ -365,6 +366,14 @@ class ParticipantServiceTest {
         }
         verify(rooms, never()).updateActivity(any(), any(), any());
         verify(userEvents, never()).roomActivity(any(), anyString(), any());
+    }
+
+    @Test
+    void removeParticipant_success_invalidatesRemainingAndDepartingPresenceOnly() {
+        when(participants.deleteByChatRoomIdAndUserId("room", "departing")).thenReturn(1L);
+        when(participants.findByChatRoomId("room")).thenReturn(List.of(Participant.builder().userId("remaining").build()));
+        assertTrue(service.removeParticipant("room", "departing"));
+        verify(userEvents).presenceScopeChanged(Set.of("remaining", "departing"));
     }
 
 }
