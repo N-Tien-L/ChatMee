@@ -49,6 +49,14 @@ public class Message {
 
     private boolean isDeleted;
 
+    /** Server-derived quote of the message this one replies to (SPEC-014 AC-014-3); absent on legacy messages. */
+    private ReplySnapshot replyTo;
+
+    /** Copied from the target when the reply is saved; never supplied by the client. */
+    public record ReplySnapshot(String messageId, String senderId, String senderName, String preview,
+            MessageType type) {
+    }
+
     public enum MessageType {
         TEXT,
         IMAGE,

@@ -10,6 +10,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
@@ -24,7 +25,9 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 
 import com.lnt.chatmee.dto.response.ChatMessageResponse;
+import com.lnt.chatmee.dto.response.MessageContextResponse;
 import com.lnt.chatmee.dto.response.MessagePageResponse;
+import com.lnt.chatmee.exception.InvalidRequestException;
 import com.lnt.chatmee.exception.ChatRoomNotFoundException;
 import com.lnt.chatmee.exception.DatabaseOperationException;
 import com.lnt.chatmee.exception.DmRequestPendingException;
@@ -76,6 +79,10 @@ public class MessageService {
                 .type(request.getMessageType()).content(request.getContent())
                 .createdAt(Instant.now()).updatedAt(Instant.now())
                 .isUpdated(false).isDeleted(false).build();
+        // A retry of a stored reply keeps its original snapshot (AC-014-4), so the target is only checked for new rows.
+        if (hasText(request.getReplyToMessageId()) && findStoredDuplicate(message).isEmpty()) {
+            message.setReplyTo(replySnapshot(request.getRoomId(), request.getReplyToMessageId()));
+        }
         // SYSTEM messages never write the activity summary, so they never take the request-message slot.
         String senderName = DisplayNames.of(user);
         boolean requestMessage = room.isPresent() && claimRequestMessage(room.get(), message, senderName);
@@ -181,6 +188,39 @@ public class MessageService {
             content.substring(0, end), message.getCreatedAt());
     }
 
+    static final int REPLY_PREVIEW_CODE_POINTS = 120;
+
+    /**
+     * Reads the target only after the membership checks above; it must be a live message of the same room, which
+     * the sender may read under the history rules (AC-014-1, AC-014-2). Every refusal has the same generic text.
+     */
+    private Message.ReplySnapshot replySnapshot(String roomId, String targetId) {
+        Message target;
+        try {
+            target = messageRepository.findById(targetId).orElse(null);
+        } catch (DataAccessException ex) {
+            throw new DatabaseOperationException("Failed to read reply target", ex);
+        }
+        if (target == null || target.isDeleted() || !roomId.equals(target.getChatRoomId())) {
+            throw new InvalidRequestException("Reply target unavailable");
+        }
+        String senderName = target.getType() == Message.MessageType.SYSTEM ? "System"
+                : userRepository.findById(target.getSenderId()).map(DisplayNames::of).orElse(DisplayNames.DELETED_USER);
+        String preview = target.getType() == Message.MessageType.TEXT
+                ? truncate(target.getContent(), REPLY_PREVIEW_CODE_POINTS) : "";
+        return new Message.ReplySnapshot(target.getId(), target.getSenderId(), senderName, preview, target.getType());
+    }
+
+    private static String truncate(String text, int codePoints) {
+        String content = text == null ? "" : text;
+        int end = content.offsetByCodePoints(0, Math.min(codePoints, content.codePointCount(0, content.length())));
+        return content.substring(0, end);
+    }
+
+    private static boolean hasText(String value) {
+        return value != null && !value.isBlank();
+    }
+
     /** A blank tempId is no idempotency key, so the message is stored without a client id. */
     private static String clientMessageId(String tempId) {
         return tempId == null || tempId.isBlank() ? null : tempId;
@@ -217,21 +257,66 @@ public class MessageService {
             List<Message> page = new ArrayList<>(rows.subList(0, Math.min(pageSize, rows.size())));
             Collections.reverse(page);
 
-            Map<String, String> senderNames = new HashMap<>();
-            if (!page.isEmpty()) {
-                Set<String> senderIds = page.stream().map(Message::getSenderId).collect(Collectors.toSet());
-                userRepository.findAllById(senderIds).forEach(user -> senderNames.put(user.getId(), DisplayNames.of(user)));
-            }
-            List<ChatMessageResponse> messages = page.stream()
-                    .map(message -> ChatMessageResponse.from(message,
-                            senderNames.getOrDefault(message.getSenderId(), DisplayNames.DELETED_USER), null))
-                    .toList();
+            List<ChatMessageResponse> messages = toResponses(page);
             String nextCursor = hasMore
                     ? new MessageCursor(page.get(0).getCreatedAt(), page.get(0).getId()).encode() : null;
             return new MessagePageResponse(messages, nextCursor, hasMore);
         } catch (DataAccessException e) {
             throw new DatabaseOperationException("Failed to fetch messages", e);
         }
+    }
+
+    /**
+     * The target and up to {@code limit} messages on each side, oldest first (SPEC-014 AC-014-6). A non-member,
+     * unknown room, unknown or deleted message all answer the same 404.
+     */
+    public MessageContextResponse getMessageContext(String roomId, String messageId, String userId, int limit) {
+        if (!chatRoomRepository.existsById(roomId) || !participantService.isUserParticipant(roomId, userId)) {
+            throw new ChatRoomNotFoundException("Message not found");
+        }
+        int side = limit <= 0 ? 20 : Math.min(limit, 50);
+        try {
+            Message target = messageRepository.findById(messageId)
+                    .filter(found -> roomId.equals(found.getChatRoomId()) && !found.isDeleted())
+                    .orElseThrow(() -> new ChatRoomNotFoundException("Message not found"));
+            PageRequest request = PageRequest.of(0, side + 1);
+            List<Message> older = messageRepository.findPageBefore(roomId, target.getCreatedAt(), target.getId(),
+                    request);
+            List<Message> newer = messageRepository.findPageAfter(roomId, target.getCreatedAt(), target.getId(),
+                    request);
+            boolean hasBefore = older.size() > side;
+            boolean hasAfter = newer.size() > side;
+            List<Message> window = new ArrayList<>(older.subList(0, Math.min(side, older.size())));
+            Collections.reverse(window);
+            window.add(target);
+            window.addAll(newer.subList(0, Math.min(side, newer.size())));
+            Message first = window.get(0);
+            Message last = window.get(window.size() - 1);
+            return new MessageContextResponse(toResponses(window), target.getId(), hasBefore, hasAfter,
+                    hasBefore ? new MessageCursor(first.getCreatedAt(), first.getId()).encode() : null,
+                    hasAfter ? new MessageCursor(last.getCreatedAt(), last.getId()).encode() : null);
+        } catch (DataAccessException e) {
+            throw new DatabaseOperationException("Failed to fetch message context", e);
+        }
+    }
+
+    /** One user query for sender names and, only when the page has replies, one query for deleted targets. */
+    private List<ChatMessageResponse> toResponses(List<Message> page) {
+        Map<String, String> senderNames = new HashMap<>();
+        if (!page.isEmpty()) {
+            Set<String> senderIds = page.stream().map(Message::getSenderId).collect(Collectors.toSet());
+            userRepository.findAllById(senderIds).forEach(user -> senderNames.put(user.getId(), DisplayNames.of(user)));
+        }
+        Set<String> targetIds = page.stream().map(Message::getReplyTo).filter(Objects::nonNull)
+                .map(Message.ReplySnapshot::messageId).collect(Collectors.toSet());
+        Set<String> deletedTargets = targetIds.isEmpty() ? Set.of()
+                : messageRepository.findByIdInAndIsDeletedTrue(targetIds).stream().map(Message::getId)
+                        .collect(Collectors.toSet());
+        return page.stream()
+                .map(message -> ChatMessageResponse.from(message,
+                        senderNames.getOrDefault(message.getSenderId(), DisplayNames.DELETED_USER), null,
+                        message.getReplyTo() != null && deletedTargets.contains(message.getReplyTo().messageId())))
+                .toList();
     }
 
     /**

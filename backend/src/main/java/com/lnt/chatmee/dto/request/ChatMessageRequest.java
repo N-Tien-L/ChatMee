@@ -28,6 +28,10 @@ public class ChatMessageRequest {
     @Size(max = 64, message = "Temp ID must not exceed 64 characters")
     private String tempId;
 
+    /** Optional id of an earlier message in the same room this message replies to (SPEC-014 AC-014-1). */
+    @Size(max = 64, message = "Reply target ID must not exceed 64 characters")
+    private String replyToMessageId;
+
     /** SYSTEM (and future media) messages are created by the server only; clients send TEXT. */
     @JsonIgnore
     @AssertTrue(message = "Only TEXT messages can be sent")

@@ -17,6 +17,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.lnt.chatmee.dto.response.ApiResponse;
+import com.lnt.chatmee.dto.response.MessageContextResponse;
 import com.lnt.chatmee.dto.response.MessagePageResponse;
 import com.lnt.chatmee.exception.ErrorCode;
 import com.lnt.chatmee.exception.GlobalExceptionHandler;
@@ -45,6 +46,17 @@ public class MessageController {
         MessagePageResponse page = messageService.getMessages(roomId, user.userId(), before, limit);
 
         return ResponseEntity.ok(ApiResponse.success(page));
+    }
+
+    @Operation(summary = "Get the messages around one message, for jumping to a reply's original")
+    @GetMapping("/{messageId}/context")
+    public ResponseEntity<ApiResponse<MessageContextResponse>> getMessageContext(
+            @PathVariable String roomId,
+            @PathVariable String messageId,
+            @CurrentUser UserPrincipal user,
+            @RequestParam(defaultValue = "20") int limit) {
+        return ResponseEntity.ok(ApiResponse.success(
+                messageService.getMessageContext(roomId, messageId, user.userId(), limit)));
     }
 
     /** Cursor validation uses the fixed history contract without altering global error mapping. */

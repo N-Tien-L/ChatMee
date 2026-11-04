@@ -39,6 +39,9 @@ changes. This spec amends SPEC-004 and SPEC-008 additively; their text stays as 
   `(createdAt, id)`, plus `hasBefore`/`hasAfter` and cursors compatible with the history
   cursor. A non-member, unknown room or unknown message returns 404.
   -> Test: `context_nonMember_returns404`, `context_tiedTimestamps_ordersStably`, `context_limitClamped`
+  (Backend evidence, CM-114: `MessageReplyServiceTest`, `MessageRepositoryIT#context_tiedTimestamps_ordersStably`,
+  `MessageControllerWebMvcTest#getMessageContext_*`. Response shape: `{messages, targetId, hasBefore, hasAfter,
+  beforeCursor, afterCursor}`; `beforeCursor` is accepted by the history `before` parameter.)
 - AC-014-7: The client shows a reply chip above the composer with cancel; sending clears it.
   A failed send keeps the chip. -> Test: `reply_chip_cancelAndKeepOnFailure`
 - AC-014-8: Tapping a quote scrolls to and highlights a loaded original. If it is not loaded,

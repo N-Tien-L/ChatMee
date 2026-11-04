@@ -39,7 +39,7 @@ class ResponseContractTest {
                 {"id":"message","tempId":"temporary","clientMessageId":"temporary","chatRoomId":"room","senderId":"user",
                  "senderName":"Alice","content":"hello","type":"TEXT",
                  "createdAt":"2026-10-09T01:02:03Z","updatedAt":"2026-10-09T01:02:03Z",
-                 "isUpdated":true,"isDeleted":false}
+                 "isUpdated":true,"isDeleted":false,"replyTo":null}
                 """));
         var user = User.builder().id("user").name("Alice").email("alice@example.test")
                 .avatarUrl("avatar").provider("github").build();
