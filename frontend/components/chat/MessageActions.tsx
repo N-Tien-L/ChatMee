@@ -2,8 +2,9 @@
 
 import { useRef, useState } from "react";
 import toast from "react-hot-toast";
-import { Copy, CornerUpLeft, Flag } from "lucide-react";
+import { Copy, CornerUpLeft, Flag, Plus } from "lucide-react";
 import type { Message } from "@/lib/types";
+import { myReaction, QUICK_REACTIONS } from "@/lib/utils/reactions";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -27,6 +28,10 @@ interface MessageActionsProps {
   onReport?: (message: Message) => void;
   /** Starts a reply to this message: the menu item, and a right swipe on touch screens (SPEC-014). */
   onReply?: (message: Message) => void;
+  /** Picks a reaction from the quick bar; picking your current one undoes it (SPEC-015 AC-015-1). */
+  onReact?: (message: Message, emoji: string) => void;
+  /** "+" on the quick bar: opens the full picker for this message (AC-015-10). */
+  onPickReaction?: (message: Message) => void;
   /** Bubble sizing classes, applied to the wrapper that receives the click. */
   className?: string;
   children: React.ReactNode;
@@ -39,14 +44,19 @@ type Gesture = { pointerId: number; x: number; y: number; axis: "x" | "y" | null
  * The long press arrives as a `contextmenu` event on touch devices. On touch the menu opens on release, so a scroll
  * or a swipe that starts on a bubble never opens it; a right swipe starts a reply instead.
  */
-export function MessageActions({ message, timeLabel, onReport, onReply, className = "", children }: MessageActionsProps) {
+export function MessageActions({
+  message, timeLabel, onReport, onReply, onReact, onPickReaction, className = "", children,
+}: MessageActionsProps) {
   const [open, setOpen] = useState(false);
   const [offset, setOffset] = useState(0);
   const triggerRef = useRef<HTMLDivElement>(null);
   const reportAfterClose = useRef(false);
   const replyAfterClose = useRef(false);
+  const pickAfterClose = useRef(false);
   const gesture = useRef<Gesture | null>(null);
   const canReply = !!onReply && !!message.id;
+  const canReact = !!onReact && !!message.id;
+  const mine = myReaction(message.reactions);
 
   const copy = async () => {
     try {
@@ -131,6 +141,13 @@ export function MessageActions({ message, timeLabel, onReport, onReply, classNam
         align={message.isOwn ? "end" : "start"}
         className="min-w-40"
         onCloseAutoFocus={(event) => {
+          if (pickAfterClose.current) {
+            // The menu's focus layer must unmount before the picker opens.
+            event.preventDefault();
+            pickAfterClose.current = false;
+            onPickReaction?.(message);
+            return;
+          }
           if (replyAfterClose.current) {
             // The composer takes focus for the reply, not the bubble.
             event.preventDefault();
@@ -149,6 +166,29 @@ export function MessageActions({ message, timeLabel, onReport, onReply, classNam
         <DropdownMenuLabel className="font-mono text-[11px] font-normal text-muted-foreground">
           {timeLabel}
         </DropdownMenuLabel>
+        {canReact && (
+          <div role="group" aria-label="React" className="flex items-center gap-0.5 px-1 py-1">
+            {QUICK_REACTIONS.map((emoji) => (
+              <DropdownMenuItem
+                key={emoji}
+                aria-label={mine === emoji ? `Remove reaction ${emoji}` : `React with ${emoji}`}
+                onSelect={() => onReact?.(message, emoji)}
+                className={`size-9 justify-center rounded-full p-0 text-xl ${mine === emoji ? "bg-primary/15" : ""}`}
+              >
+                {emoji}
+              </DropdownMenuItem>
+            ))}
+            {onPickReaction && (
+              <DropdownMenuItem
+                aria-label="More reactions"
+                onSelect={() => { pickAfterClose.current = true; }}
+                className="size-9 justify-center rounded-full p-0 text-muted-foreground"
+              >
+                <Plus aria-hidden="true" />
+              </DropdownMenuItem>
+            )}
+          </div>
+        )}
         <DropdownMenuSeparator />
         {canReply && (
           <DropdownMenuItem onSelect={() => { replyAfterClose.current = true; }}>

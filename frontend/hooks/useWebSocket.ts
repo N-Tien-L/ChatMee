@@ -3,7 +3,8 @@ import { useAuthStore, useUsersStore } from "@/lib/stores"
 import { TypingMessage, useChatStore } from "@/lib/stores/chatStore"
 import { useConnectionStatus, useStompSession } from "@/lib/realtime/StompProvider"
 import type { StompError } from "@/lib/realtime/stompSession"
-import { Message } from "@/lib/types"
+import { Message, ReactionUpdatedEvent } from "@/lib/types"
+import { isReactionEvent } from "@/lib/utils/reactions"
 
 export type { StompError }
 
@@ -12,16 +13,23 @@ export const useWebSocket = () => {
     const session = useStompSession();
     const status = useConnectionStatus();
 
+    // Message frames have no `event` field; event frames (REACTION_UPDATED, SPEC-015) do. Unknown events are ignored
+    // so a newer server never shows them as messages.
     const subscribeRoom = useCallback(
-        (roomId: string, onMessage: (msg: Message) => void) =>
+        (roomId: string, onMessage: (msg: Message) => void, onReaction?: (event: ReactionUpdatedEvent) => void) =>
             session.subscribe(`/topic/rooms/${roomId}`, (frame) => {
-                let message: Message;
+                let data: unknown;
                 try {
-                    message = JSON.parse(frame.body);
+                    data = JSON.parse(frame.body);
                 } catch {
                     return;
                 }
-                onMessage(message);
+                if (typeof data !== "object" || data === null) return;
+                if ("event" in data) {
+                    if (isReactionEvent(data)) onReaction?.(data);
+                    return;
+                }
+                onMessage(data as Message);
             }),
         [session]
     );

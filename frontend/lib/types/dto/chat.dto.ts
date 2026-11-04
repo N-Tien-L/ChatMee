@@ -94,6 +94,43 @@ export interface MessageResponse {
     isDeleted: boolean;
     /** Server-derived quote of the message this one replies to (SPEC-014); null or absent when it is not a reply. */
     replyTo?: ReplyTo | null;
+    /** Top reactions with the caller's own choice marked (SPEC-015 AC-015-5); absent or empty when there are none. */
+    reactions?: ReactionSummary[];
+}
+
+/** One emoji on a message: how many chose it and whether the current user did (SPEC-015 AC-015-5). */
+export interface ReactionSummary {
+    emoji: string;
+    count: number;
+    reactedByMe: boolean;
+}
+
+/** PUT/DELETE .../reaction response: the caller's view of the message's reactions after the change. */
+export interface MessageReactionsResponse {
+    messageId: string;
+    reactions: ReactionSummary[];
+}
+
+/** `REACTION_UPDATED` frame on `/topic/rooms/{roomId}` (AC-015-7): counts only, `reactedByMe` is per client. */
+export interface ReactionUpdatedEvent {
+    event: "REACTION_UPDATED";
+    messageId: string;
+    summary: { emoji: string; count: number }[];
+}
+
+/** One entry of GET .../reactions (AC-015-6). */
+export interface Reactor {
+    userId: string;
+    displayName: string;
+    emoji: string;
+    createdAt: string;
+}
+
+/** Who reacted, newest first; `nextCursor` requests strictly older entries. */
+export interface ReactorPageResponse {
+    reactions: Reactor[];
+    nextCursor: string | null;
+    hasMore: boolean;
 }
 
 /**

@@ -17,7 +17,7 @@ class LocalOAuthProviderTest {
             String callback = "http://127.0.0.1:3100/login/oauth2/code/github";
             String root = "http://127.0.0.1:" + provider.port();
             for (String fixture : new String[] {"", "0123456789abcdef", "fedcba9876543210"})
-            for (String account : new String[] {"alice", "bob"}) {
+            for (String account : new String[] {"alice", "bob", "carol"}) {
                 var authorize = client.send(HttpRequest.newBuilder(URI.create(root
                         + "/authorize?client_id=e2e-client&response_type=code&state=synthetic-state&redirect_uri="
                         + URLEncoder.encode(callback, StandardCharsets.UTF_8) + "&account=" + account + "&fixture=" + fixture)).build(),
